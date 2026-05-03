@@ -1,0 +1,25 @@
+{
+  "name": "album-panini-26",
+  "version": "1.0.0",
+  "description": "Tracker del álbum Panini Mundial 2026 — single-file PWA",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:js": "esbuild entry.jsx --bundle --loader:.jsx=jsx --jsx=automatic --define:process.env.NODE_ENV=\"production\" --minify --target=es2018 --outfile=app.bundle.js",
+    "build:css": "tailwindcss -c tailwind.config.js -i input.css -o output.css --minify",
+    "build:inline": "node inline.mjs",
+    "build": "npm run build:js && npm run build:css && npm run build:inline",
+    "watch:js": "esbuild entry.jsx --bundle --loader:.jsx=jsx --jsx=automatic --target=es2018 --watch --outfile=app.bundle.js",
+    "watch:css": "tailwindcss -c tailwind.config.js -i input.css -o output.css --watch",
+    "clean": "rm -rf dist app.bundle.js output.css"
+  },
+  "dependencies": {
+    "lucide-react": "0.383.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0",
+    "tailwindcss": "^3.4.0"
+  }
+}
