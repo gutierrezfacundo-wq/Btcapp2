@@ -22,3 +22,18 @@ build/
 # OS
 .DS_Store
 Thumbs.db
+
+# Android / Gradle
+.gradle/
+local.properties
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+*.aar
+*.keystore
+*.jks
+app/build/
+build/
+.kotlin/

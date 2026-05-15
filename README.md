@@ -1,3 +1,90 @@
+# IPTV Player (Android) + BTC Bot
+
+Este repo aloja dos proyectos en branches separados:
+
+- **`claude/iptv-player-app-*`** — App Android nativa para reproducir IPTV (ver abajo).
+- **`main`** — Bot Python de monitoreo de BTC (sección al final).
+
+---
+
+## IPTV Player — App Android
+
+App nativa en Kotlin + Jetpack Compose con ExoPlayer (Media3) para reproducir listas IPTV de tipo M3U/M3U8 y portales Xtream Codes. Pensada para móvil y Android TV.
+
+### Features
+
+- Soporte para **listas M3U/M3U8** (URL remota) y **Xtream Codes API** (servidor + usuario + clave).
+- **En vivo**, **Películas (VOD)** y **Series** con sus episodios por temporada.
+- **Categorías** filtrables como chips.
+- **Favoritos** persistidos localmente (Room).
+- **EPG** (XMLTV) con "ahora en pantalla" por canal (cuando la fuente provee EPG).
+- Reproducción HLS, DASH y MPEG-TS via ExoPlayer.
+- Permite **cleartext HTTP** porque la mayoría de fuentes IPTV no usan TLS.
+
+### Cómo abrir / buildear
+
+Requisitos: Android Studio Ladybug (o superior), Android SDK 35, JDK 17.
+
+```bash
+# Abrir en Android Studio (File → Open → seleccionar la raíz del repo)
+# o desde la línea de comandos:
+./gradlew :app:assembleDebug
+
+# Instalar en un dispositivo conectado:
+./gradlew :app:installDebug
+```
+
+Si Android Studio te pide `local.properties`, creá el archivo con:
+
+```
+sdk.dir=/ruta/al/Android/Sdk
+```
+
+### Stack
+
+| Capa | Librería |
+|------|----------|
+| UI | Jetpack Compose + Material 3 + Navigation |
+| Player | androidx.media3 (ExoPlayer, HLS, DASH, OkHttp DataSource) |
+| Red | Retrofit + OkHttp + kotlinx.serialization |
+| Storage | Room (favoritos) + DataStore (config de fuente) |
+| Imágenes | Coil |
+
+### Estructura
+
+```
+app/src/main/java/com/iptv/player/
+├── IptvApp.kt
+├── MainActivity.kt
+├── di/AppContainer.kt          ─ DI manual
+├── data/
+│   ├── model/                  ─ Channel, Movie, SeriesInfo, Episode, EpgProgram, SourceConfig
+│   ├── parser/                 ─ M3uParser, XmltvParser
+│   ├── remote/                 ─ XtreamApi (Retrofit) + DTOs
+│   ├── local/                  ─ Room (favoritos) + DataStore (prefs)
+│   └── repository/             ─ IptvRepository, EpgRepository
+└── ui/
+    ├── Navigation.kt
+    ├── setup/                  ─ Pantalla de configuración inicial
+    ├── home/                   ─ Tabs: Live / Movies / Series / Favoritos
+    ├── series/                 ─ Detalle de serie con episodios
+    ├── player/                 ─ ExoPlayer + PlayerView
+    ├── components/             ─ ChannelRow, PosterCard
+    └── theme/
+```
+
+### Cómo se usa la app
+
+1. Abrir la app → pantalla **Configurar fuente**.
+2. Elegir tab **Lista M3U** (pegar URL `.m3u` o `.m3u8`, opcionalmente URL EPG XMLTV) o **Xtream Codes** (servidor `https://host:puerto`, usuario, clave).
+3. Tocar **Guardar y cargar**. La app descarga y parsea el catálogo.
+4. Navegar por **En vivo / Películas / Series / Favoritos** en la barra inferior.
+5. Tocar el corazón para marcar favoritos. Tocar el ícono de ajustes (arriba) para cambiar de fuente.
+
+> **Aviso legal:** la app no incluye ni distribuye contenido. Solo reproduce streams provistos por el usuario. Asegurate de tener derechos legítimos sobre las fuentes que cargues.
+
+---
+
 # BTC Bot — Monitor y Trading de Bitcoin
 
 Bot de monitoreo y trading de BTC que corre en Termux (Android). Consulta precios desde Binance, analiza con Gemini AI y notifica/opera por Telegram.
