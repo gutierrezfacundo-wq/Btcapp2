@@ -1,0 +1,194 @@
+:root {
+  --bg: #0e0e10;
+  --surface: #18181b;
+  --surface-2: #222226;
+  --text: #e5e7eb;
+  --muted: #9ca3af;
+  --primary: #ff4081;
+  --secondary: #7c4dff;
+  --danger: #ef4444;
+  --radius: 12px;
+  --focus-outline: 0 0 0 4px #ff4081, 0 0 0 8px rgba(255, 64, 129, 0.35);
+  font-family: "LG Smart UI", "SamsungOne", "Helvetica Neue", Arial, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  width: 1920px;
+  height: 1080px;
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+}
+
+body {
+  font-size: 26px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+button, input {
+  font: inherit;
+  color: inherit;
+}
+
+a { color: var(--primary); text-decoration: none; }
+
+.focusable {
+  outline: none;
+  transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease;
+}
+
+.focusable:focus,
+.focusable.focused {
+  box-shadow: var(--focus-outline);
+  transform: scale(1.04);
+  z-index: 5;
+}
+
+.btn {
+  background: var(--surface-2);
+  color: var(--text);
+  border: none;
+  border-radius: var(--radius);
+  padding: 18px 32px;
+  cursor: pointer;
+}
+
+.btn.primary {
+  background: var(--primary);
+  color: white;
+  font-weight: 600;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.input {
+  background: var(--surface-2);
+  border: 2px solid transparent;
+  border-radius: var(--radius);
+  padding: 18px 22px;
+  color: var(--text);
+  width: 100%;
+}
+
+.input:focus,
+.input.focused {
+  border-color: var(--primary);
+  box-shadow: var(--focus-outline);
+}
+
+.page {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 32px 56px 16px;
+  font-size: 38px;
+  font-weight: 700;
+}
+
+.topbar .actions {
+  display: flex;
+  gap: 12px;
+}
+
+.scroll {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.scroll::-webkit-scrollbar-thumb {
+  background: var(--surface-2);
+  border-radius: 4px;
+}
+
+.chips {
+  display: flex;
+  gap: 12px;
+  padding: 0 56px 16px;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.chip {
+  background: var(--surface);
+  border-radius: 999px;
+  padding: 10px 22px;
+  font-size: 22px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.chip.active {
+  background: var(--primary);
+  color: white;
+}
+
+.tabs {
+  display: flex;
+  gap: 12px;
+  padding: 8px 56px 24px;
+}
+
+.tab {
+  background: var(--surface);
+  padding: 16px 32px;
+  border-radius: var(--radius);
+  font-size: 26px;
+  cursor: pointer;
+  flex: 1;
+  text-align: center;
+}
+
+.tab.active {
+  background: var(--primary);
+  color: white;
+  font-weight: 600;
+}
+
+.empty, .loading, .error {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  color: var(--muted);
+  padding: 80px;
+  text-align: center;
+}
+
+.error { color: var(--danger); }
+
+.spinner {
+  width: 64px;
+  height: 64px;
+  border: 6px solid var(--surface-2);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

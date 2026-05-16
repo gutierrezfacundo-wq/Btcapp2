@@ -1,0 +1,17 @@
+{
+  "id": "com.iptv.player.webos",
+  "version": "0.1.0",
+  "vendor": "IPTV Player",
+  "type": "web",
+  "main": "index.html",
+  "title": "IPTV Player",
+  "icon": "icon.png",
+  "largeIcon": "icon_large.png",
+  "iconColor": "#0E0E10",
+  "splashBackground": "#0E0E10",
+  "appDescription": "Reproductor IPTV para listas M3U y portales Xtream Codes",
+  "resolution": "1920x1080",
+  "uiRevision": 2,
+  "disableBackHistoryAPI": true,
+  "supportTouchMode": "none"
+}
