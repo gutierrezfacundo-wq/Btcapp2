@@ -8,7 +8,6 @@
   "icon": "icon.png",
   "largeIcon": "icon_large.png",
   "iconColor": "#0E0E10",
-  "splashBackground": "#0E0E10",
   "appDescription": "Reproductor IPTV para listas M3U y portales Xtream Codes",
   "resolution": "1920x1080",
   "uiRevision": 2,

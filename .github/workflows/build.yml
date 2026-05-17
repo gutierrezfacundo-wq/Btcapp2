@@ -78,7 +78,7 @@ jobs:
       - name: Package .ipk
         run: |
           mkdir -p build
-          ares-package dist -o build
+          ares-package dist -o build --no-minify
 
       - name: Upload IPK artifact
         uses: actions/upload-artifact@v4
