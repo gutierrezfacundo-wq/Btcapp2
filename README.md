@@ -83,6 +83,34 @@ app/src/main/java/com/iptv/player/
 
 > **Aviso legal:** la app no incluye ni distribuye contenido. Solo reproduce streams provistos por el usuario. Asegurate de tener derechos legítimos sobre las fuentes que cargues.
 
+### Build automático con GitHub Actions
+
+El repo incluye `.github/workflows/build.yml`. En cada push compila APK Android + IPK webOS y los deja como artifacts descargables.
+
+**Para generar APK ahora** (sin tener que instalar Android Studio):
+
+1. Entrá al repo en GitHub → pestaña **Actions**.
+2. En la sidebar elegí **Build apps**.
+3. Botón **Run workflow** → elegí el branch `claude/iptv-player-app-BMB34` → **Run**.
+4. Esperá ~5-7 min hasta que termine.
+5. Entrá al run → al fondo de la página hay sección **Artifacts** → bajá `IptvPlayer-apk.zip` (contiene el `.apk` debug-signed).
+
+**Para publicar una release con APK + IPK adjuntos:**
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+El workflow corre, crea una GitHub Release con changelog automático, y adjunta ambos archivos.
+
+### Instalar el APK en el teléfono
+
+1. Pasá el `.apk` al celu (USB, Drive, Telegram a vos mismo, etc.).
+2. En **Configuración → Apps → Acceso especial → Instalar apps desconocidas**, habilitá tu file manager o navegador.
+3. Tocá el `.apk` → Instalar. (Android puede pedir Play Protect skip, dale "Instalar igual".)
+4. Abrí *IPTV Player* → pegá M3U o credenciales Xtream → listo.
+
 ---
 
 # BTC Bot — Monitor y Trading de Bitcoin
