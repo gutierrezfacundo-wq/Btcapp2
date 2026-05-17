@@ -78,21 +78,33 @@ fun SeriesDetailScreen(
                     "Sin episodios",
                     modifier = Modifier.padding(16.dp),
                 )
-                else -> LazyColumn {
-                    items(episodes!!, key = { it.id }) { ep ->
-                        Column(
-                            modifier = Modifier.fillMaxWidth()
-                                .clickable { onPlay(ep.streamUrl, "T${ep.seasonNumber} E${ep.episodeNumber} — ${ep.title}") }
-                                .padding(16.dp),
-                        ) {
-                            Text(
-                                "T${ep.seasonNumber} · E${ep.episodeNumber}",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.primary,
-                            )
-                            Text(ep.title, style = MaterialTheme.typography.bodyLarge)
+                else -> {
+                    val eps = episodes!!
+                    LazyColumn {
+                        items(eps, key = { it.id }) { ep ->
+                            Column(
+                                modifier = Modifier.fillMaxWidth()
+                                    .clickable {
+                                        val idx = eps.indexOf(ep)
+                                        container.playbackController.setEpisodes(
+                                            episodes = eps,
+                                            activeIndex = idx,
+                                            seriesTitle = title,
+                                            poster = null,
+                                        )
+                                        onPlay(ep.streamUrl, "T${ep.seasonNumber} E${ep.episodeNumber} — ${ep.title}")
+                                    }
+                                    .padding(16.dp),
+                            ) {
+                                Text(
+                                    "T${ep.seasonNumber} · E${ep.episodeNumber}",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                                Text(ep.title, style = MaterialTheme.typography.bodyLarge)
+                            }
+                            HorizontalDivider()
                         }
-                        HorizontalDivider()
                     }
                 }
             }

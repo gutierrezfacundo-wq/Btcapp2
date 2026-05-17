@@ -4,10 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.iptv.player.data.local.FavoriteEntity
+import com.iptv.player.data.local.RecentEntity
 import com.iptv.player.data.model.Channel
 import com.iptv.player.data.model.MediaKind
 import com.iptv.player.data.model.Movie
-import com.iptv.player.data.model.SeriesInfo
 import com.iptv.player.data.model.SourceConfig
 import com.iptv.player.data.repository.Catalog
 import com.iptv.player.di.AppContainer
@@ -33,6 +33,9 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
     val state = _state.asStateFlow()
 
     val favorites = container.database.favoriteDao().observeAll()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    val recents = container.database.recentDao().observeRecent()
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     private var loadJob: Job? = null
@@ -80,6 +83,28 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
 
     fun nowPlayingFor(channel: Channel): String? =
         container.epgRepository.nowPlaying(channel.tvgId)?.title
+
+    fun playLive(channels: List<Channel>, activeIndex: Int) {
+        container.playbackController.setLive(channels, activeIndex)
+    }
+
+    fun playSingle(name: String, url: String, poster: String?) {
+        container.playbackController.setSingle(name, url, poster)
+    }
+
+    fun removeRecent(url: String) {
+        viewModelScope.launch { container.database.recentDao().remove(url) }
+    }
+
+    fun resumeRecent(item: RecentEntity) {
+        container.playbackController.setSingle(item.title, item.streamUrl, item.logoUrl)
+    }
+
+    fun resumeRecentAsLive(item: RecentEntity, allLive: List<Channel>) {
+        val idx = allLive.indexOfFirst { it.streamUrl == item.streamUrl }
+        if (idx >= 0) container.playbackController.setLive(allLive, idx)
+        else container.playbackController.setSingle(item.title, item.streamUrl, item.logoUrl)
+    }
 
     suspend fun seriesEpisodes(seriesId: String): List<com.iptv.player.data.model.Episode> {
         val source = state.value.source as? SourceConfig.Xtream ?: return emptyList()

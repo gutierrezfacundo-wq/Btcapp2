@@ -1,23 +1,33 @@
 package com.iptv.player.ui.home
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Favorite
 import androidx.compose.material.icons.outlined.LiveTv
 import androidx.compose.material.icons.outlined.Movie
+import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Tv
@@ -26,6 +36,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -34,6 +45,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -41,17 +53,27 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
 import com.iptv.player.R
+import com.iptv.player.data.local.RecentEntity
 import com.iptv.player.data.model.Category
 import com.iptv.player.data.model.Channel
 import com.iptv.player.data.model.MediaKind
 import com.iptv.player.data.model.Movie
 import com.iptv.player.data.model.SeriesInfo
 import com.iptv.player.di.AppContainer
+import com.iptv.player.ui.components.ChannelAttributes
 import com.iptv.player.ui.components.ChannelRow
+import com.iptv.player.ui.components.ChannelSearchBar
+import com.iptv.player.ui.components.MultiSelectChipRow
 import com.iptv.player.ui.components.PosterCard
 
 private enum class HomeTab(val labelRes: Int, val icon: @Composable () -> Unit) {
@@ -72,6 +94,7 @@ fun HomeScreen(
     val vm: HomeViewModel = viewModel(factory = HomeViewModel.Factory(container))
     val state by vm.state.collectAsState()
     val favorites by vm.favorites.collectAsState()
+    val recents by vm.recents.collectAsState()
     var tab by rememberSaveable { mutableStateOf(HomeTab.Live) }
 
     Scaffold(
@@ -109,15 +132,31 @@ fun HomeScreen(
                     HomeTab.Live -> LiveTab(
                         channels = state.catalog.liveChannels,
                         categories = state.catalog.liveCategories,
+                        recents = recents,
                         isFavorite = vm::isFavorite,
                         nowPlaying = vm::nowPlayingFor,
                         onToggleFavorite = vm::toggleFavorite,
-                        onPlay = onPlay,
+                        onPlayChannel = { filtered, idx ->
+                            vm.playLive(filtered, idx)
+                            val ch = filtered[idx]
+                            onPlay(ch.streamUrl, ch.name)
+                        },
+                        onResumeRecent = { item ->
+                            when (item.kindOrdinal) {
+                                MediaKind.LIVE.ordinal -> vm.resumeRecentAsLive(item, state.catalog.liveChannels)
+                                else -> vm.resumeRecent(item)
+                            }
+                            onPlay(item.streamUrl, item.title)
+                        },
+                        onRemoveRecent = vm::removeRecent,
                     )
                     HomeTab.Movies -> MoviesTab(
                         movies = state.catalog.movies,
                         categories = state.catalog.movieCategories,
-                        onPlay = onPlay,
+                        onPlay = { movie ->
+                            vm.playSingle(movie.name, movie.streamUrl, movie.posterUrl)
+                            onPlay(movie.streamUrl, movie.name)
+                        },
                     )
                     HomeTab.Series -> SeriesTab(
                         series = state.catalog.series,
@@ -139,7 +178,10 @@ fun HomeScreen(
                         onToggleFavorite = { ch ->
                             vm.toggleFavorite(ch.id, ch.name, ch.streamUrl, ch.logoUrl, ch.kind)
                         },
-                        onPlay = onPlay,
+                        onPlay = { ch ->
+                            vm.playSingle(ch.name, ch.streamUrl, ch.logoUrl)
+                            onPlay(ch.streamUrl, ch.name)
+                        },
                     )
                 }
             }
@@ -160,7 +202,7 @@ private fun LoadingBox() {
 @Composable
 private fun ErrorBox(msg: String) {
     Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
-        Text("$msg", color = MaterialTheme.colorScheme.error)
+        Text(msg, color = MaterialTheme.colorScheme.error)
     }
 }
 
@@ -171,7 +213,7 @@ private fun CategoryChips(
     onSelect: (String?) -> Unit,
 ) {
     LazyRow(
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         item {
@@ -195,31 +237,193 @@ private fun CategoryChips(
 private fun LiveTab(
     channels: List<Channel>,
     categories: List<Category>,
+    recents: List<RecentEntity>,
     isFavorite: (String) -> Boolean,
     nowPlaying: (Channel) -> String?,
     onToggleFavorite: (String, String, String, String?, MediaKind) -> Unit,
-    onPlay: (String, String) -> Unit,
+    onPlayChannel: (filtered: List<Channel>, index: Int) -> Unit,
+    onResumeRecent: (RecentEntity) -> Unit,
+    onRemoveRecent: (String) -> Unit,
 ) {
-    var selected by rememberSaveable { mutableStateOf<String?>(null) }
-    val filtered = remember(channels, selected) {
-        if (selected == null) channels else channels.filter { it.groupTitle == selected }
+    var category by rememberSaveable { mutableStateOf<String?>(null) }
+    var query by rememberSaveable { mutableStateOf("") }
+    var selectedCountries by rememberSaveable { mutableStateOf(emptySet<String>()) }
+    var selectedLanguages by rememberSaveable { mutableStateOf(emptySet<String>()) }
+    var selectedQualities by rememberSaveable { mutableStateOf(emptySet<String>()) }
+
+    val tagsByChannel = remember(channels) {
+        channels.associateWith { ChannelAttributes.extract(it) }
     }
+    val availableCountries by remember(tagsByChannel) {
+        derivedStateOf { tagsByChannel.values.flatMap { it.countries }.distinct().sorted() }
+    }
+    val availableLanguages by remember(tagsByChannel) {
+        derivedStateOf { tagsByChannel.values.flatMap { it.languages }.distinct().sorted() }
+    }
+    val availableQualities by remember(tagsByChannel) {
+        derivedStateOf {
+            val all = tagsByChannel.values.flatMap { it.qualities }.distinct()
+            listOf("4K", "FHD", "HD", "SD").filter { it in all }
+        }
+    }
+
+    val filtered = remember(
+        channels, category, query, selectedCountries, selectedLanguages, selectedQualities, tagsByChannel,
+    ) {
+        val q = query.trim()
+        channels.filter { ch ->
+            val tags = tagsByChannel[ch] ?: ChannelAttributes.extract(ch)
+            (category == null || ch.groupTitle == category) &&
+                (q.isEmpty() || ch.name.contains(q, ignoreCase = true) ||
+                    (ch.groupTitle?.contains(q, ignoreCase = true) == true)) &&
+                (selectedCountries.isEmpty() || tags.countries.any { it in selectedCountries }) &&
+                (selectedLanguages.isEmpty() || tags.languages.any { it in selectedLanguages }) &&
+                (selectedQualities.isEmpty() || tags.qualities.any { it in selectedQualities })
+        }
+    }
+
     Column {
-        CategoryChips(categories, selected) { selected = it }
-        if (filtered.isEmpty()) EmptyBox()
-        else LazyColumn {
-            items(filtered, key = { it.id }) { ch ->
-                ChannelRow(
-                    name = ch.name,
-                    subtitle = nowPlaying(ch) ?: ch.groupTitle,
-                    logoUrl = ch.logoUrl,
-                    isFavorite = isFavorite(ch.id),
-                    onClick = { onPlay(ch.streamUrl, ch.name) },
-                    onToggleFavorite = {
-                        onToggleFavorite(ch.id, ch.name, ch.streamUrl, ch.logoUrl, ch.kind)
-                    },
+        if (recents.isNotEmpty()) {
+            RecentsRow(
+                recentItems = recents,
+                onClick = onResumeRecent,
+                onRemove = onRemoveRecent,
+            )
+        }
+        ChannelSearchBar(query = query, onQueryChange = { query = it })
+        CategoryChips(categories, category) { category = it }
+        MultiSelectChipRow(
+            label = "País",
+            options = availableCountries,
+            selected = selectedCountries,
+            onToggle = { c -> selectedCountries = selectedCountries.toggle(c) },
+        )
+        MultiSelectChipRow(
+            label = "Idioma",
+            options = availableLanguages,
+            selected = selectedLanguages,
+            onToggle = { l -> selectedLanguages = selectedLanguages.toggle(l) },
+        )
+        MultiSelectChipRow(
+            label = "Calidad",
+            options = availableQualities,
+            selected = selectedQualities,
+            onToggle = { q -> selectedQualities = selectedQualities.toggle(q) },
+        )
+        if (filtered.isEmpty()) {
+            EmptyBox()
+        } else {
+            LazyColumn(modifier = Modifier.fillMaxSize()) {
+                itemsIndexed(filtered, key = { _, ch -> ch.id }) { idx, ch ->
+                    ChannelRow(
+                        name = ch.name,
+                        subtitle = nowPlaying(ch) ?: ch.groupTitle,
+                        logoUrl = ch.logoUrl,
+                        isFavorite = isFavorite(ch.id),
+                        onClick = { onPlayChannel(filtered, idx) },
+                        onToggleFavorite = {
+                            onToggleFavorite(ch.id, ch.name, ch.streamUrl, ch.logoUrl, ch.kind)
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun Set<String>.toggle(value: String): Set<String> =
+    if (value in this) this - value else this + value
+
+@Composable
+private fun RecentsRow(
+    recentItems: List<RecentEntity>,
+    onClick: (RecentEntity) -> Unit,
+    onRemove: (String) -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+        Text(
+            "Continuar viendo",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+        )
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            items(recentItems, key = { it.streamUrl }) { item ->
+                RecentCard(item = item, onClick = { onClick(item) }, onRemove = { onRemove(item.streamUrl) })
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecentCard(item: RecentEntity, onClick: () -> Unit, onRemove: () -> Unit) {
+    val isLive = item.kindOrdinal == MediaKind.LIVE.ordinal
+    Box(
+        modifier = Modifier
+            .width(160.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .clickable(onClick = onClick),
+    ) {
+        Column {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(90.dp)
+                    .background(Color(0xFF1C1C1F)),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (!item.logoUrl.isNullOrBlank()) {
+                    AsyncImage(
+                        model = item.logoUrl,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                } else {
+                    Icon(
+                        if (isLive) Icons.Outlined.LiveTv else Icons.Outlined.Movie,
+                        contentDescription = null,
+                        tint = Color.White,
+                    )
+                }
+                Icon(
+                    Icons.Outlined.PlayArrow,
+                    contentDescription = null,
+                    tint = Color.White.copy(alpha = 0.85f),
+                    modifier = Modifier.size(36.dp),
                 )
             }
+            if (!isLive && item.durationMs > 0 && item.positionMs > 0) {
+                LinearProgressIndicator(
+                    progress = {
+                        (item.positionMs.toFloat() / item.durationMs.toFloat()).coerceIn(0f, 1f)
+                    },
+                    modifier = Modifier.fillMaxWidth().height(3.dp),
+                )
+            }
+            Text(
+                item.title,
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.Medium,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+            )
+        }
+        IconButton(
+            onClick = onRemove,
+            modifier = Modifier.align(Alignment.TopEnd).size(28.dp),
+        ) {
+            Icon(
+                Icons.Outlined.Close,
+                contentDescription = "Quitar",
+                tint = Color.White,
+                modifier = Modifier.size(16.dp),
+            )
         }
     }
 }
@@ -228,13 +432,19 @@ private fun LiveTab(
 private fun MoviesTab(
     movies: List<Movie>,
     categories: List<Category>,
-    onPlay: (String, String) -> Unit,
+    onPlay: (Movie) -> Unit,
 ) {
     var selected by rememberSaveable { mutableStateOf<String?>(null) }
-    val filtered = remember(movies, selected) {
-        if (selected == null) movies else movies.filter { it.category == selected }
+    var query by rememberSaveable { mutableStateOf("") }
+    val filtered = remember(movies, selected, query) {
+        val q = query.trim()
+        movies.filter { m ->
+            (selected == null || m.category == selected) &&
+                (q.isEmpty() || m.name.contains(q, ignoreCase = true))
+        }
     }
     Column {
+        ChannelSearchBar(query = query, onQueryChange = { query = it }, placeholder = "Buscar película…")
         CategoryChips(categories, selected) { selected = it }
         if (filtered.isEmpty()) EmptyBox()
         else LazyVerticalGrid(
@@ -245,7 +455,7 @@ private fun MoviesTab(
                 PosterCard(
                     title = movie.name,
                     posterUrl = movie.posterUrl,
-                    onClick = { onPlay(movie.streamUrl, movie.name) },
+                    onClick = { onPlay(movie) },
                 )
             }
         }
@@ -259,10 +469,16 @@ private fun SeriesTab(
     onOpen: (String, String) -> Unit,
 ) {
     var selected by rememberSaveable { mutableStateOf<String?>(null) }
-    val filtered = remember(series, selected) {
-        if (selected == null) series else series.filter { it.category == selected }
+    var query by rememberSaveable { mutableStateOf("") }
+    val filtered = remember(series, selected, query) {
+        val q = query.trim()
+        series.filter { s ->
+            (selected == null || s.category == selected) &&
+                (q.isEmpty() || s.name.contains(q, ignoreCase = true))
+        }
     }
     Column {
+        ChannelSearchBar(query = query, onQueryChange = { query = it }, placeholder = "Buscar serie…")
         CategoryChips(categories, selected) { selected = it }
         if (filtered.isEmpty()) EmptyBox()
         else LazyVerticalGrid(
@@ -284,7 +500,7 @@ private fun SeriesTab(
 private fun FavoritesTab(
     favorites: List<Channel>,
     onToggleFavorite: (Channel) -> Unit,
-    onPlay: (String, String) -> Unit,
+    onPlay: (Channel) -> Unit,
 ) {
     if (favorites.isEmpty()) EmptyBox()
     else LazyColumn {
@@ -294,7 +510,7 @@ private fun FavoritesTab(
                 subtitle = null,
                 logoUrl = ch.logoUrl,
                 isFavorite = true,
-                onClick = { onPlay(ch.streamUrl, ch.name) },
+                onClick = { onPlay(ch) },
                 onToggleFavorite = { onToggleFavorite(ch) },
             )
         }

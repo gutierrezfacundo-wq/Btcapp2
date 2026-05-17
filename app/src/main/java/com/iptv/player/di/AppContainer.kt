@@ -7,6 +7,7 @@ import com.iptv.player.data.local.PreferencesStore
 import com.iptv.player.data.remote.XtreamApi
 import com.iptv.player.data.repository.EpgRepository
 import com.iptv.player.data.repository.IptvRepository
+import com.iptv.player.playback.PlaybackController
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -15,6 +16,8 @@ import retrofit2.converter.kotlinx.serialization.asConverterFactory
 import java.util.concurrent.TimeUnit
 
 class AppContainer(context: Context) {
+
+    val appContext: Context = context.applicationContext
 
     val httpClient: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(20, TimeUnit.SECONDS)
@@ -38,12 +41,15 @@ class AppContainer(context: Context) {
     val xtreamApi: XtreamApi = retrofit.create(XtreamApi::class.java)
 
     val database: IptvDatabase = Room.databaseBuilder(
-        context.applicationContext,
+        appContext,
         IptvDatabase::class.java,
         "iptv.db",
-    ).build()
+    )
+        .fallbackToDestructiveMigration()
+        .build()
 
-    val preferencesStore = PreferencesStore(context.applicationContext)
+    val preferencesStore = PreferencesStore(appContext)
     val iptvRepository = IptvRepository(xtreamApi, httpClient)
     val epgRepository = EpgRepository(httpClient)
+    val playbackController = PlaybackController()
 }
