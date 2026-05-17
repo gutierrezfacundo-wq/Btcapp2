@@ -11,6 +11,8 @@ import com.iptv.player.data.model.Movie
 import com.iptv.player.data.model.SourceConfig
 import com.iptv.player.data.repository.Catalog
 import com.iptv.player.di.AppContainer
+import com.iptv.player.ui.components.ChannelAttributes
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -18,13 +20,19 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 data class HomeUiState(
     val loading: Boolean = true,
     val error: String? = null,
     val catalog: Catalog = Catalog(),
     val source: SourceConfig? = null,
+    val channelTags: Map<String, ChannelAttributes.Tags> = emptyMap(),
+    val availableCountries: List<String> = emptyList(),
+    val availableLanguages: List<String> = emptyList(),
+    val availableQualities: List<String> = emptyList(),
 )
 
 class HomeViewModel(private val container: AppContainer) : ViewModel() {
@@ -53,6 +61,7 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
             runCatching { container.iptvRepository.loadCatalog(source) }
                 .onSuccess { catalog ->
                     _state.value = HomeUiState(loading = false, catalog = catalog, source = source)
+                    launch { computeChannelTags(catalog.liveChannels) }
                     launch {
                         runCatching { container.epgRepository.load(source) }
                     }
@@ -64,6 +73,31 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
                         source = source,
                     )
                 }
+        }
+    }
+
+    private suspend fun computeChannelTags(channels: List<Channel>) = withContext(Dispatchers.Default) {
+        val tags = HashMap<String, ChannelAttributes.Tags>(channels.size)
+        val countries = LinkedHashSet<String>()
+        val languages = LinkedHashSet<String>()
+        val qualities = LinkedHashSet<String>()
+        for (ch in channels) {
+            val t = ChannelAttributes.extract(ch)
+            tags[ch.id] = t
+            countries.addAll(t.countries)
+            languages.addAll(t.languages)
+            qualities.addAll(t.qualities)
+        }
+        val sortedCountries = countries.sorted()
+        val sortedLanguages = languages.sorted()
+        val orderedQualities = listOf("4K", "FHD", "HD", "SD").filter { it in qualities }
+        _state.update { current ->
+            current.copy(
+                channelTags = tags,
+                availableCountries = sortedCountries,
+                availableLanguages = sortedLanguages,
+                availableQualities = orderedQualities,
+            )
         }
     }
 

@@ -133,6 +133,10 @@ fun HomeScreen(
                         channels = state.catalog.liveChannels,
                         categories = state.catalog.liveCategories,
                         recents = recents,
+                        channelTags = state.channelTags,
+                        availableCountries = state.availableCountries,
+                        availableLanguages = state.availableLanguages,
+                        availableQualities = state.availableQualities,
                         isFavorite = vm::isFavorite,
                         nowPlaying = vm::nowPlayingFor,
                         onToggleFavorite = vm::toggleFavorite,
@@ -238,6 +242,10 @@ private fun LiveTab(
     channels: List<Channel>,
     categories: List<Category>,
     recents: List<RecentEntity>,
+    channelTags: Map<String, ChannelAttributes.Tags>,
+    availableCountries: List<String>,
+    availableLanguages: List<String>,
+    availableQualities: List<String>,
     isFavorite: (String) -> Boolean,
     nowPlaying: (Channel) -> String?,
     onToggleFavorite: (String, String, String, String?, MediaKind) -> Unit,
@@ -251,32 +259,23 @@ private fun LiveTab(
     var selectedLanguages by rememberSaveable { mutableStateOf(emptySet<String>()) }
     var selectedQualities by rememberSaveable { mutableStateOf(emptySet<String>()) }
 
-    val tagsByChannel = remember(channels) {
-        channels.associateWith { ChannelAttributes.extract(it) }
-    }
-    val availableCountries by remember(tagsByChannel) {
-        derivedStateOf { tagsByChannel.values.flatMap { it.countries }.distinct().sorted() }
-    }
-    val availableLanguages by remember(tagsByChannel) {
-        derivedStateOf { tagsByChannel.values.flatMap { it.languages }.distinct().sorted() }
-    }
-    val availableQualities by remember(tagsByChannel) {
-        derivedStateOf {
-            val all = tagsByChannel.values.flatMap { it.qualities }.distinct()
-            listOf("4K", "FHD", "HD", "SD").filter { it in all }
-        }
-    }
-
     val filtered = remember(
-        channels, category, query, selectedCountries, selectedLanguages, selectedQualities, tagsByChannel,
+        channels, category, query, selectedCountries, selectedLanguages, selectedQualities, channelTags,
     ) {
         val q = query.trim()
+        val tagsLoaded = channelTags.isNotEmpty()
+        val skipAttrFilter = !tagsLoaded ||
+            (selectedCountries.isEmpty() && selectedLanguages.isEmpty() && selectedQualities.isEmpty())
         channels.filter { ch ->
-            val tags = tagsByChannel[ch] ?: ChannelAttributes.extract(ch)
-            (category == null || ch.groupTitle == category) &&
-                (q.isEmpty() || ch.name.contains(q, ignoreCase = true) ||
-                    (ch.groupTitle?.contains(q, ignoreCase = true) == true)) &&
-                (selectedCountries.isEmpty() || tags.countries.any { it in selectedCountries }) &&
+            val categoryOk = category == null || ch.groupTitle == category
+            if (!categoryOk) return@filter false
+            val queryOk = q.isEmpty() ||
+                ch.name.contains(q, ignoreCase = true) ||
+                (ch.groupTitle?.contains(q, ignoreCase = true) == true)
+            if (!queryOk) return@filter false
+            if (skipAttrFilter) return@filter true
+            val tags = channelTags[ch.id] ?: return@filter false
+            (selectedCountries.isEmpty() || tags.countries.any { it in selectedCountries }) &&
                 (selectedLanguages.isEmpty() || tags.languages.any { it in selectedLanguages }) &&
                 (selectedQualities.isEmpty() || tags.qualities.any { it in selectedQualities })
         }
