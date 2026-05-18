@@ -1,6 +1,7 @@
 package com.iptv.player.di
 
 import android.content.Context
+import androidx.media3.common.util.UnstableApi
 import androidx.room.Room
 import com.iptv.player.data.local.IptvDatabase
 import com.iptv.player.data.local.PreferencesStore
@@ -8,6 +9,7 @@ import com.iptv.player.data.remote.XtreamApi
 import com.iptv.player.data.repository.EpgRepository
 import com.iptv.player.data.repository.IptvRepository
 import com.iptv.player.playback.PlaybackController
+import com.iptv.player.playback.PlaybackManager
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -15,6 +17,7 @@ import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
 import java.util.concurrent.TimeUnit
 
+@OptIn(UnstableApi::class)
 class AppContainer(context: Context) {
 
     val appContext: Context = context.applicationContext
@@ -52,4 +55,5 @@ class AppContainer(context: Context) {
     val iptvRepository = IptvRepository(xtreamApi, httpClient)
     val epgRepository = EpgRepository(httpClient)
     val playbackController = PlaybackController()
+    val playbackManager = PlaybackManager(appContext, httpClient)
 }

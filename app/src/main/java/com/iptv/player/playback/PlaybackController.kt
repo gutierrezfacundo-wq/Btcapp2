@@ -73,6 +73,10 @@ class PlaybackController {
         _queue.value = PlaybackQueue.Single(name, url, poster)
     }
 
+    fun clear() {
+        _queue.value = null
+    }
+
     fun selectIndex(index: Int) {
         when (val q = _queue.value) {
             is PlaybackQueue.Live -> if (index in q.channels.indices && index != q.activeIndex) {

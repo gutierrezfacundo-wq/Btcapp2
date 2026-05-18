@@ -70,9 +70,11 @@ import com.iptv.player.data.model.MediaKind
 import com.iptv.player.data.model.Movie
 import com.iptv.player.data.model.SeriesInfo
 import com.iptv.player.di.AppContainer
+import androidx.media3.common.util.UnstableApi
 import com.iptv.player.ui.components.ChannelAttributes
 import com.iptv.player.ui.components.ChannelRow
 import com.iptv.player.ui.components.ChannelSearchBar
+import com.iptv.player.ui.components.MiniPlayer
 import com.iptv.player.ui.components.MultiSelectChipRow
 import com.iptv.player.ui.components.PosterCard
 
@@ -83,7 +85,7 @@ private enum class HomeTab(val labelRes: Int, val icon: @Composable () -> Unit) 
     Favorites(R.string.nav_favorites, { Icon(Icons.Outlined.Favorite, null) }),
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, UnstableApi::class)
 @Composable
 fun HomeScreen(
     container: AppContainer,
@@ -95,6 +97,8 @@ fun HomeScreen(
     val state by vm.state.collectAsState()
     val favorites by vm.favorites.collectAsState()
     val recents by vm.recents.collectAsState()
+    val activeQueue by container.playbackController.queue.collectAsState()
+    val playerVisible by container.playbackController.playerVisible.collectAsState()
     var tab by rememberSaveable { mutableStateOf(HomeTab.Live) }
 
     Scaffold(
@@ -112,14 +116,28 @@ fun HomeScreen(
             )
         },
         bottomBar = {
-            NavigationBar {
-                HomeTab.entries.forEach { entry ->
-                    NavigationBarItem(
-                        selected = tab == entry,
-                        onClick = { tab = entry },
-                        icon = entry.icon,
-                        label = { Text(stringResource(entry.labelRes)) },
+            Column {
+                val q = activeQueue
+                if (q != null && !playerVisible) {
+                    MiniPlayer(
+                        player = container.playbackManager.player,
+                        title = q.title,
+                        onExpand = { onPlay(q.streamUrl, q.title) },
+                        onClose = {
+                            container.playbackManager.stop()
+                            container.playbackController.clear()
+                        },
                     )
+                }
+                NavigationBar {
+                    HomeTab.entries.forEach { entry ->
+                        NavigationBarItem(
+                            selected = tab == entry,
+                            onClick = { tab = entry },
+                            icon = entry.icon,
+                            label = { Text(stringResource(entry.labelRes)) },
+                        )
+                    }
                 }
             }
         },
@@ -281,52 +299,130 @@ private fun LiveTab(
         }
     }
 
-    Column {
-        if (recents.isNotEmpty()) {
-            RecentsRow(
-                recentItems = recents,
-                onClick = onResumeRecent,
-                onRemove = onRemoveRecent,
+    Row(Modifier.fillMaxSize()) {
+        CategorySidebar(
+            categories = categories,
+            selected = category,
+            onSelect = { category = it },
+            modifier = Modifier.width(140.dp).fillMaxHeight(),
+        )
+        Column(Modifier.weight(1f).fillMaxHeight()) {
+            if (recents.isNotEmpty()) {
+                RecentsRow(
+                    recentItems = recents,
+                    onClick = onResumeRecent,
+                    onRemove = onRemoveRecent,
+                )
+            }
+            ChannelSearchBar(query = query, onQueryChange = { query = it })
+            MultiSelectChipRow(
+                label = "País",
+                options = availableCountries,
+                selected = selectedCountries,
+                onToggle = { c -> selectedCountries = selectedCountries.toggle(c) },
             )
-        }
-        ChannelSearchBar(query = query, onQueryChange = { query = it })
-        CategoryChips(categories, category) { category = it }
-        MultiSelectChipRow(
-            label = "País",
-            options = availableCountries,
-            selected = selectedCountries,
-            onToggle = { c -> selectedCountries = selectedCountries.toggle(c) },
-        )
-        MultiSelectChipRow(
-            label = "Idioma",
-            options = availableLanguages,
-            selected = selectedLanguages,
-            onToggle = { l -> selectedLanguages = selectedLanguages.toggle(l) },
-        )
-        MultiSelectChipRow(
-            label = "Calidad",
-            options = availableQualities,
-            selected = selectedQualities,
-            onToggle = { q -> selectedQualities = selectedQualities.toggle(q) },
-        )
-        if (filtered.isEmpty()) {
-            EmptyBox()
-        } else {
-            LazyColumn(modifier = Modifier.fillMaxSize()) {
-                itemsIndexed(filtered, key = { _, ch -> ch.id }) { idx, ch ->
-                    ChannelRow(
-                        name = ch.name,
-                        subtitle = nowPlaying(ch) ?: ch.groupTitle,
-                        logoUrl = ch.logoUrl,
-                        isFavorite = isFavorite(ch.id),
-                        onClick = { onPlayChannel(filtered, idx) },
-                        onToggleFavorite = {
-                            onToggleFavorite(ch.id, ch.name, ch.streamUrl, ch.logoUrl, ch.kind)
-                        },
-                    )
+            MultiSelectChipRow(
+                label = "Idioma",
+                options = availableLanguages,
+                selected = selectedLanguages,
+                onToggle = { l -> selectedLanguages = selectedLanguages.toggle(l) },
+            )
+            MultiSelectChipRow(
+                label = "Calidad",
+                options = availableQualities,
+                selected = selectedQualities,
+                onToggle = { q -> selectedQualities = selectedQualities.toggle(q) },
+            )
+            if (filtered.isEmpty()) {
+                EmptyBox()
+            } else {
+                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                    itemsIndexed(filtered, key = { _, ch -> ch.id }) { idx, ch ->
+                        ChannelRow(
+                            name = ch.name,
+                            subtitle = nowPlaying(ch) ?: ch.groupTitle,
+                            logoUrl = ch.logoUrl,
+                            isFavorite = isFavorite(ch.id),
+                            onClick = { onPlayChannel(filtered, idx) },
+                            onToggleFavorite = {
+                                onToggleFavorite(ch.id, ch.name, ch.streamUrl, ch.logoUrl, ch.kind)
+                            },
+                        )
+                    }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun CategorySidebar(
+    categories: List<Category>,
+    selected: String?,
+    onSelect: (String?) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+    ) {
+        Text(
+            "Categorías",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+        )
+        LazyColumn(modifier = Modifier.fillMaxSize()) {
+            item {
+                CategorySidebarItem(
+                    label = stringResource(R.string.all_categories),
+                    isSelected = selected == null,
+                    onClick = { onSelect(null) },
+                )
+            }
+            items(categories, key = { it.id }) { cat ->
+                CategorySidebarItem(
+                    label = cat.name,
+                    isSelected = selected == cat.name,
+                    onClick = { onSelect(cat.name) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CategorySidebarItem(label: String, isSelected: Boolean, onClick: () -> Unit) {
+    val bg = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f) else Color.Transparent
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(bg)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (isSelected) {
+            Box(
+                Modifier
+                    .width(3.dp)
+                    .height(18.dp)
+                    .background(MaterialTheme.colorScheme.primary),
+            )
+            Spacer(Modifier.width(8.dp))
+        } else {
+            Spacer(Modifier.width(11.dp))
+        }
+        Text(
+            label,
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+            color = if (isSelected) MaterialTheme.colorScheme.onSurface
+                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 

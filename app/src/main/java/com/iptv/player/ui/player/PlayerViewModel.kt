@@ -1,15 +1,10 @@
 package com.iptv.player.ui.player
 
-import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.datasource.DefaultDataSource
-import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.iptv.player.data.local.RecentEntity
 import com.iptv.player.data.model.EpgProgram
 import com.iptv.player.data.model.MediaKind
@@ -31,8 +26,7 @@ class PlayerViewModel(private val container: AppContainer) : ViewModel() {
 
     val queue = container.playbackController.queue
 
-    private var _player: ExoPlayer? = null
-    private var currentUrl: String? = null
+    val player: ExoPlayer get() = container.playbackManager.player
 
     private val _epg = MutableStateFlow(EpgState())
     val epg = _epg.asStateFlow()
@@ -65,29 +59,13 @@ class PlayerViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
-    fun ensurePlayer(context: Context): ExoPlayer {
-        _player?.let { return it }
-        val app = context.applicationContext
-        val httpFactory = OkHttpDataSource.Factory(container.httpClient)
-        val dataSourceFactory = DefaultDataSource.Factory(app, httpFactory)
-        return ExoPlayer.Builder(app)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
-            .build()
-            .also { _player = it }
-    }
-
-    suspend fun applyQueue(q: PlaybackQueue, player: ExoPlayer) {
+    suspend fun applyQueue(q: PlaybackQueue) {
         val url = q.streamUrl
-        if (url == currentUrl) return
-        currentUrl = url
         val seekTo = when (q) {
             is PlaybackQueue.Live -> 0L
             else -> container.database.recentDao().get(url)?.positionMs ?: 0L
         }
-        player.setMediaItem(MediaItem.fromUri(url))
-        player.prepare()
-        if (seekTo > 0L) player.seekTo(seekTo)
-        player.playWhenReady = true
+        container.playbackManager.play(url, seekTo)
     }
 
     fun selectIndex(index: Int) = container.playbackController.selectIndex(index)
@@ -100,7 +78,6 @@ class PlayerViewModel(private val container: AppContainer) : ViewModel() {
 
     private fun recordRecent(q: PlaybackQueue) {
         val kind = q.kindOrdinal()
-        val player = _player
         viewModelScope.launch {
             container.database.recentDao().upsert(
                 RecentEntity(
@@ -109,8 +86,8 @@ class PlayerViewModel(private val container: AppContainer) : ViewModel() {
                     logoUrl = q.logoUrl,
                     kindOrdinal = kind,
                     positionMs = if (kind == MediaKind.LIVE.ordinal) 0L
-                        else (player?.currentPosition?.takeIf { it > 0 } ?: 0L),
-                    durationMs = player?.duration?.takeIf { it > 0 } ?: 0L,
+                        else container.playbackManager.currentPosition.coerceAtLeast(0L),
+                    durationMs = container.playbackManager.duration,
                     lastPlayedAt = System.currentTimeMillis(),
                 )
             )
@@ -118,12 +95,11 @@ class PlayerViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     fun savePosition() {
-        val player = _player ?: return
         val q = queue.value ?: return
         val kind = q.kindOrdinal()
         if (kind == MediaKind.LIVE.ordinal) return
-        val pos = player.currentPosition
-        val dur = player.duration.takeIf { it > 0 } ?: 0L
+        val pos = container.playbackManager.currentPosition
+        val dur = container.playbackManager.duration
         viewModelScope.launch {
             container.database.recentDao().upsert(
                 RecentEntity(
@@ -148,9 +124,7 @@ class PlayerViewModel(private val container: AppContainer) : ViewModel() {
     override fun onCleared() {
         super.onCleared()
         savePosition()
-        _player?.release()
-        _player = null
-        currentUrl = null
+        // El ExoPlayer es singleton en PlaybackManager — no se libera aca.
     }
 
     class Factory(private val container: AppContainer) : ViewModelProvider.Factory {

@@ -3,6 +3,11 @@ package com.iptv.player.ui.player
 import android.app.Activity
 import android.content.res.Configuration
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -34,11 +39,13 @@ import androidx.compose.material.icons.outlined.PictureInPicture
 import androidx.compose.material.icons.outlined.SkipNext
 import androidx.compose.material.icons.outlined.SkipPrevious
 import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material.icons.outlined.ViewList
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -70,10 +77,12 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
 import com.iptv.player.data.model.Channel
+import com.iptv.player.data.model.EpgProgram
 import com.iptv.player.di.AppContainer
 import com.iptv.player.playback.PlaybackQueue
 import com.iptv.player.ui.LocalEnterPip
 import com.iptv.player.ui.LocalIsInPipMode
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class, UnstableApi::class)
 @Composable
@@ -85,7 +94,7 @@ fun PlayerScreen(
 ) {
     val context = LocalContext.current
     val vm: PlayerViewModel = viewModel(factory = PlayerViewModel.Factory(container))
-    val player = remember { vm.ensurePlayer(context) }
+    val player = vm.player
     val queue by vm.queue.collectAsStateWithLifecycle()
     val epg by vm.epg.collectAsStateWithLifecycle()
     val isInPip = LocalIsInPipMode.current
@@ -98,7 +107,7 @@ fun PlayerScreen(
     }
 
     LaunchedEffect(queue) {
-        queue?.let { vm.applyQueue(it, player) }
+        queue?.let { vm.applyQueue(it) }
     }
 
     DisposableEffect(Unit) {
@@ -107,19 +116,36 @@ fun PlayerScreen(
     }
 
     var isFullscreen by rememberSaveable { mutableStateOf(false) }
+    var listOpenLandscape by rememberSaveable { mutableStateOf(true) }
+    var miniEpgVisible by remember { mutableStateOf(false) }
+    var lastChannelId by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(queue) {
+        val curId = (queue as? PlaybackQueue.Live)?.active?.id
+        if (curId != null && curId != lastChannelId) {
+            val firstShow = lastChannelId == null
+            lastChannelId = curId
+            if (!firstShow) {
+                miniEpgVisible = true
+                delay(3500)
+                miniEpgVisible = false
+            }
+        }
+    }
+
+    val orientation = LocalConfiguration.current.orientation
+    val isLandscape = orientation == Configuration.ORIENTATION_LANDSCAPE
 
     BackHandler {
         when {
             isFullscreen -> isFullscreen = false
+            isLandscape && listOpenLandscape -> listOpenLandscape = false
             else -> onBack()
         }
     }
 
     val activity = context as? Activity
     SystemBarsEffect(activity = activity, hidden = isFullscreen || isInPip)
-
-    val orientation = LocalConfiguration.current.orientation
-    val isLandscape = orientation == Configuration.ORIENTATION_LANDSCAPE
     val titleText = queue?.title ?: title
     var showTrackSelector by remember { mutableStateOf(false) }
     val live = queue as? PlaybackQueue.Live
@@ -138,18 +164,28 @@ fun PlayerScreen(
             onPrev = { vm.previous() },
             onNext = { vm.next() },
             showNav = live != null,
+            miniEpgVisible = miniEpgVisible,
+            epgNow = epg.now,
+            epgNext = epg.next,
+            channelName = live?.active?.name,
         )
-        isLandscape -> LandscapeSplitLayout(
+        isLandscape -> LandscapeOverlayLayout(
             player = player,
             titleText = titleText,
             onBack = onBack,
             onOpenTracks = { showTrackSelector = true },
             onEnterPip = enterPip,
             onEnterFullscreen = { isFullscreen = true },
+            onToggleList = { listOpenLandscape = !listOpenLandscape },
             onPrev = { vm.previous() },
             onNext = { vm.next() },
             live = live,
+            listOpen = listOpenLandscape,
             onSelectChannel = { vm.selectIndex(it) },
+            miniEpgVisible = miniEpgVisible,
+            epgNow = epg.now,
+            epgNext = epg.next,
+            channelName = live?.active?.name,
         )
         else -> PortraitLayout(
             player = player,
@@ -201,8 +237,8 @@ private fun PortraitLayout(
     onOpenTracks: () -> Unit,
     onEnterPip: () -> Unit,
     onEnterFullscreen: () -> Unit,
-    epgNow: com.iptv.player.data.model.EpgProgram?,
-    epgNext: com.iptv.player.data.model.EpgProgram?,
+    epgNow: EpgProgram?,
+    epgNext: EpgProgram?,
     live: PlaybackQueue.Live?,
     onSelectChannel: (Int) -> Unit,
 ) {
@@ -255,50 +291,68 @@ private fun PortraitLayout(
 
 @OptIn(UnstableApi::class)
 @Composable
-private fun LandscapeSplitLayout(
+private fun LandscapeOverlayLayout(
     player: ExoPlayer,
     titleText: String,
     onBack: () -> Unit,
     onOpenTracks: () -> Unit,
     onEnterPip: () -> Unit,
     onEnterFullscreen: () -> Unit,
+    onToggleList: () -> Unit,
     onPrev: () -> Unit,
     onNext: () -> Unit,
     live: PlaybackQueue.Live?,
+    listOpen: Boolean,
     onSelectChannel: (Int) -> Unit,
+    miniEpgVisible: Boolean,
+    epgNow: EpgProgram?,
+    epgNext: EpgProgram?,
+    channelName: String?,
 ) {
-    Row(Modifier.fillMaxSize().background(Color.Black)) {
-        Box(
-            modifier = Modifier
-                .weight(if (live != null) 0.62f else 1f)
-                .fillMaxHeight()
-                .background(Color.Black),
-        ) {
-            PlayerSurface(player, Modifier.fillMaxSize())
-            OverlayBar(
-                titleText = titleText,
-                showNav = live != null,
-                onBack = onBack,
-                onPrev = onPrev,
-                onNext = onNext,
-                onOpenTracks = onOpenTracks,
-                onEnterPip = onEnterPip,
-                onEnterFullscreen = onEnterFullscreen,
-            )
-        }
+    Box(Modifier.fillMaxSize().background(Color.Black)) {
+        PlayerSurface(player, Modifier.fillMaxSize())
+        OverlayBar(
+            titleText = titleText,
+            showNav = live != null,
+            showListToggle = live != null,
+            onBack = onBack,
+            onPrev = onPrev,
+            onNext = onNext,
+            onOpenTracks = onOpenTracks,
+            onEnterPip = onEnterPip,
+            onEnterFullscreen = onEnterFullscreen,
+            onToggleList = onToggleList,
+        )
         if (live != null) {
-            Box(
-                modifier = Modifier
-                    .weight(0.38f)
-                    .fillMaxHeight()
-                    .background(MaterialTheme.colorScheme.background),
+            AnimatedVisibility(
+                visible = listOpen,
+                enter = slideInHorizontally(initialOffsetX = { it }),
+                exit = slideOutHorizontally(targetOffsetX = { it }),
+                modifier = Modifier.align(Alignment.CenterEnd),
             ) {
-                CompactChannelList(
-                    channels = live.channels,
-                    activeIndex = live.activeIndex,
-                    onSelect = onSelectChannel,
-                )
+                Surface(
+                    modifier = Modifier.fillMaxHeight().width(320.dp),
+                    color = MaterialTheme.colorScheme.background.copy(alpha = 0.93f),
+                    tonalElevation = 6.dp,
+                ) {
+                    Column(modifier = Modifier.windowInsetsPadding(WindowInsets.systemBars)) {
+                        Spacer(Modifier.size(56.dp))
+                        CompactChannelList(
+                            channels = live.channels,
+                            activeIndex = live.activeIndex,
+                            onSelect = onSelectChannel,
+                        )
+                    }
+                }
             }
+        }
+        AnimatedVisibility(
+            visible = miniEpgVisible,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.BottomStart).padding(16.dp),
+        ) {
+            MiniEpgCard(channelName, epgNow, epgNext)
         }
     }
 }
@@ -315,21 +369,35 @@ private fun FullscreenLayout(
     onPrev: () -> Unit,
     onNext: () -> Unit,
     showNav: Boolean,
+    miniEpgVisible: Boolean,
+    epgNow: EpgProgram?,
+    epgNext: EpgProgram?,
+    channelName: String?,
 ) {
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         PlayerSurface(player, Modifier.fillMaxSize())
         OverlayBar(
             titleText = titleText,
             showNav = showNav,
+            showListToggle = false,
             onBack = onBack,
             onPrev = onPrev,
             onNext = onNext,
             onOpenTracks = onOpenTracks,
             onEnterPip = onEnterPip,
             onEnterFullscreen = onExit,
+            onToggleList = {},
             fullscreenIcon = Icons.Outlined.FullscreenExit,
             fullscreenContentDesc = "Salir de pantalla completa",
         )
+        AnimatedVisibility(
+            visible = miniEpgVisible,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.BottomStart).padding(16.dp),
+        ) {
+            MiniEpgCard(channelName, epgNow, epgNext)
+        }
     }
 }
 
@@ -337,19 +405,21 @@ private fun FullscreenLayout(
 private fun OverlayBar(
     titleText: String,
     showNav: Boolean,
+    showListToggle: Boolean,
     onBack: () -> Unit,
     onPrev: () -> Unit,
     onNext: () -> Unit,
     onOpenTracks: () -> Unit,
     onEnterPip: () -> Unit,
     onEnterFullscreen: () -> Unit,
+    onToggleList: () -> Unit,
     fullscreenIcon: androidx.compose.ui.graphics.vector.ImageVector = Icons.Outlined.Fullscreen,
     fullscreenContentDesc: String = "Pantalla completa",
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Color.Black.copy(alpha = 0.35f))
+            .background(Color.Black.copy(alpha = 0.45f))
             .windowInsetsPadding(WindowInsets.systemBars)
             .padding(horizontal = 4.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -373,6 +443,11 @@ private fun OverlayBar(
                 Icon(Icons.Outlined.SkipNext, "Siguiente", tint = Color.White)
             }
         }
+        if (showListToggle) {
+            IconButton(onClick = onToggleList) {
+                Icon(Icons.Outlined.ViewList, "Mostrar/ocultar lista", tint = Color.White)
+            }
+        }
         IconButton(onClick = onOpenTracks) {
             Icon(Icons.Outlined.Tune, "Pistas", tint = Color.White)
         }
@@ -381,6 +456,59 @@ private fun OverlayBar(
         }
         IconButton(onClick = onEnterFullscreen) {
             Icon(fullscreenIcon, fullscreenContentDesc, tint = Color.White)
+        }
+    }
+}
+
+@Composable
+private fun MiniEpgCard(channelName: String?, now: EpgProgram?, next: EpgProgram?) {
+    Surface(
+        shape = RoundedCornerShape(10.dp),
+        color = Color.Black.copy(alpha = 0.78f),
+        tonalElevation = 4.dp,
+        modifier = Modifier.width(360.dp),
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+            if (!channelName.isNullOrBlank()) {
+                Text(
+                    channelName,
+                    color = Color.White,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(Modifier.size(4.dp))
+            }
+            if (now != null) {
+                Text(
+                    "AHORA",
+                    color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.labelSmall,
+                )
+                Text(
+                    now.title,
+                    color = Color.White,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (next != null) {
+                Spacer(Modifier.size(4.dp))
+                Text(
+                    "DESPUÉS",
+                    color = Color.White.copy(alpha = 0.6f),
+                    style = MaterialTheme.typography.labelSmall,
+                )
+                Text(
+                    next.title,
+                    color = Color.White.copy(alpha = 0.8f),
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
     }
 }
@@ -463,6 +591,7 @@ private fun CompactChannelRow(channel: Channel, isActive: Boolean, onClick: () -
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
             Text(
                 channel.name,
+                color = MaterialTheme.colorScheme.onSurface,
                 fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
