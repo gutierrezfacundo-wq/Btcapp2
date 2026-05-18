@@ -78,7 +78,15 @@ fun AppNavGraph(
                 container = container,
                 streamUrl = url,
                 title = title,
-                onBack = { navController.popBackStack() },
+                onBack = {
+                    val popped = navController.popBackStack()
+                    if (!popped) {
+                        navController.navigate(Routes.Home) {
+                            popUpTo(Routes.Player) { inclusive = true }
+                            launchSingleTop = true
+                        }
+                    }
+                },
             )
         }
         composable(

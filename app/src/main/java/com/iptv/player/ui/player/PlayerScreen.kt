@@ -108,7 +108,12 @@ fun PlayerScreen(
 
     var isFullscreen by rememberSaveable { mutableStateOf(false) }
 
-    BackHandler(enabled = isFullscreen) { isFullscreen = false }
+    BackHandler {
+        when {
+            isFullscreen -> isFullscreen = false
+            else -> onBack()
+        }
+    }
 
     val activity = context as? Activity
     SystemBarsEffect(activity = activity, hidden = isFullscreen || isInPip)
