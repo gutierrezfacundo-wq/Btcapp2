@@ -34,6 +34,8 @@ captures/
 *.aar
 *.keystore
 *.jks
+# Excepcion: clave de debug fija para firma consistente entre builds (no es secreta)
+!app/debug.keystore
 app/build/
 build/
 .kotlin/
