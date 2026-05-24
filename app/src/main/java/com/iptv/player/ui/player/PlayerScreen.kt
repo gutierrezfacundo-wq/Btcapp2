@@ -2,6 +2,7 @@ package com.iptv.player.ui.player
 
 import android.app.Activity
 import android.content.res.Configuration
+import android.view.View
 import android.view.WindowManager
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
@@ -335,19 +336,27 @@ private fun LandscapeOverlayLayout(
     channelName: String?,
 ) {
     Box(Modifier.fillMaxSize().background(Color.Black)) {
-        PlayerSurface(player, Modifier.fillMaxSize())
-        OverlayBar(
-            titleText = titleText,
-            showNav = live != null,
-            showListToggle = live != null,
-            onBack = onBack,
-            onPrev = onPrev,
-            onNext = onNext,
-            onOpenTracks = onOpenTracks,
-            onEnterPip = onEnterPip,
-            onEnterFullscreen = onEnterFullscreen,
-            onToggleList = onToggleList,
-        )
+        var controlsVisible by remember { mutableStateOf(true) }
+        PlayerSurface(player, Modifier.fillMaxSize(), onControllerVisibility = { controlsVisible = it })
+        AnimatedVisibility(
+            visible = controlsVisible,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.TopCenter),
+        ) {
+            OverlayBar(
+                titleText = titleText,
+                showNav = live != null,
+                showListToggle = live != null,
+                onBack = onBack,
+                onPrev = onPrev,
+                onNext = onNext,
+                onOpenTracks = onOpenTracks,
+                onEnterPip = onEnterPip,
+                onEnterFullscreen = onEnterFullscreen,
+                onToggleList = onToggleList,
+            )
+        }
         if (live != null) {
             AnimatedVisibility(
                 visible = listOpen,
@@ -400,21 +409,29 @@ private fun FullscreenLayout(
     channelName: String?,
 ) {
     Box(Modifier.fillMaxSize().background(Color.Black)) {
-        PlayerSurface(player, Modifier.fillMaxSize())
-        OverlayBar(
-            titleText = titleText,
-            showNav = showNav,
-            showListToggle = false,
-            onBack = onBack,
-            onPrev = onPrev,
-            onNext = onNext,
-            onOpenTracks = onOpenTracks,
-            onEnterPip = onEnterPip,
-            onEnterFullscreen = onExit,
-            onToggleList = {},
-            fullscreenIcon = Icons.Outlined.FullscreenExit,
-            fullscreenContentDesc = "Salir de pantalla completa",
-        )
+        var controlsVisible by remember { mutableStateOf(true) }
+        PlayerSurface(player, Modifier.fillMaxSize(), onControllerVisibility = { controlsVisible = it })
+        AnimatedVisibility(
+            visible = controlsVisible,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.TopCenter),
+        ) {
+            OverlayBar(
+                titleText = titleText,
+                showNav = showNav,
+                showListToggle = false,
+                onBack = onBack,
+                onPrev = onPrev,
+                onNext = onNext,
+                onOpenTracks = onOpenTracks,
+                onEnterPip = onEnterPip,
+                onEnterFullscreen = onExit,
+                onToggleList = {},
+                fullscreenIcon = Icons.Outlined.FullscreenExit,
+                fullscreenContentDesc = "Salir de pantalla completa",
+            )
+        }
         AnimatedVisibility(
             visible = miniEpgVisible,
             enter = fadeIn(),
@@ -544,6 +561,7 @@ private fun PlayerSurface(
     player: ExoPlayer,
     modifier: Modifier = Modifier,
     controllerEnabled: Boolean = true,
+    onControllerVisibility: ((Boolean) -> Unit)? = null,
 ) {
     AndroidView(
         modifier = modifier,
@@ -552,6 +570,13 @@ private fun PlayerSurface(
                 this.player = player
                 useController = controllerEnabled
                 setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
+                if (onControllerVisibility != null) {
+                    setControllerVisibilityListener(
+                        PlayerView.ControllerVisibilityListener { visibility ->
+                            onControllerVisibility(visibility == View.VISIBLE)
+                        }
+                    )
+                }
             }
         },
         update = { view ->
