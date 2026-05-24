@@ -6,6 +6,7 @@ import androidx.room.Room
 import com.iptv.player.data.local.IptvDatabase
 import com.iptv.player.data.local.PreferencesStore
 import com.iptv.player.data.remote.XtreamApi
+import com.iptv.player.data.repository.CatalogCache
 import com.iptv.player.data.repository.EpgRepository
 import com.iptv.player.data.repository.IptvRepository
 import com.iptv.player.playback.PlaybackController
@@ -54,6 +55,7 @@ class AppContainer(context: Context) {
     val preferencesStore = PreferencesStore(appContext)
     val iptvRepository = IptvRepository(xtreamApi, httpClient)
     val epgRepository = EpgRepository(httpClient)
+    val catalogCache = CatalogCache(appContext)
     val playbackController = PlaybackController()
     val playbackManager = PlaybackManager(appContext, httpClient)
 }

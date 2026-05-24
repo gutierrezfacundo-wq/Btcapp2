@@ -1,7 +1,11 @@
 package com.iptv.player.data.model
 
+import kotlinx.serialization.Serializable
+
+@Serializable
 enum class MediaKind { LIVE, MOVIE, SERIES_EPISODE }
 
+@Serializable
 data class Channel(
     val id: String,
     val name: String,
@@ -12,6 +16,7 @@ data class Channel(
     val kind: MediaKind = MediaKind.LIVE,
 )
 
+@Serializable
 data class Movie(
     val id: String,
     val name: String,
@@ -23,6 +28,7 @@ data class Movie(
     val year: String? = null,
 )
 
+@Serializable
 data class SeriesInfo(
     val id: String,
     val name: String,
@@ -41,6 +47,7 @@ data class Episode(
     val plot: String? = null,
 )
 
+@Serializable
 data class Category(
     val id: String,
     val name: String,

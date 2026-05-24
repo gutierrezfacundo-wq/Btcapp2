@@ -14,6 +14,7 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 
+@kotlinx.serialization.Serializable
 data class Catalog(
     val liveChannels: List<Channel> = emptyList(),
     val liveCategories: List<Category> = emptyList(),

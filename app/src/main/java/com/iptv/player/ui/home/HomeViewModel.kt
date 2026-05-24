@@ -57,21 +57,33 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
         loadJob = viewModelScope.launch {
             _state.value = HomeUiState(loading = true)
             val source = container.preferencesStore.source.filterNotNull().first()
-            _state.value = HomeUiState(loading = true, source = source)
+
+            // 1) Mostrar el catalogo cacheado al instante (si existe)
+            val cached = runCatching { container.catalogCache.load(source) }.getOrNull()
+            if (cached != null) {
+                _state.value = HomeUiState(loading = false, catalog = cached, source = source)
+                launch { computeChannelTags(cached.liveChannels) }
+                launch { runCatching { container.epgRepository.load(source) } }
+            } else {
+                _state.value = HomeUiState(loading = true, source = source)
+            }
+
+            // 2) Refrescar desde la red en segundo plano
             runCatching { container.iptvRepository.loadCatalog(source) }
                 .onSuccess { catalog ->
                     _state.value = HomeUiState(loading = false, catalog = catalog, source = source)
                     launch { computeChannelTags(catalog.liveChannels) }
-                    launch {
-                        runCatching { container.epgRepository.load(source) }
-                    }
+                    launch { runCatching { container.catalogCache.save(source, catalog) } }
+                    launch { runCatching { container.epgRepository.load(source) } }
                 }
                 .onFailure { e ->
-                    _state.value = HomeUiState(
-                        loading = false,
-                        error = e.message ?: "Error cargando contenido",
-                        source = source,
-                    )
+                    if (cached == null) {
+                        _state.value = HomeUiState(
+                            loading = false,
+                            error = e.message ?: "Error cargando contenido",
+                            source = source,
+                        )
+                    }
                 }
         }
     }

@@ -83,6 +83,7 @@ fun MiniPlayer(
                         }
                     },
                     update = { view -> view.player = player },
+                    onRelease = { view -> view.player = null },
                 )
             }
             Column(

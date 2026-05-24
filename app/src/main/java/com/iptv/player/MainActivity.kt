@@ -29,6 +29,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         val container = (application as IptvApp).container
+        val lastCrash = com.iptv.player.crash.CrashStore.consume(this)
         setContent {
             IptvTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
@@ -44,6 +45,9 @@ class MainActivity : ComponentActivity() {
                             container = container,
                             hasSource = source.value != null,
                         )
+                    }
+                    if (lastCrash != null) {
+                        com.iptv.player.ui.CrashDialog(trace = lastCrash)
                     }
                 }
             }

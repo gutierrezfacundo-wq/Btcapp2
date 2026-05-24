@@ -533,6 +533,7 @@ private fun PlayerSurface(
             view.player = player
             view.useController = controllerEnabled
         },
+        onRelease = { view -> view.player = null },
     )
 }
 
