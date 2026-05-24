@@ -23,8 +23,8 @@ android {
         applicationId = "com.iptv.player"
         minSdk = 24
         targetSdk = 35
-        versionCode = (System.getenv("VERSION_CODE")?.toIntOrNull()) ?: 1
-        versionName = System.getenv("VERSION_NAME") ?: "0.1.0"
+        versionCode = (System.getenv("VERSION_CODE")?.toIntOrNull()) ?: 2
+        versionName = System.getenv("VERSION_NAME") ?: "0.2.0"
         vectorDrawables { useSupportLibrary = true }
     }
 

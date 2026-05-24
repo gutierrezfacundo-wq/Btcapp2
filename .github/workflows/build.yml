@@ -35,6 +35,9 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Build debug APK
+        env:
+          VERSION_CODE: ${{ github.run_number }}
+          VERSION_NAME: 0.2.0.${{ github.run_number }}
         run: |
           set -o pipefail
           ./gradlew :app:assembleDebug --no-daemon --stacktrace 2>&1 | tee build.log
