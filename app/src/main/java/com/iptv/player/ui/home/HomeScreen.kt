@@ -24,7 +24,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.CalendarViewWeek
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Favorite
 import androidx.compose.material.icons.outlined.LiveTv
@@ -128,7 +128,7 @@ fun HomeScreen(
                 title = { Text(stringResource(R.string.app_name)) },
                 actions = {
                     IconButton(onClick = { showGuide = true }) {
-                        Icon(Icons.Outlined.CalendarViewWeek, contentDescription = "Guía")
+                        Icon(Icons.Filled.DateRange, contentDescription = "Guía")
                     }
                     IconButton(onClick = vm::load) {
                         Icon(Icons.Outlined.Refresh, contentDescription = "Recargar")
