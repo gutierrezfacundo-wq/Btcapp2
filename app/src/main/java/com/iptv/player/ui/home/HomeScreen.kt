@@ -1,5 +1,6 @@
 package com.iptv.player.ui.home
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -23,6 +24,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.CalendarViewWeek
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Favorite
 import androidx.compose.material.icons.outlined.LiveTv
@@ -100,12 +102,34 @@ fun HomeScreen(
     val activeQueue by container.playbackController.queue.collectAsState()
     val playerVisible by container.playbackController.playerVisible.collectAsState()
     var tab by rememberSaveable { mutableStateOf(HomeTab.Live) }
+    var showGuide by rememberSaveable { mutableStateOf(false) }
+
+    if (showGuide) {
+        val liveChannels = state.catalog.liveChannels
+        val epg by container.epgRepository.cache.collectAsState()
+        BackHandler { showGuide = false }
+        EpgGuide(
+            channels = liveChannels,
+            epg = epg,
+            onPlayChannel = { idx ->
+                vm.playLive(liveChannels, idx)
+                val ch = liveChannels[idx]
+                showGuide = false
+                onPlay(ch.streamUrl, ch.name)
+            },
+            onBack = { showGuide = false },
+        )
+        return
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.app_name)) },
                 actions = {
+                    IconButton(onClick = { showGuide = true }) {
+                        Icon(Icons.Outlined.CalendarViewWeek, contentDescription = "Guía")
+                    }
                     IconButton(onClick = vm::load) {
                         Icon(Icons.Outlined.Refresh, contentDescription = "Recargar")
                     }
