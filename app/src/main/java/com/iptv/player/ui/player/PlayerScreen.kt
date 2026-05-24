@@ -2,6 +2,7 @@ package com.iptv.player.ui.player
 
 import android.app.Activity
 import android.content.res.Configuration
+import android.view.WindowManager
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -72,6 +73,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
@@ -146,6 +148,7 @@ fun PlayerScreen(
 
     val activity = context as? Activity
     SystemBarsEffect(activity = activity, hidden = isFullscreen || isInPip)
+    KeepScreenOnEffect(activity = activity, player = player)
     val titleText = queue?.title ?: title
     var showTrackSelector by remember { mutableStateOf(false) }
     val live = queue as? PlaybackQueue.Live
@@ -224,6 +227,28 @@ private fun SystemBarsEffect(activity: Activity?, hidden: Boolean) {
             val window = activity?.window ?: return@onDispose
             WindowCompat.getInsetsController(window, window.decorView)
                 .show(WindowInsetsCompat.Type.systemBars())
+        }
+    }
+}
+
+@OptIn(UnstableApi::class)
+@Composable
+private fun KeepScreenOnEffect(activity: Activity?, player: ExoPlayer) {
+    DisposableEffect(activity, player) {
+        val window = activity?.window
+        fun keepOn(on: Boolean) {
+            if (window == null) return
+            if (on) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+        keepOn(player.isPlaying)
+        val listener = object : Player.Listener {
+            override fun onIsPlayingChanged(isPlaying: Boolean) = keepOn(isPlaying)
+        }
+        player.addListener(listener)
+        onDispose {
+            player.removeListener(listener)
+            keepOn(false)
         }
     }
 }
