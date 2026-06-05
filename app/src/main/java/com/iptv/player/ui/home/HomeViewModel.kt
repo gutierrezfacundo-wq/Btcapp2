@@ -24,14 +24,14 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+private const val CACHE_TTL_MS = 6 * 60 * 60 * 1000L // 6 horas
+
 data class HomeUiState(
     val loading: Boolean = true,
     val error: String? = null,
     val catalog: Catalog = Catalog(),
     val source: SourceConfig? = null,
-    val channelTags: Map<String, ChannelAttributes.Tags> = emptyMap(),
-    val availableCountries: List<String> = emptyList(),
-    val availableLanguages: List<String> = emptyList(),
+    val channelQuality: Map<String, String> = emptyMap(),
     val availableQualities: List<String> = emptyList(),
 )
 
@@ -52,7 +52,7 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
         load()
     }
 
-    fun load() {
+    fun load(forceRefresh: Boolean = false) {
         loadJob?.cancel()
         loadJob = viewModelScope.launch {
             _state.value = HomeUiState(loading = true)
@@ -60,10 +60,14 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
 
             // 1) Mostrar el catalogo cacheado al instante (si existe)
             val cached = runCatching { container.catalogCache.load(source) }.getOrNull()
+            val cacheFresh = container.catalogCache.ageMs(source) < CACHE_TTL_MS
             if (cached != null) {
                 _state.value = HomeUiState(loading = false, catalog = cached, source = source)
                 launch { computeChannelTags(cached.liveChannels) }
                 launch { runCatching { container.epgRepository.load(source) } }
+                // Si el cache es fresco y no se pidio refrescar, no golpeamos la red:
+                // abrir la app es instantaneo.
+                if (cacheFresh && !forceRefresh) return@launch
             } else {
                 _state.value = HomeUiState(loading = true, source = source)
             }
@@ -88,26 +92,22 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
+    fun refresh() = load(forceRefresh = true)
+
     private suspend fun computeChannelTags(channels: List<Channel>) = withContext(Dispatchers.Default) {
-        val tags = HashMap<String, ChannelAttributes.Tags>(channels.size)
-        val countries = LinkedHashSet<String>()
-        val languages = LinkedHashSet<String>()
+        val quality = HashMap<String, String>(channels.size)
         val qualities = LinkedHashSet<String>()
         for (ch in channels) {
-            val t = ChannelAttributes.extract(ch)
-            tags[ch.id] = t
-            countries.addAll(t.countries)
-            languages.addAll(t.languages)
-            qualities.addAll(t.qualities)
+            val q = ChannelAttributes.qualityOf(ch)
+            if (q.isNotEmpty()) {
+                quality[ch.id] = q
+                qualities.add(q)
+            }
         }
-        val sortedCountries = countries.sorted()
-        val sortedLanguages = languages.sorted()
         val orderedQualities = listOf("4K", "FHD", "HD", "SD").filter { it in qualities }
         _state.update { current ->
             current.copy(
-                channelTags = tags,
-                availableCountries = sortedCountries,
-                availableLanguages = sortedLanguages,
+                channelQuality = quality,
                 availableQualities = orderedQualities,
             )
         }

@@ -48,7 +48,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -74,7 +73,6 @@ import com.iptv.player.data.model.Movie
 import com.iptv.player.data.model.SeriesInfo
 import com.iptv.player.di.AppContainer
 import androidx.media3.common.util.UnstableApi
-import com.iptv.player.ui.components.ChannelAttributes
 import com.iptv.player.ui.components.ChannelRow
 import com.iptv.player.ui.components.ChannelSearchBar
 import com.iptv.player.ui.components.MiniPlayer
@@ -131,7 +129,7 @@ fun HomeScreen(
                     IconButton(onClick = { showGuide = true }) {
                         Icon(Icons.Filled.DateRange, contentDescription = "Guía")
                     }
-                    IconButton(onClick = vm::load) {
+                    IconButton(onClick = vm::refresh) {
                         Icon(Icons.Outlined.Refresh, contentDescription = "Recargar")
                     }
                     IconButton(onClick = onReconfigure) {
@@ -176,9 +174,7 @@ fun HomeScreen(
                         channels = state.catalog.liveChannels,
                         categories = state.catalog.liveCategories,
                         recents = recents,
-                        channelTags = state.channelTags,
-                        availableCountries = state.availableCountries,
-                        availableLanguages = state.availableLanguages,
+                        channelQuality = state.channelQuality,
                         availableQualities = state.availableQualities,
                         isFavorite = vm::isFavorite,
                         nowPlaying = vm::nowPlayingFor,
@@ -285,9 +281,7 @@ private fun LiveTab(
     channels: List<Channel>,
     categories: List<Category>,
     recents: List<RecentEntity>,
-    channelTags: Map<String, ChannelAttributes.Tags>,
-    availableCountries: List<String>,
-    availableLanguages: List<String>,
+    channelQuality: Map<String, String>,
     availableQualities: List<String>,
     isFavorite: (String) -> Boolean,
     nowPlaying: (Channel) -> String?,
@@ -298,17 +292,12 @@ private fun LiveTab(
 ) {
     var category by rememberSaveable { mutableStateOf<String?>(null) }
     var query by rememberSaveable { mutableStateOf("") }
-    var selectedCountries by rememberSaveable { mutableStateOf(emptySet<String>()) }
-    var selectedLanguages by rememberSaveable { mutableStateOf(emptySet<String>()) }
     var selectedQualities by rememberSaveable { mutableStateOf(emptySet<String>()) }
 
     val filtered = remember(
-        channels, category, query, selectedCountries, selectedLanguages, selectedQualities, channelTags,
+        channels, category, query, selectedQualities, channelQuality,
     ) {
         val q = query.trim()
-        val tagsLoaded = channelTags.isNotEmpty()
-        val skipAttrFilter = !tagsLoaded ||
-            (selectedCountries.isEmpty() && selectedLanguages.isEmpty() && selectedQualities.isEmpty())
         channels.filter { ch ->
             val categoryOk = category == null || ch.groupTitle == category
             if (!categoryOk) return@filter false
@@ -316,11 +305,9 @@ private fun LiveTab(
                 ch.name.contains(q, ignoreCase = true) ||
                 (ch.groupTitle?.contains(q, ignoreCase = true) == true)
             if (!queryOk) return@filter false
-            if (skipAttrFilter) return@filter true
-            val tags = channelTags[ch.id] ?: return@filter false
-            (selectedCountries.isEmpty() || tags.countries.any { it in selectedCountries }) &&
-                (selectedLanguages.isEmpty() || tags.languages.any { it in selectedLanguages }) &&
-                (selectedQualities.isEmpty() || tags.qualities.any { it in selectedQualities })
+            if (selectedQualities.isEmpty()) return@filter true
+            val qy = channelQuality[ch.id]
+            qy != null && qy in selectedQualities
         }
     }
 
@@ -340,18 +327,6 @@ private fun LiveTab(
                 )
             }
             ChannelSearchBar(query = query, onQueryChange = { query = it })
-            MultiSelectChipRow(
-                label = "País",
-                options = availableCountries,
-                selected = selectedCountries,
-                onToggle = { c -> selectedCountries = selectedCountries.toggle(c) },
-            )
-            MultiSelectChipRow(
-                label = "Idioma",
-                options = availableLanguages,
-                selected = selectedLanguages,
-                onToggle = { l -> selectedLanguages = selectedLanguages.toggle(l) },
-            )
             MultiSelectChipRow(
                 label = "Calidad",
                 options = availableQualities,

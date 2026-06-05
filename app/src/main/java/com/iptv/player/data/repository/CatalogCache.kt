@@ -22,6 +22,13 @@ class CatalogCache(appContext: Context) {
         runCatching { json.decodeFromString<Catalog>(f.readText()) }.getOrNull()
     }
 
+    /** Edad del cache en ms; Long.MAX_VALUE si no existe. */
+    fun ageMs(source: SourceConfig): Long {
+        val f = fileFor(source.cacheKey())
+        if (!f.exists()) return Long.MAX_VALUE
+        return System.currentTimeMillis() - f.lastModified()
+    }
+
     suspend fun save(source: SourceConfig, catalog: Catalog) {
         withContext(Dispatchers.IO) {
             runCatching { fileFor(source.cacheKey()).writeText(json.encodeToString(catalog)) }

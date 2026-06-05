@@ -112,4 +112,13 @@ object ChannelAttributes {
         }
         return emptySet()
     }
+
+    /** Solo calidad — barato, sin los regex de pais/idioma. Devuelve "" si no hay match. */
+    fun qualityOf(channel: Channel): String {
+        val text = channel.name
+        for ((label, regex) in QUALITY_PATTERNS) {
+            if (regex.containsMatchIn(text)) return label
+        }
+        return ""
+    }
 }
