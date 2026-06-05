@@ -103,6 +103,7 @@ fun HomeScreen(
     val playerVisible by container.playbackController.playerVisible.collectAsState()
     var tab by rememberSaveable { mutableStateOf(HomeTab.Live) }
     var showGuide by rememberSaveable { mutableStateOf(false) }
+    var channelForDialog by remember { mutableStateOf<Channel?>(null) }
 
     if (showGuide) {
         val liveChannels = state.catalog.liveChannels
@@ -193,6 +194,7 @@ fun HomeScreen(
                             onPlay(item.streamUrl, item.title)
                         },
                         onRemoveRecent = vm::removeRecent,
+                        onLongPressChannel = { channelForDialog = it },
                     )
                     HomeTab.Movies -> MoviesTab(
                         movies = state.catalog.movies,
@@ -207,29 +209,25 @@ fun HomeScreen(
                         categories = state.catalog.seriesCategories,
                         onOpen = onOpenSeries,
                     )
-                    HomeTab.Favorites -> FavoritesTab(
-                        favorites = favorites.map {
-                            Channel(
-                                id = it.id,
-                                name = it.name,
-                                streamUrl = it.streamUrl,
-                                logoUrl = it.logoUrl,
-                                groupTitle = null,
-                                tvgId = null,
-                                kind = MediaKind.entries.getOrElse(it.kindOrdinal) { MediaKind.LIVE },
-                            )
-                        },
-                        onToggleFavorite = { ch ->
-                            vm.toggleFavorite(ch.id, ch.name, ch.streamUrl, ch.logoUrl, ch.kind)
-                        },
-                        onPlay = { ch ->
-                            vm.playSingle(ch.name, ch.streamUrl, ch.logoUrl)
-                            onPlay(ch.streamUrl, ch.name)
-                        },
-                    )
+                    HomeTab.Favorites -> FavoritesAndCollectionsTab(vm = vm, onPlay = onPlay)
                 }
             }
         }
+    }
+
+    val dialogChannel = channelForDialog
+    if (dialogChannel != null) {
+        val cols by vm.collections.collectAsState()
+        val memberIds by vm.collectionsContaining(dialogChannel.id)
+            .collectAsState(initial = emptyList())
+        AddToCollectionDialog(
+            channelName = dialogChannel.name,
+            collections = cols,
+            memberIds = memberIds.toSet(),
+            onToggle = { cid, incl -> vm.setChannelInCollection(cid, dialogChannel, incl) },
+            onCreateAndAdd = { name -> vm.createCollectionWith(name, dialogChannel) },
+            onDismiss = { channelForDialog = null },
+        )
     }
 }
 
@@ -290,6 +288,7 @@ private fun LiveTab(
     onPlayChannel: (filtered: List<Channel>, index: Int) -> Unit,
     onResumeRecent: (RecentEntity) -> Unit,
     onRemoveRecent: (String) -> Unit,
+    onLongPressChannel: (Channel) -> Unit,
 ) {
     var category by rememberSaveable { mutableStateOf<String?>(null) }
     var query by rememberSaveable { mutableStateOf("") }
@@ -348,6 +347,7 @@ private fun LiveTab(
                             onToggleFavorite = {
                                 onToggleFavorite(ch.id, ch.name, ch.streamUrl, ch.logoUrl, ch.kind)
                             },
+                            onLongClick = { onLongPressChannel(ch) },
                         )
                     }
                 }
@@ -593,28 +593,7 @@ private fun SeriesTab(
 }
 
 @Composable
-private fun FavoritesTab(
-    favorites: List<Channel>,
-    onToggleFavorite: (Channel) -> Unit,
-    onPlay: (Channel) -> Unit,
-) {
-    if (favorites.isEmpty()) EmptyBox()
-    else LazyColumn {
-        items(favorites, key = { it.id }) { ch ->
-            ChannelRow(
-                name = ch.name,
-                subtitle = null,
-                logoUrl = ch.logoUrl,
-                isFavorite = true,
-                onClick = { onPlay(ch) },
-                onToggleFavorite = { onToggleFavorite(ch) },
-            )
-        }
-    }
-}
-
-@Composable
-private fun EmptyBox() {
+internal fun EmptyBox() {
     Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
         Text(stringResource(R.string.empty))
     }

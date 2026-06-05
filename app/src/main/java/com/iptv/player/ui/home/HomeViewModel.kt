@@ -141,11 +141,66 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
 
     fun isFavorite(id: String): Boolean = favorites.value.any { it.id == id }
 
+    // --- Colecciones de favoritos ---
+    val collections = container.collectionRepository.collections
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    fun collectionsContaining(channelId: String) =
+        container.collectionRepository.collectionsContaining(channelId)
+
+    fun collectionItems(id: Long) = container.collectionRepository.items(id)
+
+    fun createCollection(name: String) {
+        viewModelScope.launch { container.collectionRepository.createCollection(name) }
+    }
+
+    fun createCollectionWith(name: String, channel: Channel) {
+        viewModelScope.launch {
+            val id = container.collectionRepository.createCollection(name)
+            container.collectionRepository.addChannel(id, channel)
+        }
+    }
+
+    fun setChannelInCollection(collectionId: Long, channel: Channel, included: Boolean) {
+        viewModelScope.launch {
+            if (included) container.collectionRepository.addChannel(collectionId, channel)
+            else container.collectionRepository.removeChannel(collectionId, channel.id)
+        }
+    }
+
+    fun renameCollection(id: Long, name: String) {
+        viewModelScope.launch { container.collectionRepository.rename(id, name) }
+    }
+
+    fun removeFromCollection(collectionId: Long, channelId: String) {
+        viewModelScope.launch { container.collectionRepository.removeChannel(collectionId, channelId) }
+    }
+
+    fun deleteCollection(id: Long) {
+        viewModelScope.launch { container.collectionRepository.deleteCollection(id) }
+    }
+
     fun nowPlayingFor(channel: Channel): String? =
         container.epgRepository.nowPlaying(channel.tvgId)?.title
 
     fun playLive(channels: List<Channel>, activeIndex: Int) {
         container.playbackController.setLive(channels, activeIndex)
+    }
+
+    /** Reproduce desde una coleccion; el zapping navega dentro de la coleccion. */
+    fun playCollection(items: List<com.iptv.player.data.local.CollectionItemEntity>, index: Int) {
+        val channels = items.map { item ->
+            Channel(
+                id = item.channelId,
+                name = item.name,
+                streamUrl = item.streamUrl,
+                logoUrl = item.logoUrl,
+                groupTitle = null,
+                tvgId = null,
+                kind = MediaKind.entries.getOrElse(item.kindOrdinal) { MediaKind.LIVE },
+            )
+        }
+        container.playbackController.setLive(channels, index)
     }
 
     fun playSingle(name: String, url: String, poster: String?) {

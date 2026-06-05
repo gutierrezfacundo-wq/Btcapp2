@@ -7,6 +7,7 @@ import com.iptv.player.data.local.IptvDatabase
 import com.iptv.player.data.local.PreferencesStore
 import com.iptv.player.data.remote.XtreamApi
 import com.iptv.player.data.repository.CatalogCache
+import com.iptv.player.data.repository.CollectionRepository
 import com.iptv.player.data.repository.EpgRepository
 import com.iptv.player.data.repository.IptvRepository
 import com.iptv.player.data.repository.PlaylistRepository
@@ -50,7 +51,10 @@ class AppContainer(context: Context) {
         IptvDatabase::class.java,
         "iptv.db",
     )
-        .addMigrations(com.iptv.player.data.local.MIGRATION_2_3)
+        .addMigrations(
+            com.iptv.player.data.local.MIGRATION_2_3,
+            com.iptv.player.data.local.MIGRATION_3_4,
+        )
         .fallbackToDestructiveMigration()
         .build()
 
@@ -59,6 +63,10 @@ class AppContainer(context: Context) {
     val epgRepository = EpgRepository(httpClient)
     val catalogCache = CatalogCache(appContext)
     val playlistRepository = PlaylistRepository(database.playlistDao(), preferencesStore)
+    val collectionRepository = CollectionRepository(
+        database.collectionDao(),
+        database.collectionItemDao(),
+    )
     val playbackController = PlaybackController()
     val playbackManager = PlaybackManager(appContext, httpClient)
 }
