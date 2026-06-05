@@ -2,6 +2,10 @@
 <resources>
     <string name="app_name">IPTV Player</string>
     <string name="setup_title">Configurar fuente</string>
+    <string name="setup_playlist_name">Nombre de la lista</string>
+    <string name="playlists_title">Mis listas</string>
+    <string name="playlists_add">Agregar lista</string>
+    <string name="playlists_empty">No hay listas. Agregá una.</string>
     <string name="setup_tab_m3u">Lista M3U</string>
     <string name="setup_tab_xtream">Xtream Codes</string>
     <string name="setup_m3u_url">URL de la lista (.m3u / .m3u8)</string>

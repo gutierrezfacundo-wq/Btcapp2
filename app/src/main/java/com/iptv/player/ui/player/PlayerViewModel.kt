@@ -41,7 +41,7 @@ class PlayerViewModel(private val container: AppContainer) : ViewModel() {
     init {
         viewModelScope.launch {
             runCatching {
-                val source = container.preferencesStore.source.filterNotNull().first()
+                val source = container.playlistRepository.activeSource.filterNotNull().first()
                 container.epgRepository.load(source)
             }
         }

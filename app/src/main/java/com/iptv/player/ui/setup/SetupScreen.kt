@@ -62,8 +62,16 @@ fun SetupScreen(
             }
             Spacer(Modifier.height(16.dp))
             if (tab == 0) {
+                var name by rememberSaveable { mutableStateOf("") }
                 var url by rememberSaveable { mutableStateOf("") }
                 var epg by rememberSaveable { mutableStateOf("") }
+                OutlinedTextField(
+                    value = name, onValueChange = { name = it },
+                    label = { Text(stringResource(R.string.setup_playlist_name)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(12.dp))
                 OutlinedTextField(
                     value = url, onValueChange = { url = it },
                     label = { Text(stringResource(R.string.setup_m3u_url)) },
@@ -81,7 +89,7 @@ fun SetupScreen(
                 )
                 Spacer(Modifier.height(20.dp))
                 Button(
-                    onClick = { vm.saveM3u(url.trim(), epg.trim().ifBlank { null }, onSaved) },
+                    onClick = { vm.saveM3u(name.trim(), url.trim(), epg.trim().ifBlank { null }, onSaved) },
                     enabled = url.isNotBlank() && !state.saving,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
@@ -89,9 +97,17 @@ fun SetupScreen(
                     else Text(stringResource(R.string.setup_save))
                 }
             } else {
+                var name by rememberSaveable { mutableStateOf("") }
                 var server by rememberSaveable { mutableStateOf("") }
                 var user by rememberSaveable { mutableStateOf("") }
                 var pass by rememberSaveable { mutableStateOf("") }
+                OutlinedTextField(
+                    value = name, onValueChange = { name = it },
+                    label = { Text(stringResource(R.string.setup_playlist_name)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(12.dp))
                 OutlinedTextField(
                     value = server, onValueChange = { server = it },
                     label = { Text(stringResource(R.string.setup_xtream_server)) },
@@ -116,7 +132,7 @@ fun SetupScreen(
                 )
                 Spacer(Modifier.height(20.dp))
                 Button(
-                    onClick = { vm.saveXtream(server.trim(), user.trim(), pass, onSaved) },
+                    onClick = { vm.saveXtream(name.trim(), server.trim(), user.trim(), pass, onSaved) },
                     enabled = server.isNotBlank() && user.isNotBlank() && pass.isNotBlank() && !state.saving,
                     modifier = Modifier.fillMaxWidth(),
                 ) {

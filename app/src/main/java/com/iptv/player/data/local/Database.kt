@@ -40,11 +40,32 @@ interface RecentDao {
 }
 
 @Database(
-    entities = [FavoriteEntity::class, RecentEntity::class],
-    version = 2,
+    entities = [FavoriteEntity::class, RecentEntity::class, PlaylistEntity::class],
+    version = 3,
     exportSchema = false,
 )
 abstract class IptvDatabase : RoomDatabase() {
     abstract fun favoriteDao(): FavoriteDao
     abstract fun recentDao(): RecentDao
+    abstract fun playlistDao(): PlaylistDao
+}
+
+val MIGRATION_2_3 = object : androidx.room.migration.Migration(2, 3) {
+    override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS playlists (
+                id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                kind TEXT NOT NULL,
+                m3uUrl TEXT,
+                epgUrl TEXT,
+                xServer TEXT,
+                xUser TEXT,
+                xPass TEXT,
+                createdAt INTEGER NOT NULL
+            )
+            """.trimIndent()
+        )
+    }
 }

@@ -3,10 +3,12 @@ package com.iptv.player.data.local
 import android.content.Context
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.iptv.player.data.model.SourceConfig
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
 private val Context.dataStore by preferencesDataStore(name = "iptv_prefs")
@@ -20,9 +22,34 @@ class PreferencesStore(private val context: Context) {
         val XServer = stringPreferencesKey("xtream_server")
         val XUser = stringPreferencesKey("xtream_user")
         val XPass = stringPreferencesKey("xtream_pass")
+        val ActivePlaylistId = longPreferencesKey("active_playlist_id")
     }
 
+    /** Id de la lista activa; null si no hay ninguna seleccionada. */
+    val activePlaylistId: Flow<Long?> = context.dataStore.data.map { prefs ->
+        prefs[Keys.ActivePlaylistId]
+    }
+
+    suspend fun setActivePlaylistId(id: Long) {
+        context.dataStore.edit { it[Keys.ActivePlaylistId] = id }
+    }
+
+    /** Fuente legacy (config unica anterior a las multilistas); usada solo para migrar. */
     val source: Flow<SourceConfig?> = context.dataStore.data.map { prefs -> readSource(prefs) }
+
+    suspend fun readLegacySourceOnce(): SourceConfig? =
+        readSource(context.dataStore.data.first())
+
+    suspend fun clearLegacySource() {
+        context.dataStore.edit { prefs ->
+            prefs.remove(Keys.SourceKind)
+            prefs.remove(Keys.M3uUrl)
+            prefs.remove(Keys.EpgUrl)
+            prefs.remove(Keys.XServer)
+            prefs.remove(Keys.XUser)
+            prefs.remove(Keys.XPass)
+        }
+    }
 
     private fun readSource(prefs: Preferences): SourceConfig? {
         return when (prefs[Keys.SourceKind]) {

@@ -9,6 +9,7 @@ import androidx.navigation.navArgument
 import com.iptv.player.di.AppContainer
 import com.iptv.player.ui.home.HomeScreen
 import com.iptv.player.ui.player.PlayerScreen
+import com.iptv.player.ui.playlists.PlaylistsScreen
 import com.iptv.player.ui.series.SeriesDetailScreen
 import com.iptv.player.ui.setup.SetupScreen
 import java.net.URLDecoder
@@ -18,6 +19,7 @@ import java.nio.charset.StandardCharsets
 object Routes {
     const val Setup = "setup"
     const val Home = "home"
+    const val Playlists = "playlists"
     const val Player = "player/{url}/{title}"
     const val SeriesDetail = "series/{seriesId}/{title}"
 
@@ -45,8 +47,11 @@ fun AppNavGraph(
             SetupScreen(
                 container = container,
                 onSaved = {
-                    navController.navigate(Routes.Home) {
-                        popUpTo(Routes.Setup) { inclusive = true }
+                    val popped = navController.popBackStack()
+                    if (!popped) {
+                        navController.navigate(Routes.Home) {
+                            popUpTo(Routes.Setup) { inclusive = true }
+                        }
                     }
                 },
             )
@@ -56,11 +61,14 @@ fun AppNavGraph(
                 container = container,
                 onPlay = { url, title -> navController.navigate(Routes.player(url, title)) },
                 onOpenSeries = { id, title -> navController.navigate(Routes.seriesDetail(id, title)) },
-                onReconfigure = {
-                    navController.navigate(Routes.Setup) {
-                        popUpTo(Routes.Home) { inclusive = true }
-                    }
-                },
+                onOpenPlaylists = { navController.navigate(Routes.Playlists) },
+            )
+        }
+        composable(Routes.Playlists) {
+            PlaylistsScreen(
+                container = container,
+                onAddNew = { navController.navigate(Routes.Setup) },
+                onBack = { navController.popBackStack() },
             )
         }
         composable(

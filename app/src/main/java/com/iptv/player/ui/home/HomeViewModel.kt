@@ -17,8 +17,9 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -48,15 +49,30 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
 
     private var loadJob: Job? = null
 
+    /** Nombre de la lista activa, para mostrar en la UI. */
+    val activePlaylistName = container.playlistRepository.activePlaylist
+        .map { it?.name }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
     init {
-        load()
+        // Recarga automaticamente cuando cambia la lista activa.
+        viewModelScope.launch {
+            container.playlistRepository.activeSource
+                .filterNotNull()
+                .distinctUntilChanged()
+                .collect { source -> loadFor(source, forceRefresh = false) }
+        }
     }
 
-    fun load(forceRefresh: Boolean = false) {
+    fun refresh() {
+        val source = _state.value.source ?: return
+        loadFor(source, forceRefresh = true)
+    }
+
+    private fun loadFor(source: SourceConfig, forceRefresh: Boolean) {
         loadJob?.cancel()
         loadJob = viewModelScope.launch {
             _state.value = HomeUiState(loading = true)
-            val source = container.preferencesStore.source.filterNotNull().first()
 
             // 1) Mostrar el catalogo cacheado al instante (si existe)
             val cached = runCatching { container.catalogCache.load(source) }.getOrNull()
@@ -91,8 +107,6 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
                 }
         }
     }
-
-    fun refresh() = load(forceRefresh = true)
 
     private suspend fun computeChannelTags(channels: List<Channel>) = withContext(Dispatchers.Default) {
         val quality = HashMap<String, String>(channels.size)

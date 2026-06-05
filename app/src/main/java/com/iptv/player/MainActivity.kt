@@ -8,11 +8,15 @@ import android.util.Rational
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.navigation.compose.rememberNavController
 import com.iptv.player.ui.AppNavGraph
@@ -33,18 +37,32 @@ class MainActivity : ComponentActivity() {
         setContent {
             IptvTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    val source = container.preferencesStore.source.collectAsState(initial = null)
-                    val navController = rememberNavController()
+                    // null = cargando (corre migracion legacy y lee playlists);
+                    // true = hay listas -> Home; false = no hay -> Setup.
+                    val hasPlaylists by produceState<Boolean?>(initialValue = null) {
+                        container.playlistRepository.migrateLegacyIfNeeded()
+                        container.playlistRepository.playlists.collect { list ->
+                            value = list.isNotEmpty()
+                        }
+                    }
                     val pip by isInPipMode.collectAsState()
                     CompositionLocalProvider(
                         LocalIsInPipMode provides pip,
                         LocalEnterPip provides ::enterPip,
                     ) {
-                        AppNavGraph(
-                            navController = navController,
-                            container = container,
-                            hasSource = source.value != null,
-                        )
+                        when (val ready = hasPlaylists) {
+                            null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator()
+                            }
+                            else -> {
+                                val navController = rememberNavController()
+                                AppNavGraph(
+                                    navController = navController,
+                                    container = container,
+                                    hasSource = ready,
+                                )
+                            }
+                        }
                     }
                     if (lastCrash != null) {
                         com.iptv.player.ui.CrashDialog(trace = lastCrash)

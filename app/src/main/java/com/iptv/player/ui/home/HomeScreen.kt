@@ -25,6 +25,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Favorite
@@ -32,7 +33,6 @@ import androidx.compose.material.icons.outlined.LiveTv
 import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Refresh
-import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Tv
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -92,12 +92,13 @@ fun HomeScreen(
     container: AppContainer,
     onPlay: (url: String, title: String) -> Unit,
     onOpenSeries: (id: String, title: String) -> Unit,
-    onReconfigure: () -> Unit,
+    onOpenPlaylists: () -> Unit,
 ) {
     val vm: HomeViewModel = viewModel(factory = HomeViewModel.Factory(container))
     val state by vm.state.collectAsState()
     val favorites by vm.favorites.collectAsState()
     val recents by vm.recents.collectAsState()
+    val activePlaylistName by vm.activePlaylistName.collectAsState()
     val activeQueue by container.playbackController.queue.collectAsState()
     val playerVisible by container.playbackController.playerVisible.collectAsState()
     var tab by rememberSaveable { mutableStateOf(HomeTab.Live) }
@@ -124,7 +125,7 @@ fun HomeScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.app_name)) },
+                title = { Text(activePlaylistName ?: stringResource(R.string.app_name)) },
                 actions = {
                     IconButton(onClick = { showGuide = true }) {
                         Icon(Icons.Filled.DateRange, contentDescription = "Guía")
@@ -132,8 +133,8 @@ fun HomeScreen(
                     IconButton(onClick = vm::refresh) {
                         Icon(Icons.Outlined.Refresh, contentDescription = "Recargar")
                     }
-                    IconButton(onClick = onReconfigure) {
-                        Icon(Icons.Outlined.Settings, contentDescription = "Ajustes")
+                    IconButton(onClick = onOpenPlaylists) {
+                        Icon(Icons.AutoMirrored.Filled.List, contentDescription = "Mis listas")
                     }
                 },
             )
