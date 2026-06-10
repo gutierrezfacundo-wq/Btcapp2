@@ -45,6 +45,8 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -146,6 +148,9 @@ fun HomeScreen(
         return
     }
 
+    val isLandscape = androidx.compose.ui.platform.LocalConfiguration.current.orientation ==
+        android.content.res.Configuration.ORIENTATION_LANDSCAPE
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -177,9 +182,26 @@ fun HomeScreen(
                         },
                     )
                 }
-                NavigationBar {
+                if (!isLandscape) {
+                    NavigationBar {
+                        HomeTab.entries.forEach { entry ->
+                            NavigationBarItem(
+                                selected = tab == entry,
+                                onClick = { tab = entry },
+                                icon = entry.icon,
+                                label = { Text(stringResource(entry.labelRes)) },
+                            )
+                        }
+                    }
+                }
+            }
+        },
+    ) { padding ->
+        Row(modifier = Modifier.fillMaxSize().padding(padding)) {
+            if (isLandscape) {
+                NavigationRail {
                     HomeTab.entries.forEach { entry ->
-                        NavigationBarItem(
+                        NavigationRailItem(
                             selected = tab == entry,
                             onClick = { tab = entry },
                             icon = entry.icon,
@@ -188,9 +210,7 @@ fun HomeScreen(
                     }
                 }
             }
-        },
-    ) { padding ->
-        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+            Box(modifier = Modifier.fillMaxSize().weight(1f)) {
             when {
                 state.loading -> LoadingBox()
                 state.error != null -> ErrorBox(state.error!!)
@@ -222,6 +242,7 @@ fun HomeScreen(
                         onOpenHidden = { showHiddenManager = true },
                         hiddenCount = hiddenCategories.size +
                             channelPrefs.values.count { it.hidden },
+                        compactRecents = isLandscape,
                     )
                     HomeTab.Movies -> MoviesTab(
                         movies = state.catalog.movies,
@@ -238,6 +259,7 @@ fun HomeScreen(
                     )
                     HomeTab.Favorites -> FavoritesAndCollectionsTab(vm = vm, onPlay = onPlay)
                 }
+            }
             }
         }
     }
@@ -352,6 +374,7 @@ private fun LiveTab(
     onLongPressCategory: (String) -> Unit,
     onOpenHidden: () -> Unit,
     hiddenCount: Int,
+    compactRecents: Boolean = false,
 ) {
     var category by rememberSaveable { mutableStateOf<String?>(null) }
     var query by rememberSaveable { mutableStateOf("") }
@@ -382,7 +405,7 @@ private fun LiveTab(
             onLongPress = onLongPressCategory,
             onOpenHidden = onOpenHidden,
             hiddenCount = hiddenCount,
-            modifier = Modifier.width(140.dp).fillMaxHeight(),
+            modifier = Modifier.width(if (compactRecents) 120.dp else 140.dp).fillMaxHeight(),
         )
         Column(Modifier.weight(1f).fillMaxHeight()) {
             if (recents.isNotEmpty()) {
@@ -390,6 +413,7 @@ private fun LiveTab(
                     recentItems = recents,
                     onClick = onResumeRecent,
                     onRemove = onRemoveRecent,
+                    compact = compactRecents,
                 )
             }
             ChannelSearchBar(query = query, onQueryChange = { query = it })
@@ -520,32 +544,45 @@ private fun RecentsRow(
     recentItems: List<RecentEntity>,
     onClick: (RecentEntity) -> Unit,
     onRemove: (String) -> Unit,
+    compact: Boolean = false,
 ) {
-    Column(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
-        Text(
-            "Continuar viendo",
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-        )
+    Column(modifier = Modifier.fillMaxWidth().padding(top = if (compact) 0.dp else 4.dp)) {
+        if (!compact) {
+            Text(
+                "Continuar viendo",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+            )
+        }
         LazyRow(
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             items(recentItems, key = { it.streamUrl }) { item ->
-                RecentCard(item = item, onClick = { onClick(item) }, onRemove = { onRemove(item.streamUrl) })
+                RecentCard(
+                    item = item,
+                    onClick = { onClick(item) },
+                    onRemove = { onRemove(item.streamUrl) },
+                    compact = compact,
+                )
             }
         }
     }
 }
 
 @Composable
-private fun RecentCard(item: RecentEntity, onClick: () -> Unit, onRemove: () -> Unit) {
+private fun RecentCard(
+    item: RecentEntity,
+    onClick: () -> Unit,
+    onRemove: () -> Unit,
+    compact: Boolean = false,
+) {
     val isLive = item.kindOrdinal == MediaKind.LIVE.ordinal
     Box(
         modifier = Modifier
-            .width(160.dp)
-            .clip(RoundedCornerShape(10.dp))
+            .width(if (compact) 120.dp else 160.dp)
+            .clip(RoundedCornerShape(8.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .clickable(onClick = onClick),
     ) {
@@ -553,7 +590,7 @@ private fun RecentCard(item: RecentEntity, onClick: () -> Unit, onRemove: () -> 
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(90.dp)
+                    .height(if (compact) 64.dp else 90.dp)
                     .background(Color(0xFF1C1C1F)),
                 contentAlignment = Alignment.Center,
             ) {
