@@ -46,8 +46,12 @@ class PlayerViewModel(private val container: AppContainer) : ViewModel() {
             }
         }
         viewModelScope.launch {
-            combine(queue, container.epgRepository.cache, tickerFlow) { q, _, _ ->
-                val tvgId = (q as? PlaybackQueue.Live)?.active?.tvgId
+            val epgMapFlow = container.database.epgMapDao().observeAll()
+            combine(queue, container.epgRepository.cache, tickerFlow, epgMapFlow) { q, _, _, maps ->
+                val active = (q as? PlaybackQueue.Live)?.active
+                val tvgId = active?.let { ch ->
+                    maps.firstOrNull { it.channelId == ch.id }?.tvgId ?: ch.tvgId
+                }
                 EpgState(
                     now = container.epgRepository.nowPlaying(tvgId),
                     next = container.epgRepository.nextProgram(tvgId),

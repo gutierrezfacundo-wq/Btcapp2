@@ -82,6 +82,27 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent?): Boolean {
+        val controller = (application as IptvApp).container.playbackController
+        if (controller.playerVisible.value) {
+            when (keyCode) {
+                android.view.KeyEvent.KEYCODE_CHANNEL_UP,
+                android.view.KeyEvent.KEYCODE_MEDIA_NEXT,
+                -> {
+                    controller.next()
+                    return true
+                }
+                android.view.KeyEvent.KEYCODE_CHANNEL_DOWN,
+                android.view.KeyEvent.KEYCODE_MEDIA_PREVIOUS,
+                -> {
+                    controller.previous()
+                    return true
+                }
+            }
+        }
+        return super.onKeyDown(keyCode, event)
+    }
+
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
         val container = (application as IptvApp).container

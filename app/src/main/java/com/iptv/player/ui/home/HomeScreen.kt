@@ -1,8 +1,10 @@
 package com.iptv.player.ui.home
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -101,22 +103,43 @@ fun HomeScreen(
     val activePlaylistName by vm.activePlaylistName.collectAsState()
     val activeQueue by container.playbackController.queue.collectAsState()
     val playerVisible by container.playbackController.playerVisible.collectAsState()
+    val displayLiveChannels by vm.displayLiveChannels.collectAsState()
+    val displayLiveCategories by vm.displayLiveCategories.collectAsState()
+    val channelPrefs by vm.channelPrefs.collectAsState()
+    val hiddenCategories by vm.hiddenCategories.collectAsState()
+    val epgMap by vm.epgMap.collectAsState()
     var tab by rememberSaveable { mutableStateOf(HomeTab.Live) }
     var showGuide by rememberSaveable { mutableStateOf(false) }
-    var channelForDialog by remember { mutableStateOf<Channel?>(null) }
+    var channelForOptions by remember { mutableStateOf<Channel?>(null) }
+    var channelForCollection by remember { mutableStateOf<Channel?>(null) }
+    var showHiddenManager by remember { mutableStateOf(false) }
 
     if (showGuide) {
-        val liveChannels = state.catalog.liveChannels
+        val liveChannels = displayLiveChannels
         val epg by container.epgRepository.cache.collectAsState()
         BackHandler { showGuide = false }
         EpgGuide(
             channels = liveChannels,
             epg = epg,
+            epgIdOf = { ch -> epgMap[ch.id] ?: ch.tvgId },
             onPlayChannel = { idx ->
                 vm.playLive(liveChannels, idx)
                 val ch = liveChannels[idx]
                 showGuide = false
                 onPlay(ch.streamUrl, ch.name)
+            },
+            onPlayCatchup = { ch, program ->
+                val source = state.source
+                val streamId = ch.xtreamStreamId
+                if (source is com.iptv.player.data.model.SourceConfig.Xtream && streamId != null) {
+                    val durationMin =
+                        ((program.stopEpochMs - program.startEpochMs) / 60_000L).toInt().coerceAtLeast(1)
+                    val url = source.streamTimeshift(streamId, program.startEpochMs, durationMin)
+                    val title = "${ch.name} — ${program.title}"
+                    vm.playSingle(title, url, ch.logoUrl)
+                    showGuide = false
+                    onPlay(url, title)
+                }
             },
             onBack = { showGuide = false },
         )
@@ -173,8 +196,8 @@ fun HomeScreen(
                 state.error != null -> ErrorBox(state.error!!)
                 else -> when (tab) {
                     HomeTab.Live -> LiveTab(
-                        channels = state.catalog.liveChannels,
-                        categories = state.catalog.liveCategories,
+                        channels = displayLiveChannels,
+                        categories = displayLiveCategories,
                         recents = recents,
                         channelQuality = state.channelQuality,
                         availableQualities = state.availableQualities,
@@ -188,13 +211,17 @@ fun HomeScreen(
                         },
                         onResumeRecent = { item ->
                             when (item.kindOrdinal) {
-                                MediaKind.LIVE.ordinal -> vm.resumeRecentAsLive(item, state.catalog.liveChannels)
+                                MediaKind.LIVE.ordinal -> vm.resumeRecentAsLive(item, displayLiveChannels)
                                 else -> vm.resumeRecent(item)
                             }
                             onPlay(item.streamUrl, item.title)
                         },
                         onRemoveRecent = vm::removeRecent,
-                        onLongPressChannel = { channelForDialog = it },
+                        onLongPressChannel = { channelForOptions = it },
+                        onLongPressCategory = { vm.setCategoryHidden(it, true) },
+                        onOpenHidden = { showHiddenManager = true },
+                        hiddenCount = hiddenCategories.size +
+                            channelPrefs.values.count { it.hidden },
                     )
                     HomeTab.Movies -> MoviesTab(
                         movies = state.catalog.movies,
@@ -215,7 +242,28 @@ fun HomeScreen(
         }
     }
 
-    val dialogChannel = channelForDialog
+    val optionsChannel = channelForOptions
+    if (optionsChannel != null) {
+        val pref = channelPrefs[optionsChannel.id]
+        ChannelOptionsDialog(
+            channel = optionsChannel,
+            currentCustomName = pref?.customName,
+            currentNumber = pref?.customNumber,
+            currentEpgId = epgMap[optionsChannel.id],
+            availableEpgIds = vm.availableEpgIds(),
+            onAddToCollection = {
+                channelForCollection = optionsChannel
+                channelForOptions = null
+            },
+            onRename = { vm.renameChannel(optionsChannel.id, it) },
+            onSetNumber = { vm.setChannelNumber(optionsChannel.id, it) },
+            onHide = { vm.setChannelHidden(optionsChannel.id, true) },
+            onSetEpg = { vm.setEpgMapping(optionsChannel.id, it) },
+            onDismiss = { channelForOptions = null },
+        )
+    }
+
+    val dialogChannel = channelForCollection
     if (dialogChannel != null) {
         val cols by vm.collections.collectAsState()
         val memberIds by vm.collectionsContaining(dialogChannel.id)
@@ -226,7 +274,19 @@ fun HomeScreen(
             memberIds = memberIds.toSet(),
             onToggle = { cid, incl -> vm.setChannelInCollection(cid, dialogChannel, incl) },
             onCreateAndAdd = { name -> vm.createCollectionWith(name, dialogChannel) },
-            onDismiss = { channelForDialog = null },
+            onDismiss = { channelForCollection = null },
+        )
+    }
+
+    if (showHiddenManager) {
+        val hiddenChannelIds = channelPrefs.values.filter { it.hidden }.map { it.channelId }.toSet()
+        val hiddenChannels = state.catalog.liveChannels.filter { it.id in hiddenChannelIds }
+        HiddenItemsDialog(
+            hiddenChannels = hiddenChannels,
+            hiddenCategories = hiddenCategories.toList().sorted(),
+            onUnhideChannel = { vm.setChannelHidden(it, false) },
+            onUnhideCategory = { vm.setCategoryHidden(it, false) },
+            onDismiss = { showHiddenManager = false },
         )
     }
 }
@@ -289,6 +349,9 @@ private fun LiveTab(
     onResumeRecent: (RecentEntity) -> Unit,
     onRemoveRecent: (String) -> Unit,
     onLongPressChannel: (Channel) -> Unit,
+    onLongPressCategory: (String) -> Unit,
+    onOpenHidden: () -> Unit,
+    hiddenCount: Int,
 ) {
     var category by rememberSaveable { mutableStateOf<String?>(null) }
     var query by rememberSaveable { mutableStateOf("") }
@@ -316,6 +379,9 @@ private fun LiveTab(
             categories = categories,
             selected = category,
             onSelect = { category = it },
+            onLongPress = onLongPressCategory,
+            onOpenHidden = onOpenHidden,
+            hiddenCount = hiddenCount,
             modifier = Modifier.width(140.dp).fillMaxHeight(),
         )
         Column(Modifier.weight(1f).fillMaxHeight()) {
@@ -361,6 +427,9 @@ private fun CategorySidebar(
     categories: List<Category>,
     selected: String?,
     onSelect: (String?) -> Unit,
+    onLongPress: (String) -> Unit,
+    onOpenHidden: () -> Unit,
+    hiddenCount: Int,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -387,20 +456,36 @@ private fun CategorySidebar(
                     label = cat.name,
                     isSelected = selected == cat.name,
                     onClick = { onSelect(cat.name) },
+                    onLongClick = { onLongPress(cat.name) },
                 )
+            }
+            if (hiddenCount > 0) {
+                item {
+                    CategorySidebarItem(
+                        label = "Ocultos ($hiddenCount)",
+                        isSelected = false,
+                        onClick = onOpenHidden,
+                    )
+                }
             }
         }
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun CategorySidebarItem(label: String, isSelected: Boolean, onClick: () -> Unit) {
+private fun CategorySidebarItem(
+    label: String,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
+) {
     val bg = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f) else Color.Transparent
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .background(bg)
-            .clickable(onClick = onClick)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

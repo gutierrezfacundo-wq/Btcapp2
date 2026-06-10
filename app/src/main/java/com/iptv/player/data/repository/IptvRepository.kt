@@ -70,6 +70,8 @@ class IptvRepository(
                 logoUrl = dto.streamIcon,
                 groupTitle = liveCats.firstOrNull { it.id == dto.categoryId }?.name,
                 tvgId = dto.epgChannelId,
+                archiveDays = if (dto.tvArchive == 1) dto.tvArchiveDuration else 0,
+                xtreamStreamId = dto.streamId,
             )
         }
         val vodCats = xtreamApi.vodCategories(s.playerApi()).toCategories()

@@ -46,8 +46,11 @@ interface RecentDao {
         PlaylistEntity::class,
         CollectionEntity::class,
         CollectionItemEntity::class,
+        ChannelPrefEntity::class,
+        CategoryPrefEntity::class,
+        EpgMapEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = false,
 )
 abstract class IptvDatabase : RoomDatabase() {
@@ -56,6 +59,40 @@ abstract class IptvDatabase : RoomDatabase() {
     abstract fun playlistDao(): PlaylistDao
     abstract fun collectionDao(): CollectionDao
     abstract fun collectionItemDao(): CollectionItemDao
+    abstract fun channelPrefDao(): ChannelPrefDao
+    abstract fun categoryPrefDao(): CategoryPrefDao
+    abstract fun epgMapDao(): EpgMapDao
+}
+
+val MIGRATION_4_5 = object : androidx.room.migration.Migration(4, 5) {
+    override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS channel_prefs (
+                channelId TEXT NOT NULL PRIMARY KEY,
+                hidden INTEGER NOT NULL DEFAULT 0,
+                customName TEXT,
+                customNumber INTEGER
+            )
+            """.trimIndent()
+        )
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS category_prefs (
+                name TEXT NOT NULL PRIMARY KEY,
+                hidden INTEGER NOT NULL DEFAULT 0
+            )
+            """.trimIndent()
+        )
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS epg_maps (
+                channelId TEXT NOT NULL PRIMARY KEY,
+                tvgId TEXT NOT NULL
+            )
+            """.trimIndent()
+        )
+    }
 }
 
 val MIGRATION_3_4 = object : androidx.room.migration.Migration(3, 4) {

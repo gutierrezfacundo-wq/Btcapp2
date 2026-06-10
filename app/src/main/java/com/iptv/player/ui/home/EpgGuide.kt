@@ -57,7 +57,8 @@ import java.util.Locale
 private const val DP_PER_MIN = 4
 private val CHANNEL_COL_WIDTH = 96.dp
 private val ROW_HEIGHT = 64.dp
-private val WINDOW_HOURS = 12
+private const val PAST_HOURS = 4
+private const val FUTURE_HOURS = 8
 private val SLOT_MINUTES = 30
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -67,18 +68,29 @@ fun EpgGuide(
     epg: Map<String, List<EpgProgram>>,
     onPlayChannel: (index: Int) -> Unit,
     onBack: () -> Unit,
+    epgIdOf: (Channel) -> String? = { it.tvgId },
+    onPlayCatchup: ((channel: Channel, program: EpgProgram) -> Unit)? = null,
 ) {
     val timeFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
     val now = remember { System.currentTimeMillis() }
-    val windowStart = remember(now) { floorToHour(now) }
-    val windowEnd = windowStart + WINDOW_HOURS * 3_600_000L
+    val windowStart = remember(now) { floorToHour(now) - PAST_HOURS * 3_600_000L }
+    val windowEnd = windowStart + (PAST_HOURS + FUTURE_HOURS) * 3_600_000L
     val totalMinutes = ((windowEnd - windowStart) / 60_000L).toInt()
     val totalWidth = (totalMinutes * DP_PER_MIN).dp
+    val density = androidx.compose.ui.platform.LocalDensity.current
 
     val hScroll = rememberScrollState()
     val listState = rememberLazyListState()
     var selected by remember { mutableStateOf<EpgProgram?>(null) }
     var selectedIndex by remember { mutableStateOf(-1) }
+    var selectedChannel by remember { mutableStateOf<Channel?>(null) }
+
+    // Arrancar el scroll en "ahora" (con 30 min de contexto previo).
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        val nowMinutes = ((now - windowStart) / 60_000L).toInt() - 30
+        val px = with(density) { (nowMinutes.coerceAtLeast(0) * DP_PER_MIN).dp.toPx() }
+        hScroll.scrollTo(px.toInt())
+    }
 
     Scaffold(
         topBar = {
@@ -138,7 +150,7 @@ fun EpgGuide(
                 itemsIndexed(channels, key = { _, ch -> ch.id }) { index, ch ->
                     GuideRow(
                         channel = ch,
-                        programs = epg[ch.tvgId].orEmpty(),
+                        programs = epg[epgIdOf(ch)].orEmpty(),
                         windowStart = windowStart,
                         windowEnd = windowEnd,
                         totalWidth = totalWidth,
@@ -152,6 +164,7 @@ fun EpgGuide(
                             } else {
                                 selected = prog
                                 selectedIndex = index
+                                selectedChannel = ch
                             }
                         },
                     )
@@ -163,6 +176,11 @@ fun EpgGuide(
 
     val sel = selected
     if (sel != null) {
+        val selCh = selectedChannel
+        val isPast = sel.stopEpochMs < now
+        val withinArchive = selCh != null && selCh.archiveDays > 0 &&
+            sel.startEpochMs >= now - selCh.archiveDays * 86_400_000L
+        val canCatchup = isPast && withinArchive && onPlayCatchup != null && selCh != null
         AlertDialog(
             onDismissRequest = { selected = null },
             title = { Text(sel.title, maxLines = 2, overflow = TextOverflow.Ellipsis) },
@@ -178,14 +196,31 @@ fun EpgGuide(
                         Spacer(Modifier.size(8.dp))
                         Text(sel.description, style = MaterialTheme.typography.bodyMedium)
                     }
+                    if (isPast && !canCatchup) {
+                        Spacer(Modifier.size(8.dp))
+                        Text(
+                            "Este programa ya se emitió y el proveedor no ofrece catch-up para este canal.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        )
+                    }
                 }
             },
             confirmButton = {
-                TextButton(onClick = {
-                    val idx = selectedIndex
-                    selected = null
-                    if (idx >= 0) onPlayChannel(idx)
-                }) { Text("Ver canal") }
+                if (canCatchup) {
+                    TextButton(onClick = {
+                        val ch = selCh
+                        val prog = sel
+                        selected = null
+                        if (ch != null) onPlayCatchup?.invoke(ch, prog)
+                    }) { Text("▶ Ver programa") }
+                } else {
+                    TextButton(onClick = {
+                        val idx = selectedIndex
+                        selected = null
+                        if (idx >= 0) onPlayChannel(idx)
+                    }) { Text("Ver canal") }
+                }
             },
             dismissButton = {
                 TextButton(onClick = { selected = null }) { Text("Cerrar") }

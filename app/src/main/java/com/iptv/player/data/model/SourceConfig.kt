@@ -17,5 +17,13 @@ sealed interface SourceConfig {
         fun streamSeries(episodeId: Int, ext: String) =
             "$portalBase/series/$username/$password/$episodeId.$ext"
         val xmltvUrl: String get() = "$portalBase/xmltv.php?username=$username&password=$password"
+
+        /** URL de catch-up: reproduce un programa ya emitido del archivo del proveedor. */
+        fun streamTimeshift(streamId: Int, startEpochMs: Long, durationMinutes: Int): String {
+            val fmt = java.text.SimpleDateFormat("yyyy-MM-dd:HH-mm", java.util.Locale.US)
+            val start = fmt.format(java.util.Date(startEpochMs))
+            return "$portalBase/streaming/timeshift.php?username=$username&password=$password" +
+                "&stream=$streamId&start=$start&duration=$durationMinutes"
+        }
     }
 }

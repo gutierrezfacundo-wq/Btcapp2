@@ -3,6 +3,9 @@ package com.iptv.player.ui.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.iptv.player.data.local.CategoryPrefEntity
+import com.iptv.player.data.local.ChannelPrefEntity
+import com.iptv.player.data.local.EpgMapEntity
 import com.iptv.player.data.local.FavoriteEntity
 import com.iptv.player.data.local.RecentEntity
 import com.iptv.player.data.model.Channel
@@ -17,6 +20,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
@@ -141,6 +145,83 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
 
     fun isFavorite(id: String): Boolean = favorites.value.any { it.id == id }
 
+    // --- Gestion de canales (ocultar / renombrar / numero) ---
+    val channelPrefs = container.database.channelPrefDao().observeAll()
+        .map { list -> list.associateBy { it.channelId } }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
+
+    val hiddenCategories = container.database.categoryPrefDao().observeHidden()
+        .map { list -> list.map { it.name }.toSet() }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
+
+    /** Canales en vivo con preferencias aplicadas: sin ocultos, renombrados y ordenados. */
+    val displayLiveChannels = combine(state, channelPrefs, hiddenCategories) { s, prefs, hiddenCats ->
+        s.catalog.liveChannels
+            .asSequence()
+            .filter { ch -> prefs[ch.id]?.hidden != true }
+            .filter { ch -> ch.groupTitle == null || ch.groupTitle !in hiddenCats }
+            .map { ch ->
+                val custom = prefs[ch.id]?.customName
+                if (custom.isNullOrBlank()) ch else ch.copy(name = custom)
+            }
+            .toList()
+            .sortedWith(compareBy<Channel, Int?>(nullsLast()) { prefs[it.id]?.customNumber })
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    val displayLiveCategories = combine(state, hiddenCategories) { s, hiddenCats ->
+        s.catalog.liveCategories.filter { it.name !in hiddenCats }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    fun setChannelHidden(channelId: String, hidden: Boolean) {
+        viewModelScope.launch {
+            val dao = container.database.channelPrefDao()
+            val cur = dao.get(channelId) ?: ChannelPrefEntity(channelId)
+            dao.upsert(cur.copy(hidden = hidden))
+        }
+    }
+
+    fun renameChannel(channelId: String, name: String?) {
+        viewModelScope.launch {
+            val dao = container.database.channelPrefDao()
+            val cur = dao.get(channelId) ?: ChannelPrefEntity(channelId)
+            dao.upsert(cur.copy(customName = name?.takeIf { it.isNotBlank() }))
+        }
+    }
+
+    fun setChannelNumber(channelId: String, number: Int?) {
+        viewModelScope.launch {
+            val dao = container.database.channelPrefDao()
+            val cur = dao.get(channelId) ?: ChannelPrefEntity(channelId)
+            dao.upsert(cur.copy(customNumber = number))
+        }
+    }
+
+    fun setCategoryHidden(name: String, hidden: Boolean) {
+        viewModelScope.launch {
+            if (hidden) container.database.categoryPrefDao().upsert(CategoryPrefEntity(name, true))
+            else container.database.categoryPrefDao().delete(name)
+        }
+    }
+
+    // --- Mapeo manual de EPG ---
+    val epgMap = container.database.epgMapDao().observeAll()
+        .map { list -> list.associate { it.channelId to it.tvgId } }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
+
+    /** Ids de canal disponibles en la guia XMLTV cargada, para el dialogo de mapeo. */
+    fun availableEpgIds(): List<String> =
+        container.epgRepository.cache.value.keys.sorted()
+
+    fun setEpgMapping(channelId: String, tvgId: String?) {
+        viewModelScope.launch {
+            if (tvgId.isNullOrBlank()) container.database.epgMapDao().delete(channelId)
+            else container.database.epgMapDao().upsert(EpgMapEntity(channelId, tvgId))
+        }
+    }
+
+    private fun effectiveTvgId(channel: Channel): String? =
+        epgMap.value[channel.id] ?: channel.tvgId
+
     // --- Colecciones de favoritos ---
     val collections = container.collectionRepository.collections
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
@@ -181,7 +262,7 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     fun nowPlayingFor(channel: Channel): String? =
-        container.epgRepository.nowPlaying(channel.tvgId)?.title
+        container.epgRepository.nowPlaying(effectiveTvgId(channel))?.title
 
     fun playLive(channels: List<Channel>, activeIndex: Int) {
         container.playbackController.setLive(channels, activeIndex)

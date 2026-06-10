@@ -16,6 +16,8 @@ data class XtreamLiveStreamDto(
     @SerialName("stream_icon") val streamIcon: String? = null,
     @SerialName("epg_channel_id") val epgChannelId: String? = null,
     @SerialName("category_id") val categoryId: String? = null,
+    @SerialName("tv_archive") val tvArchive: Int = 0,
+    @SerialName("tv_archive_duration") val tvArchiveDuration: Int = 0,
 )
 
 @Serializable

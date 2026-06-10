@@ -14,6 +14,10 @@ data class Channel(
     val groupTitle: String?,
     val tvgId: String?,
     val kind: MediaKind = MediaKind.LIVE,
+    /** Dias de catch-up (tv_archive) que ofrece el proveedor; 0 = sin archivo. */
+    val archiveDays: Int = 0,
+    /** Id numerico del stream Xtream (para armar URLs de timeshift); null en M3U. */
+    val xtreamStreamId: Int? = null,
 )
 
 @Serializable
