@@ -4,9 +4,50 @@ import { xtreamXmltvUrl } from "../data/types";
 import { loadM3uCatalog } from "../data/m3uCatalog";
 import { loadXtreamCatalog } from "../data/xtream";
 import { groupByChannel, parseXmltv } from "../data/xmltv";
+import { fetchText } from "../data/http";
 
 const SOURCE_KEY = "iptv.source.v1";
 const FAVORITES_KEY = "iptv.favorites.v1";
+const CATALOG_CACHE_KEY = "iptv.catalog.v1";
+
+interface CatalogCacheEntry {
+  sourceKey: string;
+  savedAt: number;
+  catalog: Catalog;
+}
+
+function sourceKeyOf(s: SourceConfig): string {
+  return s.kind === "m3u" ? `m3u:${s.playlistUrl}` : `xt:${s.server}:${s.username}`;
+}
+
+function loadCatalogCache(s: SourceConfig): Catalog | null {
+  try {
+    const raw = localStorage.getItem(CATALOG_CACHE_KEY);
+    if (!raw) return null;
+    const entry = JSON.parse(raw) as CatalogCacheEntry;
+    return entry.sourceKey === sourceKeyOf(s) ? entry.catalog : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveCatalogCache(s: SourceConfig, catalog: Catalog) {
+  try {
+    const entry: CatalogCacheEntry = {
+      sourceKey: sourceKeyOf(s),
+      savedAt: Date.now(),
+      catalog,
+    };
+    localStorage.setItem(CATALOG_CACHE_KEY, JSON.stringify(entry));
+  } catch {
+    // Catalogo demasiado grande para localStorage: seguimos sin cache.
+    try {
+      localStorage.removeItem(CATALOG_CACHE_KEY);
+    } catch {
+      /* ignore */
+    }
+  }
+}
 
 export interface FavoriteItem {
   id: string;
@@ -80,13 +121,23 @@ export const useAppStore = create<AppState>((set, get) => ({
   reload: async () => {
     const source = get().source;
     if (!source) return;
-    set({ loading: true, error: null });
+
+    // 1) Mostrar cache al instante si existe
+    const cached = loadCatalogCache(source);
+    if (cached && cached.liveChannels.length > 0) {
+      set({ catalog: cached, loading: false, error: null });
+    } else {
+      set({ loading: true, error: null });
+    }
+
+    // 2) Refrescar de red
     try {
       const catalog =
         source.kind === "m3u"
           ? await loadM3uCatalog(source)
           : await loadXtreamCatalog(source);
-      set({ catalog, loading: false });
+      set({ catalog, loading: false, error: null });
+      saveCatalogCache(source, catalog);
 
       const epgUrl = source.kind === "m3u" ? source.epgUrl : xtreamXmltvUrl(source);
       if (epgUrl) {
@@ -96,7 +147,12 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Error desconocido";
-      set({ loading: false, error: msg });
+      // Si hay cache visible, no pisamos la lista con el error.
+      if (!cached || cached.liveChannels.length === 0) {
+        set({ loading: false, error: msg });
+      } else {
+        set({ loading: false });
+      }
     }
   },
 
@@ -112,8 +168,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 }));
 
 async function loadEpg(url: string) {
-  const r = await fetch(url);
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
-  const xml = await r.text();
+  const xml = await fetchText(url, 60000);
   return groupByChannel(parseXmltv(xml));
 }

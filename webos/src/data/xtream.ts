@@ -7,6 +7,7 @@ import type {
   SeriesInfo,
   SourceConfig,
 } from "./types";
+import { fetchJson } from "./http";
 import {
   xtreamPlayerApi,
   xtreamStreamLive,
@@ -56,10 +57,9 @@ interface XtSeriesInfoDto {
   }>>;
 }
 
+
 async function getJson<T>(url: string): Promise<T> {
-  const r = await fetch(url);
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
-  return r.json() as Promise<T>;
+  return fetchJson<T>(url);
 }
 
 function toCategories(dtos: XtCategoryDto[]): Category[] {

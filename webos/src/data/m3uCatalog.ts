@@ -1,13 +1,15 @@
 import type { Catalog, Category, Movie, SeriesInfo, SourceConfig } from "./types";
 import { parseM3u } from "./m3u";
+import { fetchText } from "./http";
 
 export async function loadM3uCatalog(
   source: Extract<SourceConfig, { kind: "m3u" }>,
 ): Promise<Catalog> {
-  const r = await fetch(source.playlistUrl);
-  if (!r.ok) throw new Error(`HTTP ${r.status} al obtener la lista`);
-  const text = await r.text();
+  const text = await fetchText(source.playlistUrl);
   const all = parseM3u(text);
+  if (all.length === 0) {
+    throw new Error("La lista se descargó pero no contiene canales (¿es un M3U válido?).");
+  }
 
   const live = all.filter((c) => c.kind === "live");
   const movies: Movie[] = all

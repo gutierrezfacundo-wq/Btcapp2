@@ -91,7 +91,15 @@ export function Home() {
         {loading ? (
           <div className="loading"><div className="spinner" /></div>
         ) : error ? (
-          <div className="error">{error}</div>
+          <div className="error" style={{ flexDirection: "column", gap: 16 }}>
+            <div>{error}</div>
+            <FocusableButton className="btn primary" onEnterPress={() => reload()}>
+              Reintentar
+            </FocusableButton>
+            <FocusableButton className="btn" onEnterPress={() => navigate("/setup")}>
+              Revisar configuración
+            </FocusableButton>
+          </div>
         ) : (
           <>
             {tab === "live" && (

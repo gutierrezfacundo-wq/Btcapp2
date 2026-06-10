@@ -179,6 +179,7 @@ a { color: var(--primary); text-decoration: none; }
 }
 
 .error { color: var(--danger); }
+.test-ok { color: #4caf50; padding: 12px 0; font-size: 20px; }
 
 .spinner {
   width: 64px;
