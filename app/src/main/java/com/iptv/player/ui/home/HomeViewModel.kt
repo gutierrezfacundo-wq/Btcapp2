@@ -76,19 +76,28 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
     private fun loadFor(source: SourceConfig, forceRefresh: Boolean) {
         loadJob?.cancel()
         loadJob = viewModelScope.launch {
-            _state.value = HomeUiState(loading = true)
+            // Si ya hay contenido visible, NO mostramos "Cargando…": refrescamos en silencio.
+            val current = _state.value
+            val hasContent = current.catalog.liveChannels.isNotEmpty() && current.source == source
+            if (!hasContent) {
+                _state.value = HomeUiState(loading = true)
+            }
 
-            // 1) Mostrar el catalogo cacheado al instante (si existe)
-            val cached = runCatching { container.catalogCache.load(source) }.getOrNull()
+            // 1) Mostrar el catalogo cacheado al instante (si existe y aun no hay contenido)
+            val cached = if (!hasContent) {
+                runCatching { container.catalogCache.load(source) }.getOrNull()
+            } else null
             val cacheFresh = container.catalogCache.ageMs(source) < CACHE_TTL_MS
             if (cached != null) {
                 _state.value = HomeUiState(loading = false, catalog = cached, source = source)
                 launch { computeChannelTags(cached.liveChannels) }
                 launch { runCatching { container.epgRepository.load(source) } }
-                // Si el cache es fresco y no se pidio refrescar, no golpeamos la red:
-                // abrir la app es instantaneo.
+                // Si el cache es fresco y no se pidio refrescar, no golpeamos la red.
                 if (cacheFresh && !forceRefresh) return@launch
-            } else {
+            } else if (hasContent && cacheFresh && !forceRefresh) {
+                // Ya tenemos contenido en memoria y el cache es reciente: nada que hacer.
+                return@launch
+            } else if (!hasContent) {
                 _state.value = HomeUiState(loading = true, source = source)
             }
 

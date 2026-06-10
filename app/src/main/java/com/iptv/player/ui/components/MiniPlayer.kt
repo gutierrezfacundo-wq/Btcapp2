@@ -59,18 +59,15 @@ fun MiniPlayer(
     }
 
     Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 6.dp)
-            .clip(RoundedCornerShape(12.dp)),
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        tonalElevation = 8.dp,
+        modifier = modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 4.dp,
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
                 modifier = Modifier
-                    .width(120.dp)
-                    .height(68.dp)
+                    .width(96.dp)
+                    .height(54.dp)
                     .background(Color.Black)
                     .clickable(onClick = onExpand),
             ) {

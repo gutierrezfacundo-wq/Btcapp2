@@ -480,7 +480,7 @@ private fun CategorySidebarItem(
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
 ) {
-    val bg = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f) else Color.Transparent
+    val bg = if (isSelected) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent
     Row(
         modifier = Modifier
             .fillMaxWidth()

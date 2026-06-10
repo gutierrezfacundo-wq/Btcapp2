@@ -58,63 +58,68 @@ fun ChannelRow(
 ) {
     val interaction = remember { MutableInteractionSource() }
     val isFocused by interaction.collectIsFocusedAsState()
-    Card(
-        modifier = modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
             .then(
-                if (isFocused) Modifier.border(
-                    2.dp,
-                    MaterialTheme.colorScheme.primary,
-                    RoundedCornerShape(12.dp),
-                ) else Modifier
+                if (isFocused) Modifier.background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
+                else Modifier
             )
             .combinedClickable(
                 interactionSource = interaction,
                 indication = LocalIndication.current,
                 onClick = onClick,
                 onLongClick = onLongClick,
-            ),
-        colors = CardDefaults.cardColors(),
+            )
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
+        Box(
+            modifier = Modifier.size(40.dp).clip(RoundedCornerShape(6.dp))
+                .background(Color(0xFF1F1F27)),
+            contentAlignment = Alignment.Center,
         ) {
-            Box(
-                modifier = Modifier.size(56.dp).clip(RoundedCornerShape(8.dp))
-                    .background(Color(0xFF222226)),
-                contentAlignment = Alignment.Center,
-            ) {
-                if (!logoUrl.isNullOrBlank()) {
-                    AsyncImage(
-                        model = logoUrl,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                } else {
-                    Icon(Icons.Outlined.LiveTv, contentDescription = null, tint = Color.White)
-                }
-            }
-            Spacer(Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(name, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                if (!subtitle.isNullOrBlank()) {
-                    Text(
-                        subtitle,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
-            IconButton(onClick = onToggleFavorite) {
-                Icon(
-                    imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+            if (!logoUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = logoUrl,
                     contentDescription = null,
-                    tint = if (isFavorite) MaterialTheme.colorScheme.primary else Color.Gray,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize().padding(2.dp),
+                )
+            } else {
+                Icon(
+                    Icons.Outlined.LiveTv,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                 )
             }
+        }
+        Spacer(Modifier.width(10.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                name,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (!subtitle.isNullOrBlank()) {
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        IconButton(onClick = onToggleFavorite) {
+            Icon(
+                imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                contentDescription = null,
+                tint = if (isFavorite) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f),
+            )
         }
     }
 }
