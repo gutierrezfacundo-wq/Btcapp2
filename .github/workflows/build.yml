@@ -97,8 +97,9 @@ jobs:
           RUN_NUMBER: ${{ github.run_number }}
         run: |
           cp appinfo.json icon.png icon_large.png dist/
-          # Inyectamos version automatica: 0.2.0.<run> (igual esquema que Android)
-          sed -i 's/"version": "0\.2\.0"/"version": "0.2.0.'"$RUN_NUMBER"'"/' dist/appinfo.json
+          # webOS exige exactamente 3 componentes en la version (X.Y.Z),
+          # asi que usamos el run_number como patch: 0.2.<run>
+          sed -i 's/"version": "0\.2\.0"/"version": "0.2.'"$RUN_NUMBER"'"/' dist/appinfo.json
           echo "Version inyectada:"
           grep version dist/appinfo.json
 
