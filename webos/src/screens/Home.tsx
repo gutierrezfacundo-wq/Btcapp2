@@ -20,6 +20,8 @@ const TABS: { id: Tab; label: string }[] = [
 export function Home() {
   const navigate = useNavigate();
   const { catalog, loading, error, favorites, reload, source } = useAppStore();
+  const loadingStep = useAppStore((s) => s.loadingStep);
+  const loadingProgress = useAppStore((s) => s.loadingProgress);
   const toggleFavorite = useAppStore((s) => s.toggleFavorite);
   const isFavorite = useAppStore((s) => s.isFavorite);
   const epgByChannel = useAppStore((s) => s.epgByChannel);
@@ -89,7 +91,19 @@ export function Home() {
         </div>
 
         {loading ? (
-          <div className="loading"><div className="spinner" /></div>
+          <div className="loading" style={{ flexDirection: "column", gap: 16 }}>
+            <div className="spinner" />
+            {loadingStep ? (
+              <div style={{ textAlign: "center" }}>
+                <div style={{ fontSize: 22 }}>{loadingStep}</div>
+                {loadingProgress ? (
+                  <div style={{ fontSize: 18, opacity: 0.6, marginTop: 6 }}>
+                    {loadingProgress.current} / {loadingProgress.total}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
         ) : error ? (
           <div className="error" style={{ flexDirection: "column", gap: 16 }}>
             <div>{error}</div>

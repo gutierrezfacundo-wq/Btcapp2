@@ -71,19 +71,46 @@ function categoryName(list: Category[], id: string | undefined): string | undefi
   return list.find((c) => c.id === id)?.name;
 }
 
+export type LoadProgress = (step: string, current: number, total: number) => void;
+
 export async function loadXtreamCatalog(
   source: Extract<SourceConfig, { kind: "xtream" }>,
+  onProgress?: LoadProgress,
 ): Promise<Catalog> {
   const base = xtreamPlayerApi(source);
+  const TOTAL = 6;
+  // Pedidos en SERIE para que la TV no tenga que cargar 6 JSON grandes a la vez.
+  // Tambien con timeouts largos: los listados grandes pueden tardar 60s+ en
+  // bajar por wifi de TV.
+  const longTimeout = 120000;
 
-  const [liveCatsDto, liveDto, vodCatsDto, movieDto, seriesCatsDto, seriesDto] = await Promise.all([
-    getJson<XtCategoryDto[]>(`${base}&action=get_live_categories`),
-    getJson<XtLiveDto[]>(`${base}&action=get_live_streams`),
-    getJson<XtCategoryDto[]>(`${base}&action=get_vod_categories`),
-    getJson<XtMovieDto[]>(`${base}&action=get_vod_streams`),
-    getJson<XtCategoryDto[]>(`${base}&action=get_series_categories`),
-    getJson<XtSeriesDto[]>(`${base}&action=get_series`),
-  ]);
+  onProgress?.("Categorías de canales", 1, TOTAL);
+  const liveCatsDto = await fetchJson<XtCategoryDto[]>(
+    `${base}&action=get_live_categories`,
+  );
+  onProgress?.("Canales en vivo", 2, TOTAL);
+  const liveDto = await fetchJson<XtLiveDto[]>(
+    `${base}&action=get_live_streams`,
+    longTimeout,
+  );
+  onProgress?.("Categorías de películas", 3, TOTAL);
+  const vodCatsDto = await fetchJson<XtCategoryDto[]>(
+    `${base}&action=get_vod_categories`,
+  );
+  onProgress?.("Películas", 4, TOTAL);
+  const movieDto = await fetchJson<XtMovieDto[]>(
+    `${base}&action=get_vod_streams`,
+    longTimeout,
+  );
+  onProgress?.("Categorías de series", 5, TOTAL);
+  const seriesCatsDto = await fetchJson<XtCategoryDto[]>(
+    `${base}&action=get_series_categories`,
+  );
+  onProgress?.("Series", 6, TOTAL);
+  const seriesDto = await fetchJson<XtSeriesDto[]>(
+    `${base}&action=get_series`,
+    longTimeout,
+  );
 
   const liveCats = toCategories(liveCatsDto);
   const vodCats = toCategories(vodCatsDto);

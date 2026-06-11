@@ -79,6 +79,8 @@ interface AppState {
   source: SourceConfig | null;
   catalog: Catalog;
   loading: boolean;
+  loadingStep: string | null;
+  loadingProgress: { current: number; total: number } | null;
   error: string | null;
   favorites: FavoriteItem[];
   epgByChannel: Map<string, EpgProgram[]>;
@@ -103,6 +105,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   source: loadSource(),
   catalog: emptyCatalog,
   loading: false,
+  loadingStep: null,
+  loadingProgress: null,
   error: null,
   favorites: loadFavorites(),
   epgByChannel: new Map(),
@@ -132,11 +136,15 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     // 2) Refrescar de red
     try {
+      const onProgress = (step: string, current: number, total: number) => {
+        set({ loadingStep: step, loadingProgress: { current, total } });
+      };
+      set({ loadingStep: "Conectando…", loadingProgress: { current: 0, total: 6 } });
       const catalog =
         source.kind === "m3u"
           ? await loadM3uCatalog(source)
-          : await loadXtreamCatalog(source);
-      set({ catalog, loading: false, error: null });
+          : await loadXtreamCatalog(source, onProgress);
+      set({ catalog, loading: false, loadingStep: null, loadingProgress: null, error: null });
       saveCatalogCache(source, catalog);
 
       const epgUrl = source.kind === "m3u" ? source.epgUrl : xtreamXmltvUrl(source);
@@ -149,9 +157,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       const msg = e instanceof Error ? e.message : "Error desconocido";
       // Si hay cache visible, no pisamos la lista con el error.
       if (!cached || cached.liveChannels.length === 0) {
-        set({ loading: false, error: msg });
+        set({ loading: false, loadingStep: null, loadingProgress: null, error: msg });
       } else {
-        set({ loading: false });
+        set({ loading: false, loadingStep: null, loadingProgress: null });
       }
     }
   },
