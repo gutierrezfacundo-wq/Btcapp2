@@ -6,7 +6,7 @@ import {
   setFocus,
 } from "@noriginmedia/norigin-spatial-navigation";
 import { useAppStore } from "../store/useAppStore";
-import { findNowPlaying } from "../data/xmltv";
+import { findNextProgram, findNowPlaying } from "../data/xmltv";
 import { FocusableButton } from "../components/FocusableButton";
 import { FocusableInput } from "../components/FocusableInput";
 import { PosterCard } from "../components/PosterCard";
@@ -177,6 +177,15 @@ export function Home() {
     return norm ? byCat.filter((s) => s.name.toLowerCase().includes(norm)) : byCat;
   }, [tab, catalog.series, category, query]);
 
+  // Numeracion global y estable: el numero de cada canal es su posicion en
+  // la lista completa del proveedor. No depende de la categoria ni del
+  // filtro, asi nunca hay dos canales "1".
+  const channelNumbers = useMemo(() => {
+    const map = new Map<string, number>();
+    catalog.liveChannels.forEach((c, i) => map.set(c.id, i + 1));
+    return map;
+  }, [catalog.liveChannels]);
+
   // Pre-calcular conteos por categoría una sola vez por pestaña.
   // Antes esto se hacia O(N) por cada categoria en cada render -> con 55k
   // canales y 56 categorias eran 3 millones de ops por render = lag enorme.
@@ -298,6 +307,7 @@ export function Home() {
                 totalFiltered={filteredChannels.length}
                 cap={RENDER_CAP}
                 selectedChannelId={selectedChannelId}
+                channelNumbers={channelNumbers}
                 onChannelEnter={(c) => {
                   // OK 1: arranca en el preview con sonido.
                   // OK 2 (mismo canal): expande a pantalla completa SIN recargar
@@ -330,7 +340,7 @@ export function Home() {
                 cap={RENDER_CAP}
               />
             ) : (
-              <FavoritesList favorites={favorites} onPlay={play} />
+              <FavoritesList favorites={favorites} channelNumbers={channelNumbers} onPlay={play} />
             )}
           </main>
 
@@ -342,10 +352,9 @@ export function Home() {
                   ? catalog.liveChannels.find((c) => c.id === selectedChannelId) ?? null
                   : null
               }
-              channelNumber={(() => {
-                const i = filteredChannels.findIndex((c) => c.id === selectedChannelId);
-                return i >= 0 ? i + 1 : null;
-              })()}
+              channelNumber={
+                selectedChannelId ? channelNumbers.get(selectedChannelId) ?? null : null
+              }
               epgByChannel={epgByChannel}
               fullscreen={fullscreen}
               onEnterFullscreen={() => setFullscreen(true)}
@@ -388,6 +397,7 @@ function PreviewPanel({
   channel, channelNumber, epgByChannel, fullscreen, onEnterFullscreen, onExitFullscreen,
 }: PreviewProps) {
   const now = channel ? findNowPlaying(epgByChannel as never, channel.tvgId) : null;
+  const next = channel ? findNextProgram(epgByChannel as never, channel.tvgId) : null;
   const videoElRef = useRef<HTMLVideoElement | null>(null);
   const [paused, setPaused] = useState(false);
   const [fsOverlay, setFsOverlay] = useState(true);
@@ -561,6 +571,14 @@ function PreviewPanel({
                 ) : null}
               </>
             ) : null}
+            {next ? (
+              <>
+                <div className="hot-preview-now-label next">DESPUÉS · {
+                  new Date(next.startMs).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                }</div>
+                <div className="hot-preview-next">{next.title}</div>
+              </>
+            ) : null}
           </div>
         </>
       ) : (
@@ -582,6 +600,7 @@ interface LiveListProps {
   totalFiltered: number;
   cap: number;
   selectedChannelId: string | null;
+  channelNumbers: Map<string, number>;
   onChannelEnter: (c: { id: string; name: string; streamUrl: string; logoUrl?: string; kind: "live" | "movie" | "series-episode" }) => void;
   epgByChannel: Map<string, ReturnType<typeof findNowPlaying> extends { title?: string } | undefined ? unknown : never> | Map<string, unknown>;
   isFavorite: (id: string) => boolean;
@@ -589,13 +608,13 @@ interface LiveListProps {
 }
 
 function LiveChannelList({
-  channels, totalFiltered, cap, selectedChannelId, onChannelEnter, epgByChannel,
+  channels, totalFiltered, cap, selectedChannelId, channelNumbers, onChannelEnter, epgByChannel,
   isFavorite, onToggleFavorite,
 }: LiveListProps) {
   if (channels.length === 0) return <div className="hot-status">No hay canales</div>;
   return (
     <div className="hot-channels-scroll">
-      {channels.map((c, idx) => {
+      {channels.map((c) => {
         const now = findNowPlaying(epgByChannel as never, c.tvgId);
         const isSel = c.id === selectedChannelId;
         return (
@@ -605,6 +624,7 @@ function LiveChannelList({
             className={`hot-channel ${isSel ? "selected" : ""}`}
             onEnterPress={() => onChannelEnter(c)}
           >
+            <div className="hot-channel-num">{channelNumbers.get(c.id) ?? "—"}</div>
             <div className="hot-channel-logo">
               {c.logoUrl ? (
                 <img src={c.logoUrl} alt="" />
@@ -617,7 +637,6 @@ function LiveChannelList({
               {now ? <div className="hot-channel-now">{now.title}</div> : null}
             </div>
             {isFavorite(c.id) ? <span className="hot-channel-fav" onClick={(e) => { e.stopPropagation(); onToggleFavorite(c); }}>★</span> : null}
-            <div className="hot-channel-num">{idx + 1}</div>
           </FocusableButton>
         );
       })}
@@ -649,26 +668,27 @@ function PosterGrid({ items, total, cap }: {
   );
 }
 
-function FavoritesList({ favorites, onPlay }: {
+function FavoritesList({ favorites, channelNumbers, onPlay }: {
   favorites: Array<{ id: string; name: string; streamUrl: string; logoUrl?: string; kind: string }>;
+  channelNumbers: Map<string, number>;
   onPlay: (url: string, title: string) => void;
 }) {
   if (favorites.length === 0) return <div className="hot-status">Sin favoritos</div>;
   return (
     <div className="hot-channels-scroll">
-      {favorites.map((f, idx) => (
+      {favorites.map((f) => (
         <FocusableButton
           key={f.id}
           className="hot-channel"
           onEnterPress={() => onPlay(f.streamUrl, f.name)}
         >
+          <div className="hot-channel-num">{channelNumbers.get(f.id) ?? "★"}</div>
           <div className="hot-channel-logo">
             {f.logoUrl ? <img src={f.logoUrl} alt="" /> : <div className="hot-channel-logo-placeholder">★</div>}
           </div>
           <div className="hot-channel-info">
             <div className="hot-channel-name">{f.name}</div>
           </div>
-          <div className="hot-channel-num">{idx + 1}</div>
         </FocusableButton>
       ))}
     </div>

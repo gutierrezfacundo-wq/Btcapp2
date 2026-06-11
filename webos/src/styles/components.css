@@ -639,3 +639,20 @@
 .hot-preview-desc { font-size: 17px; }
 .hot-logo { font-size: 28px; }
 .hot-ctrl { font-size: 18px; }
+
+/* ===== Aprovechar el espacio: numero a la izquierda, preview mas grande ===== */
+/* Fila de canal: numero | logo | nombre | estrella (nada flotando lejos) */
+.hot-channel {
+  grid-template-columns: 56px 76px 1fr auto;
+  gap: 12px;
+}
+.hot-channel-num {
+  min-width: 48px;
+  font-size: 18px;
+  text-align: center;
+}
+/* Preview mas ancho: el video llena el espacio de la derecha */
+.hot-preview { width: 660px; }
+.hot-preview-info { padding: 16px 22px; gap: 8px; }
+.hot-preview-now-label.next { color: var(--muted); margin-top: 10px; }
+.hot-preview-next { font-size: 19px; color: var(--text); opacity: 0.85; }

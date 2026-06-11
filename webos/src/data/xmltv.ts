@@ -73,3 +73,18 @@ export function findNowPlaying(
   const now = Date.now();
   return list.find((p) => now >= p.startMs && now <= p.stopMs);
 }
+
+export function findNextProgram(
+  byChannel: Map<string, EpgProgram[]>,
+  tvgId: string | undefined,
+): EpgProgram | undefined {
+  if (!tvgId) return undefined;
+  const list = byChannel.get(tvgId);
+  if (!list) return undefined;
+  const now = Date.now();
+  let best: EpgProgram | undefined;
+  for (const p of list) {
+    if (p.startMs > now && (!best || p.startMs < best.startMs)) best = p;
+  }
+  return best;
+}
