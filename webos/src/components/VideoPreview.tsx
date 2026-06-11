@@ -6,9 +6,13 @@ interface Props {
   muted?: boolean;
   /** Da acceso al <video> al padre para controles (pausa/play). */
   onVideoEl?: (el: HTMLVideoElement | null) => void;
+  /** Da acceso a la instancia Hls (null si el stream es nativo) para pistas. */
+  onHls?: (hls: Hls | null) => void;
+  /** Reporta la resolucion real del video cuando se conoce o cambia. */
+  onResolution?: (width: number, height: number) => void;
 }
 
-export function VideoPreview({ url, muted = true, onVideoEl }: Props) {
+export function VideoPreview({ url, muted = true, onVideoEl, onHls, onResolution }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const hlsRef = useRef<Hls | null>(null);
   const [status, setStatus] = useState<"idle" | "loading" | "playing" | "error">(
@@ -38,7 +42,14 @@ export function VideoPreview({ url, muted = true, onVideoEl }: Props) {
     }
 
     setStatus("loading");
+    onResolution?.(0, 0);
     const looksLikeHls = /\.m3u8(\?|$)/i.test(url);
+
+    const reportRes = () => {
+      if (video.videoWidth > 0) onResolution?.(video.videoWidth, video.videoHeight);
+    };
+    video.addEventListener("loadedmetadata", reportRes);
+    video.addEventListener("resize", reportRes);
 
     if (looksLikeHls && Hls.isSupported()) {
       const hls = new Hls({
@@ -55,10 +66,12 @@ export function VideoPreview({ url, muted = true, onVideoEl }: Props) {
       hls.on(Hls.Events.ERROR, (_evt, data) => {
         if (data.fatal) setStatus("error");
       });
+      onHls?.(hls);
     } else {
       video.src = url;
       video.oncanplay = () => setStatus("playing");
       video.onerror = () => setStatus("error");
+      onHls?.(null);
     }
 
     video.play().catch(() => {
@@ -66,6 +79,9 @@ export function VideoPreview({ url, muted = true, onVideoEl }: Props) {
     });
 
     return () => {
+      video.removeEventListener("loadedmetadata", reportRes);
+      video.removeEventListener("resize", reportRes);
+      onHls?.(null);
       if (hlsRef.current) {
         hlsRef.current.destroy();
         hlsRef.current = null;
@@ -73,6 +89,7 @@ export function VideoPreview({ url, muted = true, onVideoEl }: Props) {
       video.removeAttribute("src");
       video.load();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url]);
 
   return (

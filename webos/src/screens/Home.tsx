@@ -12,6 +12,7 @@ import { FocusableInput } from "../components/FocusableInput";
 import { PosterCard } from "../components/PosterCard";
 import { VideoPreview } from "../components/VideoPreview";
 import { isBackKey } from "../webos/remote-keys";
+import type Hls from "hls.js";
 
 type Tab = "live" | "movies" | "series" | "favorites";
 
@@ -341,6 +342,10 @@ export function Home() {
                   ? catalog.liveChannels.find((c) => c.id === selectedChannelId) ?? null
                   : null
               }
+              channelNumber={(() => {
+                const i = filteredChannels.findIndex((c) => c.id === selectedChannelId);
+                return i >= 0 ? i + 1 : null;
+              })()}
               epgByChannel={epgByChannel}
               fullscreen={fullscreen}
               onEnterFullscreen={() => setFullscreen(true)}
@@ -361,8 +366,18 @@ interface PreviewChannel {
   tvgId?: string;
 }
 
+/** Detecta la calidad declarada en el nombre del canal (4K| UHD, FHD, etc). */
+function qualityFromName(name: string): string | null {
+  if (/4k|uhd|2160/i.test(name)) return "4K UHD";
+  if (/fhd|1080/i.test(name)) return "FHD";
+  if (/\bhd\b|720/i.test(name)) return "HD";
+  if (/\bsd\b|480/i.test(name)) return "SD";
+  return null;
+}
+
 interface PreviewProps {
   channel: PreviewChannel | null;
+  channelNumber: number | null;
   epgByChannel: unknown;
   fullscreen: boolean;
   onEnterFullscreen: () => void;
@@ -370,7 +385,7 @@ interface PreviewProps {
 }
 
 function PreviewPanel({
-  channel, epgByChannel, fullscreen, onEnterFullscreen, onExitFullscreen,
+  channel, channelNumber, epgByChannel, fullscreen, onEnterFullscreen, onExitFullscreen,
 }: PreviewProps) {
   const now = channel ? findNowPlaying(epgByChannel as never, channel.tvgId) : null;
   const videoElRef = useRef<HTMLVideoElement | null>(null);
@@ -378,9 +393,18 @@ function PreviewPanel({
   const [fsOverlay, setFsOverlay] = useState(true);
   const fsTimer = useRef<number | null>(null);
   const prevFs = useRef(false);
+  const [hls, setHls] = useState<Hls | null>(null);
+  const [res, setRes] = useState<{ w: number; h: number } | null>(null);
+  const [tracksOpen, setTracksOpen] = useState(false);
+  const tracksOpenRef = useRef(false);
+  tracksOpenRef.current = tracksOpen;
+  const quality = channel ? qualityFromName(channel.name) : null;
 
-  // Al cambiar de canal, resetear estado de pausa.
-  useEffect(() => setPaused(false), [channel?.id]);
+  // Al cambiar de canal, resetear estado de pausa y menu de pistas.
+  useEffect(() => {
+    setPaused(false);
+    setTracksOpen(false);
+  }, [channel?.id]);
 
   const togglePause = () => {
     const v = videoElRef.current;
@@ -397,7 +421,10 @@ function PreviewPanel({
   const pokeOverlay = () => {
     setFsOverlay(true);
     if (fsTimer.current !== null) window.clearTimeout(fsTimer.current);
-    fsTimer.current = window.setTimeout(() => setFsOverlay(false), 5000);
+    fsTimer.current = window.setTimeout(() => {
+      // No esconder los controles mientras el menu de pistas este abierto.
+      if (!tracksOpenRef.current) setFsOverlay(false);
+    }, 5000);
   };
 
   // Manejo de teclas en fullscreen: back sale (el video sigue en el preview),
@@ -417,11 +444,17 @@ function PreviewPanel({
       if (isBackKey(e)) {
         e.preventDefault();
         e.stopPropagation();
-        onExitFullscreen();
+        if (tracksOpenRef.current) {
+          setTracksOpen(false);
+          setFocus("FS_TRACKS");
+        } else {
+          onExitFullscreen();
+        }
         return;
       }
-      if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+      if (!tracksOpenRef.current && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
         // Evitar que el foco se escape a la lista que quedo detras.
+        // (Con el menu de pistas abierto, las flechas navegan el menu.)
         e.stopPropagation();
       }
       pokeOverlay();
@@ -447,11 +480,18 @@ function PreviewPanel({
           url={channel?.streamUrl ?? null}
           muted={false}
           onVideoEl={(el) => { videoElRef.current = el; }}
+          onHls={setHls}
+          onResolution={(w, h) => setRes(w > 0 ? { w, h } : null)}
         />
         {fullscreen ? (
           <div className={`fs-overlay ${fsOverlay ? "visible" : ""}`}>
             <div className="fs-top">
               <div className="fs-name">{channel?.name}</div>
+              <div className="fs-meta">
+                {channelNumber !== null ? <span className="chip blue">Nº {channelNumber}</span> : null}
+                {quality ? <span className="chip yellow">{quality}</span> : null}
+                {res ? <span className="chip dark">REPRODUCIENDO {res.w} x {res.h}</span> : null}
+              </div>
               {now ? <div className="fs-now">AHORA · {now.title}</div> : null}
             </div>
             <div className="fs-bottom">
@@ -462,10 +502,30 @@ function PreviewPanel({
               >
                 {paused ? "▶ Reproducir" : "⏸ Pausa"}
               </FocusableButton>
+              <FocusableButton
+                focusKey="FS_TRACKS"
+                className="btn hot-ctrl"
+                onEnterPress={() => {
+                  setTracksOpen((v) => !v);
+                  pokeOverlay();
+                  window.setTimeout(() => setFocus("TRK_FIRST"), 60);
+                }}
+              >
+                ⚙ Calidad / Audio / Sub
+              </FocusableButton>
               <FocusableButton className="btn hot-ctrl" onEnterPress={onExitFullscreen}>
                 ← Volver a la lista
               </FocusableButton>
             </div>
+            {tracksOpen ? (
+              <TrackMenu
+                hls={hls}
+                onClose={() => {
+                  setTracksOpen(false);
+                  setFocus("FS_TRACKS");
+                }}
+              />
+            ) : null}
           </div>
         ) : null}
       </div>
@@ -487,6 +547,11 @@ function PreviewPanel({
               <img className="hot-preview-logo" src={channel.logoUrl} alt="" />
             ) : null}
             <div className="hot-preview-name">{channel.name}</div>
+            <div className="hot-preview-meta">
+              {channelNumber !== null ? <span className="chip blue">Nº {channelNumber}</span> : null}
+              {quality ? <span className="chip yellow">{quality}</span> : null}
+              {res ? <span className="chip dark">{res.w} x {res.h}</span> : null}
+            </div>
             {now ? (
               <>
                 <div className="hot-preview-now-label">AHORA</div>
@@ -606,6 +671,97 @@ function FavoritesList({ favorites, onPlay }: {
           <div className="hot-channel-num">{idx + 1}</div>
         </FocusableButton>
       ))}
+    </div>
+  );
+}
+
+/** Menu de pistas: calidad (niveles HLS), audio y subtitulos. */
+function TrackMenu({ hls, onClose }: { hls: Hls | null; onClose: () => void }) {
+  const [, setTick] = useState(0);
+  const refresh = () => setTick((t) => t + 1);
+
+  if (!hls) {
+    return (
+      <div className="trk-menu">
+        <div className="trk-title">Pistas</div>
+        <div className="trk-empty">
+          Este stream no permite cambiar calidad, audio ni subtítulos
+          (reproducción directa sin variantes).
+        </div>
+        <FocusableButton focusKey="TRK_FIRST" className="btn hot-ctrl" onEnterPress={onClose}>
+          Cerrar
+        </FocusableButton>
+      </div>
+    );
+  }
+
+  const levels = hls.levels ?? [];
+  const audioTracks = hls.audioTracks ?? [];
+  const subTracks = hls.subtitleTracks ?? [];
+
+  const levelLabel = (l: { height?: number; bitrate?: number }) =>
+    l.height ? `${l.height}p` : `${Math.round((l.bitrate ?? 0) / 1000)} kbps`;
+
+  return (
+    <div className="trk-menu">
+      <div className="trk-title">Pistas</div>
+      <div className="trk-scroll">
+        <div className="trk-section">CALIDAD</div>
+        <FocusableButton
+          focusKey="TRK_FIRST"
+          className={`trk-item ${hls.autoLevelEnabled ? "on" : ""}`}
+          onEnterPress={() => { hls.currentLevel = -1; refresh(); }}
+        >
+          Auto {hls.autoLevelEnabled ? "✓" : ""}
+        </FocusableButton>
+        {levels.map((l, i) => (
+          <FocusableButton
+            key={`lv-${i}`}
+            className={`trk-item ${!hls.autoLevelEnabled && hls.currentLevel === i ? "on" : ""}`}
+            onEnterPress={() => { hls.currentLevel = i; refresh(); }}
+          >
+            {levelLabel(l)} {!hls.autoLevelEnabled && hls.currentLevel === i ? "✓" : ""}
+          </FocusableButton>
+        ))}
+
+        {audioTracks.length > 0 ? (
+          <>
+            <div className="trk-section">AUDIO</div>
+            {audioTracks.map((t, i) => (
+              <FocusableButton
+                key={`au-${i}`}
+                className={`trk-item ${hls.audioTrack === i ? "on" : ""}`}
+                onEnterPress={() => { hls.audioTrack = i; refresh(); }}
+              >
+                {t.name || t.lang || `Pista ${i + 1}`} {hls.audioTrack === i ? "✓" : ""}
+              </FocusableButton>
+            ))}
+          </>
+        ) : null}
+
+        <div className="trk-section">SUBTÍTULOS</div>
+        <FocusableButton
+          className={`trk-item ${hls.subtitleTrack === -1 ? "on" : ""}`}
+          onEnterPress={() => { hls.subtitleTrack = -1; refresh(); }}
+        >
+          Desactivados {hls.subtitleTrack === -1 ? "✓" : ""}
+        </FocusableButton>
+        {subTracks.map((t, i) => (
+          <FocusableButton
+            key={`su-${i}`}
+            className={`trk-item ${hls.subtitleTrack === i ? "on" : ""}`}
+            onEnterPress={() => { hls.subtitleTrack = i; refresh(); }}
+          >
+            {t.name || t.lang || `Sub ${i + 1}`} {hls.subtitleTrack === i ? "✓" : ""}
+          </FocusableButton>
+        ))}
+        {subTracks.length === 0 ? (
+          <div className="trk-empty small">Este canal no trae subtítulos.</div>
+        ) : null}
+      </div>
+      <FocusableButton className="btn hot-ctrl" onEnterPress={onClose}>
+        Cerrar
+      </FocusableButton>
     </div>
   );
 }
