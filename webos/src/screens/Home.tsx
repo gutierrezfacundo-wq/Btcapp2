@@ -1,256 +1,381 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { FocusContext, useFocusable, setFocus } from "@noriginmedia/norigin-spatial-navigation";
+import {
+  FocusContext,
+  useFocusable,
+  setFocus,
+} from "@noriginmedia/norigin-spatial-navigation";
 import { useAppStore } from "../store/useAppStore";
 import { findNowPlaying } from "../data/xmltv";
 import { FocusableButton } from "../components/FocusableButton";
 import { FocusableInput } from "../components/FocusableInput";
-import { ChannelRow } from "../components/ChannelRow";
 import { PosterCard } from "../components/PosterCard";
-import { CategoryChips } from "../components/CategoryChips";
 
 type Tab = "live" | "movies" | "series" | "favorites";
 
-const TABS: { id: Tab; label: string }[] = [
-  { id: "live", label: "En vivo" },
-  { id: "movies", label: "Películas" },
-  { id: "series", label: "Series" },
-  { id: "favorites", label: "Favoritos" },
+const SIDEBAR_ITEMS: {
+  id: Tab | "search" | "reload" | "settings" | "hub";
+  emoji: string;
+  label: string;
+}[] = [
+  { id: "hub", emoji: "⌂", label: "Inicio" },
+  { id: "live", emoji: "📺", label: "En vivo" },
+  { id: "movies", emoji: "🎬", label: "Películas" },
+  { id: "series", emoji: "🎞️", label: "Series" },
+  { id: "favorites", emoji: "★", label: "Favoritos" },
+  { id: "search", emoji: "🔍", label: "Buscar" },
+  { id: "reload", emoji: "↻", label: "Recargar" },
+  { id: "settings", emoji: "⚙", label: "Ajustes" },
 ];
+
+const RENDER_CAP = 500;
 
 export function Home() {
   const navigate = useNavigate();
-  const { catalog, loading, error, favorites, reload, source } = useAppStore();
+  const [search] = useSearchParams();
+  const initialTab = (search.get("tab") as Tab) ?? "live";
+
+  const catalog = useAppStore((s) => s.catalog);
+  const favorites = useAppStore((s) => s.favorites);
+  const loading = useAppStore((s) => s.loading);
   const loadingStep = useAppStore((s) => s.loadingStep);
   const loadingProgress = useAppStore((s) => s.loadingProgress);
+  const error = useAppStore((s) => s.error);
+  const source = useAppStore((s) => s.source);
+  const reload = useAppStore((s) => s.reload);
   const toggleFavorite = useAppStore((s) => s.toggleFavorite);
   const isFavorite = useAppStore((s) => s.isFavorite);
   const epgByChannel = useAppStore((s) => s.epgByChannel);
 
-  const [search] = useSearchParams();
-  const initialTab = (search.get("tab") as Tab) ?? "live";
   const [tab, setTab] = useState<Tab>(initialTab);
   const [category, setCategory] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!source) {
-      navigate("/setup");
-      return;
-    }
-    if (catalog.liveChannels.length === 0 && !loading) reload();
-  }, [source, catalog.liveChannels.length, loading, navigate, reload]);
+    if (!source) navigate("/setup");
+  }, [source, navigate]);
 
   useEffect(() => {
-    setFocus("HOME");
+    setCategory(null);
+    setQuery("");
+    setSearchOpen(false);
   }, [tab]);
-
-  useEffect(() => setCategory(null), [tab]);
 
   const { ref, focusKey } = useFocusable({ trackChildren: true, focusKey: "HOME" });
 
-  const [query, setQuery] = useState("");
-  // Cap de items renderizados: con 55k canales, mostrar todo cuelga la TV.
-  const RENDER_CAP = 500;
-  const norm = query.trim().toLowerCase();
+  useEffect(() => {
+    setFocus("CAT_0");
+  }, [tab]);
 
-  const filteredLive = useMemo(() => {
+  // === Datos por pestaña ===
+  const tabData = useMemo(() => {
+    if (tab === "live") {
+      return {
+        categories: catalog.liveCategories,
+        getCategoryItems: (cat: string | null) =>
+          cat ? catalog.liveChannels.filter((c) => c.groupTitle === cat) : catalog.liveChannels,
+        totalCount: catalog.liveChannels.length,
+      };
+    }
+    if (tab === "movies") {
+      return {
+        categories: catalog.movieCategories,
+        getCategoryItems: () => [], // gestionado abajo
+        totalCount: catalog.movies.length,
+      };
+    }
+    if (tab === "series") {
+      return {
+        categories: catalog.seriesCategories,
+        getCategoryItems: () => [],
+        totalCount: catalog.series.length,
+      };
+    }
+    return {
+      categories: [],
+      getCategoryItems: () => [],
+      totalCount: favorites.length,
+    };
+  }, [tab, catalog, favorites]);
+
+  const filteredChannels = useMemo(() => {
+    if (tab !== "live") return [];
     const byCat = category
       ? catalog.liveChannels.filter((c) => c.groupTitle === category)
       : catalog.liveChannels;
-    return norm
-      ? byCat.filter((c) => c.name.toLowerCase().includes(norm))
-      : byCat;
-  }, [catalog.liveChannels, category, norm]);
-  const filteredMovies = useMemo(
-    () => (category ? catalog.movies.filter((m) => m.category === category) : catalog.movies),
-    [catalog.movies, category],
-  );
-  const filteredSeries = useMemo(
-    () => (category ? catalog.series.filter((s) => s.category === category) : catalog.series),
-    [catalog.series, category],
-  );
+    const norm = query.trim().toLowerCase();
+    return norm ? byCat.filter((c) => c.name.toLowerCase().includes(norm)) : byCat;
+  }, [tab, catalog.liveChannels, category, query]);
 
-  const play = (url: string, title: string) =>
+  const filteredMovies = useMemo(() => {
+    if (tab !== "movies") return [];
+    const byCat = category
+      ? catalog.movies.filter((m) => m.category === category)
+      : catalog.movies;
+    const norm = query.trim().toLowerCase();
+    return norm ? byCat.filter((m) => m.name.toLowerCase().includes(norm)) : byCat;
+  }, [tab, catalog.movies, category, query]);
+
+  const filteredSeries = useMemo(() => {
+    if (tab !== "series") return [];
+    const byCat = category
+      ? catalog.series.filter((s) => s.category === category)
+      : catalog.series;
+    const norm = query.trim().toLowerCase();
+    return norm ? byCat.filter((s) => s.name.toLowerCase().includes(norm)) : byCat;
+  }, [tab, catalog.series, category, query]);
+
+  const totalForCategory = (catName: string): number => {
+    if (tab === "live") return catalog.liveChannels.filter((c) => c.groupTitle === catName).length;
+    if (tab === "movies") return catalog.movies.filter((m) => m.category === catName).length;
+    if (tab === "series") return catalog.series.filter((s) => s.category === catName).length;
+    return 0;
+  };
+
+  const onSidebarPress = (id: typeof SIDEBAR_ITEMS[number]["id"]) => {
+    if (id === "hub") navigate("/hub");
+    else if (id === "search") setSearchOpen((v) => !v);
+    else if (id === "reload") reload();
+    else if (id === "settings") navigate("/setup");
+    else setTab(id);
+  };
+
+  const play = (url: string, title: string) => {
     navigate(`/player?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}`);
+  };
+  const openSeries = (id: string, name: string) => {
+    navigate(`/series/${id}?name=${encodeURIComponent(name)}`);
+  };
 
-  const openSeries = (id: string, title: string) =>
-    navigate(`/series/${id}?title=${encodeURIComponent(title)}`);
-
+  // === Render ===
   return (
     <FocusContext.Provider value={focusKey}>
-      <div className="page" ref={ref}>
-        <div className="topbar">
-          <span>IPTV Player</span>
-          <div className="actions">
-            <FocusableButton className="btn" onEnterPress={reload}>↻</FocusableButton>
-            <FocusableButton className="btn" onEnterPress={() => navigate("/setup")}>⚙</FocusableButton>
-          </div>
+      <div className="page hot" ref={ref}>
+        {/* Topbar mini con logo + indicador "Live" */}
+        <div className="hot-topbar">
+          <span className="hot-logo">🔥 IPTV Player</span>
+          {tab === "live" && category ? (
+            <span className="hot-badge">{category}</span>
+          ) : null}
+          {loadingStep ? (
+            <span className="hot-loading">
+              {loadingStep}
+              {loadingProgress ? ` (${loadingProgress.current}/${loadingProgress.total})` : ""}
+            </span>
+          ) : null}
         </div>
 
-        <div className="tabs">
-          {TABS.map((t) => (
-            <FocusableButton
-              key={t.id}
-              className={`tab ${tab === t.id ? "active" : ""}`}
-              onEnterPress={() => setTab(t.id)}
-            >
-              {t.label}
-            </FocusableButton>
-          ))}
-        </div>
+        <div className="hot-body">
+          {/* Sidebar de iconos */}
+          <nav className="hot-icons">
+            {SIDEBAR_ITEMS.map((it) => (
+              <FocusableButton
+                key={it.id}
+                className={`hot-icon ${
+                  (it.id === tab || (it.id === "search" && searchOpen)) ? "active" : ""
+                }`}
+                onEnterPress={() => onSidebarPress(it.id)}
+              >
+                <span className="hot-icon-glyph">{it.emoji}</span>
+              </FocusableButton>
+            ))}
+          </nav>
 
-        {loading ? (
-          <div className="loading" style={{ flexDirection: "column", gap: 16 }}>
-            <div className="spinner" />
-            {loadingStep ? (
-              <div style={{ textAlign: "center" }}>
-                <div style={{ fontSize: 22 }}>{loadingStep}</div>
-                {loadingProgress ? (
-                  <div style={{ fontSize: 18, opacity: 0.6, marginTop: 6 }}>
-                    {loadingProgress.current} / {loadingProgress.total}
-                  </div>
-                ) : null}
+          {/* Columna 2: categorias */}
+          <aside className="hot-cats">
+            <div className="hot-cats-header">
+              <div className="hot-cats-title">
+                {tab === "live" ? "EN VIVO" :
+                  tab === "movies" ? "PELÍCULAS" :
+                    tab === "series" ? "SERIES" : "FAVORITOS"}
+              </div>
+              <div className="hot-cats-sub">TOTAL: {tabData.totalCount}</div>
+            </div>
+            {searchOpen ? (
+              <div style={{ padding: "8px 12px" }}>
+                <FocusableInput
+                  value={query}
+                  onChange={setQuery}
+                  placeholder="Buscar…"
+                  focusKey="SEARCH_INPUT"
+                />
               </div>
             ) : null}
-          </div>
-        ) : error ? (
-          <div className="error" style={{ flexDirection: "column", gap: 16 }}>
-            <div>{error}</div>
-            <FocusableButton className="btn primary" onEnterPress={() => reload()}>
-              Reintentar
-            </FocusableButton>
-            <FocusableButton className="btn" onEnterPress={() => navigate("/setup")}>
-              Revisar configuración
-            </FocusableButton>
-          </div>
-        ) : (
-          <>
-            {tab === "live" && (
-              <>
-                <CategoryChips
-                  categories={catalog.liveCategories}
-                  selected={category}
-                  onSelect={setCategory}
-                />
-                <div style={{ padding: "8px 16px" }}>
-                  <FocusableInput
-                    value={query}
-                    onChange={setQuery}
-                    placeholder={`Buscar entre ${filteredLive.length} canales…`}
-                  />
-                </div>
-                <div className="scroll" style={{ flex: 1 }}>
-                  {filteredLive.length === 0 ? (
-                    <div className="empty">No hay canales</div>
-                  ) : (
-                    <>
-                      {filteredLive.slice(0, RENDER_CAP).map((c) => {
-                        const now = findNowPlaying(epgByChannel, c.tvgId);
-                        return (
-                          <ChannelRow
-                            key={c.id}
-                            name={c.name}
-                            subtitle={now?.title ?? c.groupTitle}
-                            logoUrl={c.logoUrl}
-                            isFavorite={isFavorite(c.id)}
-                            onPlay={() => play(c.streamUrl, c.name)}
-                            onToggleFavorite={() =>
-                              toggleFavorite({
-                                id: c.id,
-                                name: c.name,
-                                streamUrl: c.streamUrl,
-                                logoUrl: c.logoUrl,
-                                kind: c.kind,
-                              })
-                            }
-                          />
-                        );
-                      })}
-                      {filteredLive.length > RENDER_CAP ? (
-                        <div className="empty" style={{ padding: 24 }}>
-                          Mostrando los primeros {RENDER_CAP} de {filteredLive.length}.
-                          Elegí una categoría o usá el buscador para refinar.
-                        </div>
-                      ) : null}
-                    </>
-                  )}
-                </div>
-              </>
-            )}
+            <div className="hot-cats-list">
+              <FocusableButton
+                className={`hot-cat ${category === null ? "selected" : ""}`}
+                focusKey="CAT_0"
+                onEnterPress={() => setCategory(null)}
+              >
+                <div className="hot-cat-name">Todas</div>
+                <div className="hot-cat-total">TOTAL: {tabData.totalCount}</div>
+              </FocusableButton>
+              {tabData.categories.map((c) => (
+                <FocusableButton
+                  key={c.id}
+                  className={`hot-cat ${category === c.name ? "selected" : ""}`}
+                  onEnterPress={() => setCategory(c.name)}
+                >
+                  <div className="hot-cat-name">{c.name}</div>
+                  <div className="hot-cat-total">TOTAL: {totalForCategory(c.name)}</div>
+                </FocusableButton>
+              ))}
+            </div>
+          </aside>
 
-            {tab === "movies" && (
-              <>
-                <CategoryChips
-                  categories={catalog.movieCategories}
-                  selected={category}
-                  onSelect={setCategory}
-                />
-                <div className="scroll" style={{ flex: 1 }}>
-                  {filteredMovies.length === 0 ? (
-                    <div className="empty">No hay películas</div>
-                  ) : (
-                    <div className="poster-grid">
-                      {filteredMovies.slice(0, RENDER_CAP).map((m) => (
-                        <PosterCard
-                          key={m.id}
-                          title={m.name}
-                          posterUrl={m.posterUrl}
-                          onSelect={() => play(m.streamUrl, m.name)}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </>
-            )}
-
-            {tab === "series" && (
-              <>
-                <CategoryChips
-                  categories={catalog.seriesCategories}
-                  selected={category}
-                  onSelect={setCategory}
-                />
-                <div className="scroll" style={{ flex: 1 }}>
-                  {filteredSeries.length === 0 ? (
-                    <div className="empty">No hay series</div>
-                  ) : (
-                    <div className="poster-grid">
-                      {filteredSeries.slice(0, RENDER_CAP).map((s) => (
-                        <PosterCard
-                          key={s.id}
-                          title={s.name}
-                          posterUrl={s.posterUrl}
-                          onSelect={() => openSeries(s.id, s.name)}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </>
-            )}
-
-            {tab === "favorites" && (
-              <div className="scroll" style={{ flex: 1 }}>
-                {favorites.length === 0 ? (
-                  <div className="empty">Todavía no hay favoritos</div>
-                ) : (
-                  favorites.map((f) => (
-                    <ChannelRow
-                      key={f.id}
-                      name={f.name}
-                      logoUrl={f.logoUrl}
-                      isFavorite
-                      onPlay={() => play(f.streamUrl, f.name)}
-                      onToggleFavorite={() => toggleFavorite(f)}
-                    />
-                  ))
-                )}
+          {/* Columna 3: items */}
+          <main className="hot-items">
+            {loading && !catalog.liveChannels.length ? (
+              <div className="hot-status"><div className="spinner" /> Cargando…</div>
+            ) : error ? (
+              <div className="hot-status">
+                <div className="error" style={{ padding: 0 }}>{error}</div>
+                <FocusableButton className="btn primary" onEnterPress={reload}>Reintentar</FocusableButton>
               </div>
+            ) : tab === "live" ? (
+              <LiveChannelList
+                channels={filteredChannels.slice(0, RENDER_CAP)}
+                totalFiltered={filteredChannels.length}
+                cap={RENDER_CAP}
+                selectedChannelId={selectedChannelId}
+                onFocusChannel={setSelectedChannelId}
+                epgByChannel={epgByChannel}
+                isFavorite={isFavorite}
+                onPlay={play}
+                onToggleFavorite={(c) =>
+                  toggleFavorite({
+                    id: c.id, name: c.name, streamUrl: c.streamUrl, logoUrl: c.logoUrl, kind: c.kind,
+                  })
+                }
+              />
+            ) : tab === "movies" ? (
+              <PosterGrid
+                items={filteredMovies.slice(0, RENDER_CAP).map((m) => ({
+                  id: m.id, title: m.name, posterUrl: m.posterUrl, onSelect: () => play(m.streamUrl, m.name),
+                }))}
+                total={filteredMovies.length}
+                cap={RENDER_CAP}
+              />
+            ) : tab === "series" ? (
+              <PosterGrid
+                items={filteredSeries.slice(0, RENDER_CAP).map((s) => ({
+                  id: s.id, title: s.name, posterUrl: s.posterUrl, onSelect: () => openSeries(s.id, s.name),
+                }))}
+                total={filteredSeries.length}
+                cap={RENDER_CAP}
+              />
+            ) : (
+              <FavoritesList favorites={favorites} onPlay={play} />
             )}
-          </>
-        )}
+          </main>
+        </div>
       </div>
     </FocusContext.Provider>
+  );
+}
+
+// ===== Sub-componentes =====
+
+interface LiveListProps {
+  channels: Array<{
+    id: string; name: string; streamUrl: string; logoUrl?: string;
+    groupTitle?: string; tvgId?: string; kind: "live" | "movie" | "series-episode";
+  }>;
+  totalFiltered: number;
+  cap: number;
+  selectedChannelId: string | null;
+  onFocusChannel: (id: string) => void;
+  epgByChannel: Map<string, ReturnType<typeof findNowPlaying> extends { title?: string } | undefined ? unknown : never> | Map<string, unknown>;
+  isFavorite: (id: string) => boolean;
+  onPlay: (url: string, title: string) => void;
+  onToggleFavorite: (c: { id: string; name: string; streamUrl: string; logoUrl?: string; kind: "live" | "movie" | "series-episode" }) => void;
+}
+
+function LiveChannelList({
+  channels, totalFiltered, cap, selectedChannelId, onFocusChannel, epgByChannel,
+  isFavorite, onPlay, onToggleFavorite,
+}: LiveListProps) {
+  if (channels.length === 0) return <div className="hot-status">No hay canales</div>;
+  return (
+    <div className="hot-channels-scroll">
+      {channels.map((c, idx) => {
+        const now = findNowPlaying(epgByChannel as never, c.tvgId);
+        const isSel = c.id === selectedChannelId;
+        return (
+          <FocusableButton
+            key={c.id}
+            className={`hot-channel ${isSel ? "selected" : ""}`}
+            onFocus={() => onFocusChannel(c.id)}
+            onEnterPress={() => onPlay(c.streamUrl, c.name)}
+          >
+            <div className="hot-channel-logo">
+              {c.logoUrl ? (
+                <img src={c.logoUrl} alt="" />
+              ) : (
+                <div className="hot-channel-logo-placeholder">📺</div>
+              )}
+            </div>
+            <div className="hot-channel-info">
+              <div className="hot-channel-name">{c.name}</div>
+              {now ? <div className="hot-channel-now">{now.title}</div> : null}
+            </div>
+            {isFavorite(c.id) ? <span className="hot-channel-fav" onClick={(e) => { e.stopPropagation(); onToggleFavorite(c); }}>★</span> : null}
+            <div className="hot-channel-num">{idx + 1}</div>
+          </FocusableButton>
+        );
+      })}
+      {totalFiltered > cap ? (
+        <div className="hot-status" style={{ padding: 16 }}>
+          Mostrando {cap} de {totalFiltered}. Elegí una categoría o buscá.
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function PosterGrid({ items, total, cap }: {
+  items: Array<{ id: string; title: string; posterUrl?: string; onSelect: () => void }>;
+  total: number; cap: number;
+}) {
+  if (items.length === 0) return <div className="hot-status">Sin contenido</div>;
+  return (
+    <div className="poster-grid hot-poster-grid">
+      {items.map((it) => (
+        <PosterCard key={it.id} title={it.title} posterUrl={it.posterUrl} onSelect={it.onSelect} />
+      ))}
+      {total > cap ? (
+        <div className="hot-status" style={{ gridColumn: "1 / -1" }}>
+          Mostrando {cap} de {total}. Elegí una categoría o buscá.
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function FavoritesList({ favorites, onPlay }: {
+  favorites: Array<{ id: string; name: string; streamUrl: string; logoUrl?: string; kind: string }>;
+  onPlay: (url: string, title: string) => void;
+}) {
+  if (favorites.length === 0) return <div className="hot-status">Sin favoritos</div>;
+  return (
+    <div className="hot-channels-scroll">
+      {favorites.map((f, idx) => (
+        <FocusableButton
+          key={f.id}
+          className="hot-channel"
+          onEnterPress={() => onPlay(f.streamUrl, f.name)}
+        >
+          <div className="hot-channel-logo">
+            {f.logoUrl ? <img src={f.logoUrl} alt="" /> : <div className="hot-channel-logo-placeholder">★</div>}
+          </div>
+          <div className="hot-channel-info">
+            <div className="hot-channel-name">{f.name}</div>
+          </div>
+          <div className="hot-channel-num">{idx + 1}</div>
+        </FocusableButton>
+      ))}
+    </div>
   );
 }

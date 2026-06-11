@@ -1,14 +1,18 @@
 :root {
-  --bg: #0e0e10;
-  --surface: #18181b;
-  --surface-2: #222226;
-  --text: #e5e7eb;
-  --muted: #9ca3af;
-  --primary: #ff4081;
-  --secondary: #7c4dff;
+  /* Paleta "Hot IPTV": azul marino oscuro + acentos amarillo/naranja */
+  --bg: #0a1525;
+  --bg-deep: #050a14;
+  --surface: #0f1d33;
+  --surface-2: #15263f;
+  --text: #e9eef7;
+  --muted: #8ea3c2;
+  --primary: #ffc107;        /* amarillo principal: categoria seleccionada, acentos */
+  --primary-dark: #f59e0b;
+  --secondary: #2d6cdf;      /* azul: chips de numero de canal */
+  --accent: #ff6b35;         /* naranja: borde del canal seleccionado */
   --danger: #ef4444;
   --radius: 12px;
-  --focus-outline: 0 0 0 4px #ff4081, 0 0 0 8px rgba(255, 64, 129, 0.35);
+  --focus-outline: 0 0 0 3px var(--accent), 0 0 0 6px rgba(255, 107, 53, 0.25);
   font-family: "LG Smart UI", "SamsungOne", "Helvetica Neue", Arial, sans-serif;
 }
 
