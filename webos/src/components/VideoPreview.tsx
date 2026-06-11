@@ -4,14 +4,22 @@ import Hls from "hls.js";
 interface Props {
   url: string | null;
   muted?: boolean;
+  /** Da acceso al <video> al padre para controles (pausa/play). */
+  onVideoEl?: (el: HTMLVideoElement | null) => void;
 }
 
-export function VideoPreview({ url, muted = true }: Props) {
+export function VideoPreview({ url, muted = true, onVideoEl }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const hlsRef = useRef<Hls | null>(null);
   const [status, setStatus] = useState<"idle" | "loading" | "playing" | "error">(
     "idle",
   );
+
+  useEffect(() => {
+    onVideoEl?.(videoRef.current);
+    return () => onVideoEl?.(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     // Limpiar instancia anterior

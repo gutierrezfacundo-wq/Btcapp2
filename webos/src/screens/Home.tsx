@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   FocusContext,
@@ -249,10 +249,14 @@ export function Home() {
                 totalFiltered={filteredChannels.length}
                 cap={RENDER_CAP}
                 selectedChannelId={selectedChannelId}
-                onFocusChannel={setSelectedChannelId}
+                onChannelEnter={(c) => {
+                  // OK 1: arranca en el preview con sonido.
+                  // OK 2 (mismo canal): pantalla completa.
+                  if (selectedChannelId === c.id) play(c.streamUrl, c.name);
+                  else setSelectedChannelId(c.id);
+                }}
                 epgByChannel={epgByChannel}
                 isFavorite={isFavorite}
-                onPlay={play}
                 onToggleFavorite={(c) =>
                   toggleFavorite({
                     id: c.id, name: c.name, streamUrl: c.streamUrl, logoUrl: c.logoUrl, kind: c.kind,
@@ -289,6 +293,7 @@ export function Home() {
                   : null
               }
               epgByChannel={epgByChannel}
+              onFullscreen={(c) => play(c.streamUrl, c.name)}
             />
           ) : null}
         </div>
@@ -297,43 +302,81 @@ export function Home() {
   );
 }
 
-interface PreviewProps {
-  channel: {
-    id: string;
-    name: string;
-    streamUrl: string;
-    logoUrl?: string;
-    tvgId?: string;
-  } | null;
-  epgByChannel: unknown;
+interface PreviewChannel {
+  id: string;
+  name: string;
+  streamUrl: string;
+  logoUrl?: string;
+  tvgId?: string;
 }
 
-function PreviewPanel({ channel, epgByChannel }: PreviewProps) {
+interface PreviewProps {
+  channel: PreviewChannel | null;
+  epgByChannel: unknown;
+  onFullscreen: (c: PreviewChannel) => void;
+}
+
+function PreviewPanel({ channel, epgByChannel, onFullscreen }: PreviewProps) {
   const now = channel ? findNowPlaying(epgByChannel as never, channel.tvgId) : null;
+  const videoElRef = useRef<HTMLVideoElement | null>(null);
+  const [paused, setPaused] = useState(false);
+
+  // Al cambiar de canal, resetear estado de pausa.
+  useEffect(() => setPaused(false), [channel?.id]);
+
+  const togglePause = () => {
+    const v = videoElRef.current;
+    if (!v) return;
+    if (v.paused) {
+      v.play().catch(() => undefined);
+      setPaused(false);
+    } else {
+      v.pause();
+      setPaused(true);
+    }
+  };
+
   return (
     <aside className="hot-preview">
       <div className="hot-preview-video">
-        <VideoPreview url={channel?.streamUrl ?? null} muted />
+        <VideoPreview
+          url={channel?.streamUrl ?? null}
+          muted={false}
+          onVideoEl={(el) => { videoElRef.current = el; }}
+        />
       </div>
       {channel ? (
-        <div className="hot-preview-info">
-          {channel.logoUrl ? (
-            <img className="hot-preview-logo" src={channel.logoUrl} alt="" />
-          ) : null}
-          <div className="hot-preview-name">{channel.name}</div>
-          {now ? (
-            <>
-              <div className="hot-preview-now-label">AHORA</div>
-              <div className="hot-preview-now">{now.title}</div>
-              {now.description ? (
-                <div className="hot-preview-desc">{now.description}</div>
-              ) : null}
-            </>
-          ) : null}
-        </div>
+        <>
+          <div className="hot-preview-controls">
+            <FocusableButton className="btn hot-ctrl" onEnterPress={togglePause}>
+              {paused ? "▶ Reproducir" : "⏸ Pausa"}
+            </FocusableButton>
+            <FocusableButton
+              className="btn hot-ctrl primary"
+              onEnterPress={() => onFullscreen(channel)}
+            >
+              ⛶ Pantalla completa
+            </FocusableButton>
+          </div>
+          <div className="hot-preview-info">
+            {channel.logoUrl ? (
+              <img className="hot-preview-logo" src={channel.logoUrl} alt="" />
+            ) : null}
+            <div className="hot-preview-name">{channel.name}</div>
+            {now ? (
+              <>
+                <div className="hot-preview-now-label">AHORA</div>
+                <div className="hot-preview-now">{now.title}</div>
+                {now.description ? (
+                  <div className="hot-preview-desc">{now.description}</div>
+                ) : null}
+              </>
+            ) : null}
+          </div>
+        </>
       ) : (
         <div className="hot-preview-info muted">
-          Movéte por la lista para ver una vista previa del canal.
+          Apretá OK en un canal para verlo acá con sonido. OK de nuevo: pantalla completa.
         </div>
       )}
     </aside>
@@ -350,16 +393,15 @@ interface LiveListProps {
   totalFiltered: number;
   cap: number;
   selectedChannelId: string | null;
-  onFocusChannel: (id: string) => void;
+  onChannelEnter: (c: { id: string; name: string; streamUrl: string; logoUrl?: string; kind: "live" | "movie" | "series-episode" }) => void;
   epgByChannel: Map<string, ReturnType<typeof findNowPlaying> extends { title?: string } | undefined ? unknown : never> | Map<string, unknown>;
   isFavorite: (id: string) => boolean;
-  onPlay: (url: string, title: string) => void;
   onToggleFavorite: (c: { id: string; name: string; streamUrl: string; logoUrl?: string; kind: "live" | "movie" | "series-episode" }) => void;
 }
 
 function LiveChannelList({
-  channels, totalFiltered, cap, selectedChannelId, onFocusChannel, epgByChannel,
-  isFavorite, onPlay, onToggleFavorite,
+  channels, totalFiltered, cap, selectedChannelId, onChannelEnter, epgByChannel,
+  isFavorite, onToggleFavorite,
 }: LiveListProps) {
   if (channels.length === 0) return <div className="hot-status">No hay canales</div>;
   return (
@@ -371,8 +413,7 @@ function LiveChannelList({
           <FocusableButton
             key={c.id}
             className={`hot-channel ${isSel ? "selected" : ""}`}
-            onFocus={() => onFocusChannel(c.id)}
-            onEnterPress={() => onPlay(c.streamUrl, c.name)}
+            onEnterPress={() => onChannelEnter(c)}
           >
             <div className="hot-channel-logo">
               {c.logoUrl ? (
