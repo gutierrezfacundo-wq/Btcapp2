@@ -93,7 +93,14 @@ jobs:
       - run: npm run build
 
       - name: Stage package contents
-        run: cp appinfo.json icon.png icon_large.png dist/
+        env:
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          cp appinfo.json icon.png icon_large.png dist/
+          # Inyectamos version automatica: 0.2.0.<run> (igual esquema que Android)
+          sed -i 's/"version": "0\.2\.0"/"version": "0.2.0.'"$RUN_NUMBER"'"/' dist/appinfo.json
+          echo "Version inyectada:"
+          grep version dist/appinfo.json
 
       - name: Install ares-cli
         run: npm install -g @webosose/ares-cli
