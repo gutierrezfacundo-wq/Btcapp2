@@ -88,6 +88,14 @@ interface AppState {
   /** Indica si una seccion VOD ya se cargo a demanda. */
   loadedSections: { movies: boolean; series: boolean };
 
+  /** Estado de navegacion del Home: sobrevive al ir/volver de otras pantallas. */
+  ui: {
+    tab: "live" | "movies" | "series" | "favorites";
+    category: string | null;
+    selectedChannelId: string | null;
+  };
+  setUi: (patch: Partial<AppState["ui"]>) => void;
+
   setSource: (s: SourceConfig) => Promise<void>;
   clearSource: () => void;
   reload: () => Promise<void>;
@@ -116,6 +124,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   favorites: loadFavorites(),
   epgByChannel: new Map(),
   loadedSections: { movies: false, series: false },
+  ui: { tab: "live", category: null, selectedChannelId: null },
+  setUi: (patch) => set({ ui: { ...get().ui, ...patch } }),
 
   setSource: async (s) => {
     localStorage.setItem(SOURCE_KEY, JSON.stringify(s));

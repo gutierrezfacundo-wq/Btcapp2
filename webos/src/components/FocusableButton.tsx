@@ -25,7 +25,14 @@ export function FocusableButton({
     onEnterPress: () => {
       if (!disabled) onEnterPress?.();
     },
-    onFocus,
+    onFocus: () => {
+      // Mantener visible el item enfocado al navegar listas largas.
+      (ref.current as HTMLElement | null)?.scrollIntoView({
+        block: "nearest",
+        inline: "nearest",
+      });
+      onFocus?.();
+    },
   });
 
   return (

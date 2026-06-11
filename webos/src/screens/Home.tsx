@@ -48,28 +48,54 @@ export function Home() {
   const toggleFavorite = useAppStore((s) => s.toggleFavorite);
   const isFavorite = useAppStore((s) => s.isFavorite);
   const epgByChannel = useAppStore((s) => s.epgByChannel);
+  const ui = useAppStore((s) => s.ui);
+  const setUi = useAppStore((s) => s.setUi);
 
-  const [tab, setTab] = useState<Tab>(initialTab);
-  const [category, setCategory] = useState<string | null>(null);
+  // Estado respaldado en el store: al volver de otra pantalla se restaura
+  // donde estabas (pestaña, categoria, canal elegido).
+  const [tab, setTabState] = useState<Tab>((search.get("tab") as Tab) ?? ui.tab ?? initialTab);
+  const [category, setCategoryState] = useState<string | null>(ui.category);
+  const [selectedChannelId, setSelectedChannelIdState] = useState<string | null>(
+    ui.selectedChannelId,
+  );
+  const setTab = (t: Tab) => { setTabState(t); setUi({ tab: t }); };
+  const setCategory = (c: string | null) => { setCategoryState(c); setUi({ category: c }); };
+  const setSelectedChannelId = (id: string | null) => {
+    setSelectedChannelIdState(id);
+    setUi({ selectedChannelId: id });
+  };
+
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
-  const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
 
   useEffect(() => {
     if (!source) navigate("/setup");
   }, [source, navigate]);
 
+  // Reset de filtros SOLO al cambiar de pestaña (no en el primer render,
+  // para no pisar el estado restaurado).
+  const firstTabRun = useRef(true);
   useEffect(() => {
+    if (firstTabRun.current) {
+      firstTabRun.current = false;
+      return;
+    }
     setCategory(null);
     setQuery("");
     setSearchOpen(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
 
   const { ref, focusKey } = useFocusable({ trackChildren: true, focusKey: "HOME" });
 
+  // Foco inicial: si hay un canal recordado lo maneja el efecto de
+  // restauracion; si no, a la primera categoria.
+  const restoredFocus = useRef(false);
   useEffect(() => {
+    if (tab === "live" && ui.selectedChannelId && !restoredFocus.current) return;
     setFocus("CAT_0");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
 
   // === Datos por pestaña ===
@@ -111,6 +137,26 @@ export function Home() {
     const norm = query.trim().toLowerCase();
     return norm ? byCat.filter((c) => c.name.toLowerCase().includes(norm)) : byCat;
   }, [tab, catalog.liveChannels, category, query]);
+
+  // Restaurar el foco al canal donde estabas (una sola vez, cuando la lista
+  // ya esta renderizada).
+  useEffect(() => {
+    if (restoredFocus.current) return;
+    if (tab !== "live" || !selectedChannelId) {
+      restoredFocus.current = true;
+      return;
+    }
+    const idx = filteredChannels.findIndex((c) => c.id === selectedChannelId);
+    if (idx >= 0 && idx < RENDER_CAP) {
+      restoredFocus.current = true;
+      window.setTimeout(() => setFocus(`CH_${selectedChannelId}`), 60);
+    } else if (filteredChannels.length > 0) {
+      // El canal recordado no esta en la vista actual: foco normal.
+      restoredFocus.current = true;
+      setFocus("CAT_0");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, selectedChannelId, filteredChannels]);
 
   const filteredMovies = useMemo(() => {
     if (tab !== "movies") return [];
@@ -359,7 +405,8 @@ function PreviewPanel({
   // re-muestra el overlay de controles.
   useEffect(() => {
     if (!fullscreen) {
-      if (prevFs.current) setFocus("PV_PAUSE");
+      // Al salir de fullscreen, volver el foco al canal en la lista.
+      if (prevFs.current) setFocus(channel ? `CH_${channel.id}` : "PV_PAUSE");
       prevFs.current = false;
       return;
     }
@@ -489,6 +536,7 @@ function LiveChannelList({
         return (
           <FocusableButton
             key={c.id}
+            focusKey={`CH_${c.id}`}
             className={`hot-channel ${isSel ? "selected" : ""}`}
             onEnterPress={() => onChannelEnter(c)}
           >
