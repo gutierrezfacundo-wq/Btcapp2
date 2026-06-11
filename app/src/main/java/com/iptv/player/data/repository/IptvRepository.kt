@@ -26,6 +26,7 @@ data class Catalog(
 
 class IptvRepository(
     private val xtreamApi: XtreamApi,
+    private val xtreamStreamClient: com.iptv.player.data.remote.XtreamStreamClient,
     private val httpClient: OkHttpClient,
 ) {
     suspend fun loadCatalog(source: SourceConfig): Catalog = when (source) {
@@ -61,8 +62,11 @@ class IptvRepository(
         mapNotNull { it.groupTitle }.distinct().sorted().map { Category(it, it) }
 
     private suspend fun loadFromXtream(s: SourceConfig.Xtream): Catalog = withContext(Dispatchers.IO) {
-        val liveCats = xtreamApi.liveCategories(s.playerApi()).toCategories()
-        val liveStreams = xtreamApi.liveStreams(s.playerApi()).map { dto ->
+        // Usamos el stream client (parsea JSON sin cargar todo a memoria) para evitar
+        // OutOfMemoryError en portales con catalogos grandes.
+        val base = s.playerApi()
+        val liveCats = xtreamStreamClient.liveCategories(base).toCategories()
+        val liveStreams = xtreamStreamClient.liveStreams(base).map { dto ->
             Channel(
                 id = "xt-live-${dto.streamId}",
                 name = dto.name,
@@ -74,8 +78,8 @@ class IptvRepository(
                 xtreamStreamId = dto.streamId,
             )
         }
-        val vodCats = xtreamApi.vodCategories(s.playerApi()).toCategories()
-        val movies = xtreamApi.vodStreams(s.playerApi()).map { dto ->
+        val vodCats = xtreamStreamClient.vodCategories(base).toCategories()
+        val movies = xtreamStreamClient.vodStreams(base).map { dto ->
             Movie(
                 id = "xt-vod-${dto.streamId}",
                 name = dto.name,
@@ -87,8 +91,8 @@ class IptvRepository(
                 plot = dto.plot,
             )
         }
-        val seriesCats = xtreamApi.seriesCategories(s.playerApi()).toCategories()
-        val series = xtreamApi.series(s.playerApi()).map { dto ->
+        val seriesCats = xtreamStreamClient.seriesCategories(base).toCategories()
+        val series = xtreamStreamClient.series(base).map { dto ->
             SeriesInfo(
                 id = dto.seriesId.toString(),
                 name = dto.name,
@@ -109,7 +113,7 @@ class IptvRepository(
 
     suspend fun seriesEpisodes(source: SourceConfig.Xtream, seriesId: Int): List<Episode> =
         withContext(Dispatchers.IO) {
-            val info = xtreamApi.seriesInfo(source.playerApi(), seriesId = seriesId)
+            val info = xtreamStreamClient.seriesInfo(source.playerApi(), seriesId = seriesId)
             info.episodes.flatMap { (seasonKey, episodes) ->
                 val season = seasonKey.toIntOrNull() ?: 0
                 episodes.map { e ->

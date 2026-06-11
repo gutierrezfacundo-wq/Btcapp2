@@ -45,6 +45,7 @@ class AppContainer(context: Context) {
         .build()
 
     val xtreamApi: XtreamApi = retrofit.create(XtreamApi::class.java)
+    val xtreamStreamClient = com.iptv.player.data.remote.XtreamStreamClient(httpClient, json)
 
     val database: IptvDatabase = Room.databaseBuilder(
         appContext,
@@ -60,7 +61,7 @@ class AppContainer(context: Context) {
         .build()
 
     val preferencesStore = PreferencesStore(appContext)
-    val iptvRepository = IptvRepository(xtreamApi, httpClient)
+    val iptvRepository = IptvRepository(xtreamApi, xtreamStreamClient, httpClient)
     val epgRepository = EpgRepository(httpClient)
     val catalogCache = CatalogCache(appContext)
     val playlistRepository = PlaylistRepository(database.playlistDao(), preferencesStore)
