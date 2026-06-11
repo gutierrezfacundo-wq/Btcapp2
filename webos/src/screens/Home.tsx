@@ -4,6 +4,7 @@ import { FocusContext, useFocusable, setFocus } from "@noriginmedia/norigin-spat
 import { useAppStore } from "../store/useAppStore";
 import { findNowPlaying } from "../data/xmltv";
 import { FocusableButton } from "../components/FocusableButton";
+import { FocusableInput } from "../components/FocusableInput";
 import { ChannelRow } from "../components/ChannelRow";
 import { PosterCard } from "../components/PosterCard";
 import { CategoryChips } from "../components/CategoryChips";
@@ -47,13 +48,19 @@ export function Home() {
 
   const { ref, focusKey } = useFocusable({ trackChildren: true, focusKey: "HOME" });
 
-  const filteredLive = useMemo(
-    () =>
-      category
-        ? catalog.liveChannels.filter((c) => c.groupTitle === category)
-        : catalog.liveChannels,
-    [catalog.liveChannels, category],
-  );
+  const [query, setQuery] = useState("");
+  // Cap de items renderizados: con 55k canales, mostrar todo cuelga la TV.
+  const RENDER_CAP = 500;
+  const norm = query.trim().toLowerCase();
+
+  const filteredLive = useMemo(() => {
+    const byCat = category
+      ? catalog.liveChannels.filter((c) => c.groupTitle === category)
+      : catalog.liveChannels;
+    return norm
+      ? byCat.filter((c) => c.name.toLowerCase().includes(norm))
+      : byCat;
+  }, [catalog.liveChannels, category, norm]);
   const filteredMovies = useMemo(
     () => (category ? catalog.movies.filter((m) => m.category === category) : catalog.movies),
     [catalog.movies, category],
@@ -125,32 +132,47 @@ export function Home() {
                   selected={category}
                   onSelect={setCategory}
                 />
+                <div style={{ padding: "8px 16px" }}>
+                  <FocusableInput
+                    value={query}
+                    onChange={setQuery}
+                    placeholder={`Buscar entre ${filteredLive.length} canales…`}
+                  />
+                </div>
                 <div className="scroll" style={{ flex: 1 }}>
                   {filteredLive.length === 0 ? (
                     <div className="empty">No hay canales</div>
                   ) : (
-                    filteredLive.map((c) => {
-                      const now = findNowPlaying(epgByChannel, c.tvgId);
-                      return (
-                        <ChannelRow
-                          key={c.id}
-                          name={c.name}
-                          subtitle={now?.title ?? c.groupTitle}
-                          logoUrl={c.logoUrl}
-                          isFavorite={isFavorite(c.id)}
-                          onPlay={() => play(c.streamUrl, c.name)}
-                          onToggleFavorite={() =>
-                            toggleFavorite({
-                              id: c.id,
-                              name: c.name,
-                              streamUrl: c.streamUrl,
-                              logoUrl: c.logoUrl,
-                              kind: c.kind,
-                            })
-                          }
-                        />
-                      );
-                    })
+                    <>
+                      {filteredLive.slice(0, RENDER_CAP).map((c) => {
+                        const now = findNowPlaying(epgByChannel, c.tvgId);
+                        return (
+                          <ChannelRow
+                            key={c.id}
+                            name={c.name}
+                            subtitle={now?.title ?? c.groupTitle}
+                            logoUrl={c.logoUrl}
+                            isFavorite={isFavorite(c.id)}
+                            onPlay={() => play(c.streamUrl, c.name)}
+                            onToggleFavorite={() =>
+                              toggleFavorite({
+                                id: c.id,
+                                name: c.name,
+                                streamUrl: c.streamUrl,
+                                logoUrl: c.logoUrl,
+                                kind: c.kind,
+                              })
+                            }
+                          />
+                        );
+                      })}
+                      {filteredLive.length > RENDER_CAP ? (
+                        <div className="empty" style={{ padding: 24 }}>
+                          Mostrando los primeros {RENDER_CAP} de {filteredLive.length}.
+                          Elegí una categoría o usá el buscador para refinar.
+                        </div>
+                      ) : null}
+                    </>
                   )}
                 </div>
               </>
@@ -168,7 +190,7 @@ export function Home() {
                     <div className="empty">No hay películas</div>
                   ) : (
                     <div className="poster-grid">
-                      {filteredMovies.map((m) => (
+                      {filteredMovies.slice(0, RENDER_CAP).map((m) => (
                         <PosterCard
                           key={m.id}
                           title={m.name}
@@ -194,7 +216,7 @@ export function Home() {
                     <div className="empty">No hay series</div>
                   ) : (
                     <div className="poster-grid">
-                      {filteredSeries.map((s) => (
+                      {filteredSeries.slice(0, RENDER_CAP).map((s) => (
                         <PosterCard
                           key={s.id}
                           title={s.name}
