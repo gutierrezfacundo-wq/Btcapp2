@@ -10,6 +10,7 @@ import { findNowPlaying } from "../data/xmltv";
 import { FocusableButton } from "../components/FocusableButton";
 import { FocusableInput } from "../components/FocusableInput";
 import { PosterCard } from "../components/PosterCard";
+import { VideoPreview } from "../components/VideoPreview";
 
 type Tab = "live" | "movies" | "series" | "favorites";
 
@@ -127,12 +128,20 @@ export function Home() {
     return norm ? byCat.filter((s) => s.name.toLowerCase().includes(norm)) : byCat;
   }, [tab, catalog.series, category, query]);
 
-  const totalForCategory = (catName: string): number => {
-    if (tab === "live") return catalog.liveChannels.filter((c) => c.groupTitle === catName).length;
-    if (tab === "movies") return catalog.movies.filter((m) => m.category === catName).length;
-    if (tab === "series") return catalog.series.filter((s) => s.category === catName).length;
-    return 0;
-  };
+  // Pre-calcular conteos por categoría una sola vez por pestaña.
+  // Antes esto se hacia O(N) por cada categoria en cada render -> con 55k
+  // canales y 56 categorias eran 3 millones de ops por render = lag enorme.
+  const categoryCounts = useMemo(() => {
+    const map = new Map<string, number>();
+    const incr = (key?: string) => {
+      if (!key) return;
+      map.set(key, (map.get(key) ?? 0) + 1);
+    };
+    if (tab === "live") catalog.liveChannels.forEach((c) => incr(c.groupTitle));
+    else if (tab === "movies") catalog.movies.forEach((m) => incr(m.category ?? undefined));
+    else if (tab === "series") catalog.series.forEach((s) => incr(s.category ?? undefined));
+    return map;
+  }, [tab, catalog]);
 
   const onSidebarPress = (id: typeof SIDEBAR_ITEMS[number]["id"]) => {
     if (id === "hub") navigate("/hub");
@@ -219,7 +228,7 @@ export function Home() {
                   onEnterPress={() => setCategory(c.name)}
                 >
                   <div className="hot-cat-name">{c.name}</div>
-                  <div className="hot-cat-total">TOTAL: {totalForCategory(c.name)}</div>
+                  <div className="hot-cat-total">TOTAL: {categoryCounts.get(c.name) ?? 0}</div>
                 </FocusableButton>
               ))}
             </div>
@@ -270,9 +279,64 @@ export function Home() {
               <FavoritesList favorites={favorites} onPlay={play} />
             )}
           </main>
+
+          {/* Columna 4: preview (solo en En vivo) */}
+          {tab === "live" ? (
+            <PreviewPanel
+              channel={
+                selectedChannelId
+                  ? catalog.liveChannels.find((c) => c.id === selectedChannelId) ?? null
+                  : null
+              }
+              epgByChannel={epgByChannel}
+            />
+          ) : null}
         </div>
       </div>
     </FocusContext.Provider>
+  );
+}
+
+interface PreviewProps {
+  channel: {
+    id: string;
+    name: string;
+    streamUrl: string;
+    logoUrl?: string;
+    tvgId?: string;
+  } | null;
+  epgByChannel: unknown;
+}
+
+function PreviewPanel({ channel, epgByChannel }: PreviewProps) {
+  const now = channel ? findNowPlaying(epgByChannel as never, channel.tvgId) : null;
+  return (
+    <aside className="hot-preview">
+      <div className="hot-preview-video">
+        <VideoPreview url={channel?.streamUrl ?? null} muted />
+      </div>
+      {channel ? (
+        <div className="hot-preview-info">
+          {channel.logoUrl ? (
+            <img className="hot-preview-logo" src={channel.logoUrl} alt="" />
+          ) : null}
+          <div className="hot-preview-name">{channel.name}</div>
+          {now ? (
+            <>
+              <div className="hot-preview-now-label">AHORA</div>
+              <div className="hot-preview-now">{now.title}</div>
+              {now.description ? (
+                <div className="hot-preview-desc">{now.description}</div>
+              ) : null}
+            </>
+          ) : null}
+        </div>
+      ) : (
+        <div className="hot-preview-info muted">
+          Movéte por la lista para ver una vista previa del canal.
+        </div>
+      )}
+    </aside>
   );
 }
 
