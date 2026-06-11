@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { FocusContext, useFocusable, setFocus } from "@noriginmedia/norigin-spatial-navigation";
 import { useAppStore } from "../store/useAppStore";
 import { findNowPlaying } from "../data/xmltv";
@@ -26,7 +26,9 @@ export function Home() {
   const isFavorite = useAppStore((s) => s.isFavorite);
   const epgByChannel = useAppStore((s) => s.epgByChannel);
 
-  const [tab, setTab] = useState<Tab>("live");
+  const [search] = useSearchParams();
+  const initialTab = (search.get("tab") as Tab) ?? "live";
+  const [tab, setTab] = useState<Tab>(initialTab);
   const [category, setCategory] = useState<string | null>(null);
 
   useEffect(() => {

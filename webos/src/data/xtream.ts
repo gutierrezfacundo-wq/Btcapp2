@@ -73,49 +73,24 @@ function categoryName(list: Category[], id: string | undefined): string | undefi
 
 export type LoadProgress = (step: string, current: number, total: number) => void;
 
-export async function loadXtreamCatalog(
+const LONG_TIMEOUT = 120000;
+
+/** Carga SOLO la seccion En Vivo (rapido, bajo consumo de memoria). */
+export async function loadXtreamLive(
   source: Extract<SourceConfig, { kind: "xtream" }>,
   onProgress?: LoadProgress,
-): Promise<Catalog> {
+): Promise<Pick<Catalog, "liveChannels" | "liveCategories">> {
   const base = xtreamPlayerApi(source);
-  const TOTAL = 6;
-  // Pedidos en SERIE para que la TV no tenga que cargar 6 JSON grandes a la vez.
-  // Tambien con timeouts largos: los listados grandes pueden tardar 60s+ en
-  // bajar por wifi de TV.
-  const longTimeout = 120000;
-
-  onProgress?.("Categorías de canales", 1, TOTAL);
+  onProgress?.("Categorías de canales", 1, 2);
   const liveCatsDto = await fetchJson<XtCategoryDto[]>(
     `${base}&action=get_live_categories`,
   );
-  onProgress?.("Canales en vivo", 2, TOTAL);
+  onProgress?.("Canales en vivo", 2, 2);
   const liveDto = await fetchJson<XtLiveDto[]>(
     `${base}&action=get_live_streams`,
-    longTimeout,
+    LONG_TIMEOUT,
   );
-  onProgress?.("Categorías de películas", 3, TOTAL);
-  const vodCatsDto = await fetchJson<XtCategoryDto[]>(
-    `${base}&action=get_vod_categories`,
-  );
-  onProgress?.("Películas", 4, TOTAL);
-  const movieDto = await fetchJson<XtMovieDto[]>(
-    `${base}&action=get_vod_streams`,
-    longTimeout,
-  );
-  onProgress?.("Categorías de series", 5, TOTAL);
-  const seriesCatsDto = await fetchJson<XtCategoryDto[]>(
-    `${base}&action=get_series_categories`,
-  );
-  onProgress?.("Series", 6, TOTAL);
-  const seriesDto = await fetchJson<XtSeriesDto[]>(
-    `${base}&action=get_series`,
-    longTimeout,
-  );
-
   const liveCats = toCategories(liveCatsDto);
-  const vodCats = toCategories(vodCatsDto);
-  const seriesCats = toCategories(seriesCatsDto);
-
   const liveChannels: Channel[] = liveDto.map((d) => ({
     id: `xt-live-${d.stream_id}`,
     name: d.name,
@@ -125,7 +100,25 @@ export async function loadXtreamCatalog(
     tvgId: d.epg_channel_id || undefined,
     kind: "live",
   }));
+  return { liveChannels, liveCategories: liveCats };
+}
 
+/** Carga la seccion Peliculas a demanda. */
+export async function loadXtreamMovies(
+  source: Extract<SourceConfig, { kind: "xtream" }>,
+  onProgress?: LoadProgress,
+): Promise<Pick<Catalog, "movies" | "movieCategories">> {
+  const base = xtreamPlayerApi(source);
+  onProgress?.("Categorías de películas", 1, 2);
+  const vodCatsDto = await fetchJson<XtCategoryDto[]>(
+    `${base}&action=get_vod_categories`,
+  );
+  onProgress?.("Películas", 2, 2);
+  const movieDto = await fetchJson<XtMovieDto[]>(
+    `${base}&action=get_vod_streams`,
+    LONG_TIMEOUT,
+  );
+  const vodCats = toCategories(vodCatsDto);
   const movies: Movie[] = movieDto.map((d) => ({
     id: `xt-vod-${d.stream_id}`,
     name: d.name,
@@ -136,7 +129,25 @@ export async function loadXtreamCatalog(
     rating: d.rating,
     year: d.releaseDate,
   }));
+  return { movies, movieCategories: vodCats };
+}
 
+/** Carga la seccion Series a demanda. */
+export async function loadXtreamSeries(
+  source: Extract<SourceConfig, { kind: "xtream" }>,
+  onProgress?: LoadProgress,
+): Promise<Pick<Catalog, "series" | "seriesCategories">> {
+  const base = xtreamPlayerApi(source);
+  onProgress?.("Categorías de series", 1, 2);
+  const seriesCatsDto = await fetchJson<XtCategoryDto[]>(
+    `${base}&action=get_series_categories`,
+  );
+  onProgress?.("Series", 2, 2);
+  const seriesDto = await fetchJson<XtSeriesDto[]>(
+    `${base}&action=get_series`,
+    LONG_TIMEOUT,
+  );
+  const seriesCats = toCategories(seriesCatsDto);
   const series: SeriesInfo[] = seriesDto.map((d) => ({
     id: String(d.series_id),
     name: d.name,
@@ -144,15 +155,18 @@ export async function loadXtreamCatalog(
     category: categoryName(seriesCats, d.category_id),
     plot: d.plot,
   }));
+  return { series, seriesCategories: seriesCats };
+}
 
-  return {
-    liveChannels,
-    liveCategories: liveCats,
-    movies,
-    movieCategories: vodCats,
-    series,
-    seriesCategories: seriesCats,
-  };
+/** Carga TODO el catalogo (compat M3U; uso desafiante en TV con listas grandes). */
+export async function loadXtreamCatalog(
+  source: Extract<SourceConfig, { kind: "xtream" }>,
+  onProgress?: LoadProgress,
+): Promise<Catalog> {
+  const live = await loadXtreamLive(source, (s, c) => onProgress?.(s, c, 6));
+  const movies = await loadXtreamMovies(source, (s, c) => onProgress?.(s, c + 2, 6));
+  const series = await loadXtreamSeries(source, (s, c) => onProgress?.(s, c + 4, 6));
+  return { ...live, ...movies, ...series };
 }
 
 export async function loadSeriesEpisodes(

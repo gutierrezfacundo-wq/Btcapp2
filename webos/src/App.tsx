@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { Setup } from "./screens/Setup";
+import { Hub } from "./screens/Hub";
 import { Home } from "./screens/Home";
 import { SeriesDetail } from "./screens/SeriesDetail";
 import { Player } from "./screens/Player";
@@ -19,7 +20,7 @@ export default function App() {
   useEffect(() => {
     // Global back-key fallback: close app at root, otherwise let route components handle it.
     const onKey = (e: KeyboardEvent) => {
-      if (isBackKey(e) && window.location.hash.replace(/^#/, "") === "/home") {
+      if (isBackKey(e) && window.location.hash.replace(/^#/, "") === "/hub") {
         // On webOS, history.back() at the root will exit the app via disableBackHistoryAPI.
         e.preventDefault();
         try {
@@ -35,8 +36,9 @@ export default function App() {
 
   return (
     <Routes>
-      <Route path="/" element={<Navigate to={source ? "/home" : "/setup"} replace />} />
+      <Route path="/" element={<Navigate to={source ? "/hub" : "/setup"} replace />} />
       <Route path="/setup" element={<Setup />} />
+      <Route path="/hub" element={<Hub />} />
       <Route path="/home" element={<Home />} />
       <Route path="/series/:id" element={<SeriesDetail />} />
       <Route path="/player" element={<Player />} />

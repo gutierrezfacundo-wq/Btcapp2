@@ -2,7 +2,7 @@ import { create } from "zustand";
 import type { Catalog, EpgProgram, MediaKind, SourceConfig } from "../data/types";
 import { xtreamXmltvUrl } from "../data/types";
 import { loadM3uCatalog } from "../data/m3uCatalog";
-import { loadXtreamCatalog } from "../data/xtream";
+import { loadXtreamLive, loadXtreamMovies, loadXtreamSeries } from "../data/xtream";
 import { groupByChannel, parseXmltv } from "../data/xmltv";
 import { fetchText } from "../data/http";
 
@@ -85,9 +85,14 @@ interface AppState {
   favorites: FavoriteItem[];
   epgByChannel: Map<string, EpgProgram[]>;
 
+  /** Indica si una seccion VOD ya se cargo a demanda. */
+  loadedSections: { movies: boolean; series: boolean };
+
   setSource: (s: SourceConfig) => Promise<void>;
   clearSource: () => void;
   reload: () => Promise<void>;
+  ensureMovies: () => Promise<void>;
+  ensureSeries: () => Promise<void>;
   toggleFavorite: (item: FavoriteItem) => void;
   isFavorite: (id: string) => boolean;
 }
@@ -110,6 +115,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   error: null,
   favorites: loadFavorites(),
   epgByChannel: new Map(),
+  loadedSections: { movies: false, series: false },
 
   setSource: async (s) => {
     localStorage.setItem(SOURCE_KEY, JSON.stringify(s));
@@ -119,7 +125,64 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   clearSource: () => {
     localStorage.removeItem(SOURCE_KEY);
-    set({ source: null, catalog: emptyCatalog, epgByChannel: new Map() });
+    set({
+      source: null,
+      catalog: emptyCatalog,
+      epgByChannel: new Map(),
+      loadedSections: { movies: false, series: false },
+    });
+  },
+
+  ensureMovies: async () => {
+    const s = get();
+    if (s.loadedSections.movies || !s.source || s.source.kind !== "xtream") return;
+    set({ loadingStep: "Películas", loadingProgress: { current: 0, total: 2 } });
+    try {
+      const onProgress = (step: string, current: number, total: number) => {
+        set({ loadingStep: step, loadingProgress: { current, total } });
+      };
+      const mv = await loadXtreamMovies(s.source, onProgress);
+      const merged: Catalog = { ...get().catalog, ...mv };
+      set({
+        catalog: merged,
+        loadingStep: null,
+        loadingProgress: null,
+        loadedSections: { ...get().loadedSections, movies: true },
+      });
+      saveCatalogCache(s.source, merged);
+    } catch (e) {
+      set({
+        loadingStep: null,
+        loadingProgress: null,
+        error: e instanceof Error ? e.message : "Error cargando películas",
+      });
+    }
+  },
+
+  ensureSeries: async () => {
+    const s = get();
+    if (s.loadedSections.series || !s.source || s.source.kind !== "xtream") return;
+    set({ loadingStep: "Series", loadingProgress: { current: 0, total: 2 } });
+    try {
+      const onProgress = (step: string, current: number, total: number) => {
+        set({ loadingStep: step, loadingProgress: { current, total } });
+      };
+      const sr = await loadXtreamSeries(s.source, onProgress);
+      const merged: Catalog = { ...get().catalog, ...sr };
+      set({
+        catalog: merged,
+        loadingStep: null,
+        loadingProgress: null,
+        loadedSections: { ...get().loadedSections, series: true },
+      });
+      saveCatalogCache(s.source, merged);
+    } catch (e) {
+      set({
+        loadingStep: null,
+        loadingProgress: null,
+        error: e instanceof Error ? e.message : "Error cargando series",
+      });
+    }
   },
 
   reload: async () => {
@@ -134,18 +197,40 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({ loading: true, error: null });
     }
 
-    // 2) Refrescar de red
+    // 2) Refrescar de red.
+    // En Xtream cargamos SOLO en-vivo al inicio (rapido, bajo consumo). Peliculas
+    // y series se cargan a demanda al entrar a esas secciones.
     try {
       const onProgress = (step: string, current: number, total: number) => {
         set({ loadingStep: step, loadingProgress: { current, total } });
       };
-      set({ loadingStep: "Conectando…", loadingProgress: { current: 0, total: 6 } });
-      const catalog =
-        source.kind === "m3u"
-          ? await loadM3uCatalog(source)
-          : await loadXtreamCatalog(source, onProgress);
-      set({ catalog, loading: false, loadingStep: null, loadingProgress: null, error: null });
-      saveCatalogCache(source, catalog);
+      set({ loadingStep: "Conectando…", loadingProgress: { current: 0, total: 2 } });
+      if (source.kind === "m3u") {
+        const catalog = await loadM3uCatalog(source);
+        set({
+          catalog,
+          loading: false,
+          loadingStep: null,
+          loadingProgress: null,
+          error: null,
+          loadedSections: { movies: true, series: true },
+        });
+        saveCatalogCache(source, catalog);
+      } else {
+        const live = await loadXtreamLive(source, onProgress);
+        const partial: Catalog = { ...emptyCatalog, ...live };
+        set({
+          catalog: partial,
+          loading: false,
+          loadingStep: null,
+          loadingProgress: null,
+          error: null,
+          loadedSections: { movies: false, series: false },
+        });
+        saveCatalogCache(source, partial);
+      }
+      const catalogForEpg = get().catalog;
+      void catalogForEpg;
 
       const epgUrl = source.kind === "m3u" ? source.epgUrl : xtreamXmltvUrl(source);
       if (epgUrl) {
