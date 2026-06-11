@@ -11,6 +11,7 @@ import { FocusableButton } from "../components/FocusableButton";
 import { FocusableInput } from "../components/FocusableInput";
 import { PosterCard } from "../components/PosterCard";
 import { VideoPreview } from "../components/VideoPreview";
+import { isBackKey } from "../webos/remote-keys";
 
 type Tab = "live" | "movies" | "series" | "favorites";
 
@@ -53,6 +54,7 @@ export function Home() {
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null);
+  const [fullscreen, setFullscreen] = useState(false);
 
   useEffect(() => {
     if (!source) navigate("/setup");
@@ -251,8 +253,9 @@ export function Home() {
                 selectedChannelId={selectedChannelId}
                 onChannelEnter={(c) => {
                   // OK 1: arranca en el preview con sonido.
-                  // OK 2 (mismo canal): pantalla completa.
-                  if (selectedChannelId === c.id) play(c.streamUrl, c.name);
+                  // OK 2 (mismo canal): expande a pantalla completa SIN recargar
+                  // (es el mismo <video> del preview, solo cambia el layout).
+                  if (selectedChannelId === c.id) setFullscreen(true);
                   else setSelectedChannelId(c.id);
                 }}
                 epgByChannel={epgByChannel}
@@ -293,7 +296,9 @@ export function Home() {
                   : null
               }
               epgByChannel={epgByChannel}
-              onFullscreen={(c) => play(c.streamUrl, c.name)}
+              fullscreen={fullscreen}
+              onEnterFullscreen={() => setFullscreen(true)}
+              onExitFullscreen={() => setFullscreen(false)}
             />
           ) : null}
         </div>
@@ -313,13 +318,20 @@ interface PreviewChannel {
 interface PreviewProps {
   channel: PreviewChannel | null;
   epgByChannel: unknown;
-  onFullscreen: (c: PreviewChannel) => void;
+  fullscreen: boolean;
+  onEnterFullscreen: () => void;
+  onExitFullscreen: () => void;
 }
 
-function PreviewPanel({ channel, epgByChannel, onFullscreen }: PreviewProps) {
+function PreviewPanel({
+  channel, epgByChannel, fullscreen, onEnterFullscreen, onExitFullscreen,
+}: PreviewProps) {
   const now = channel ? findNowPlaying(epgByChannel as never, channel.tvgId) : null;
   const videoElRef = useRef<HTMLVideoElement | null>(null);
   const [paused, setPaused] = useState(false);
+  const [fsOverlay, setFsOverlay] = useState(true);
+  const fsTimer = useRef<number | null>(null);
+  const prevFs = useRef(false);
 
   // Al cambiar de canal, resetear estado de pausa.
   useEffect(() => setPaused(false), [channel?.id]);
@@ -336,24 +348,89 @@ function PreviewPanel({ channel, epgByChannel, onFullscreen }: PreviewProps) {
     }
   };
 
+  const pokeOverlay = () => {
+    setFsOverlay(true);
+    if (fsTimer.current !== null) window.clearTimeout(fsTimer.current);
+    fsTimer.current = window.setTimeout(() => setFsOverlay(false), 5000);
+  };
+
+  // Manejo de teclas en fullscreen: back sale (el video sigue en el preview),
+  // flechas verticales no escapan a la lista de atras, cualquier tecla
+  // re-muestra el overlay de controles.
+  useEffect(() => {
+    if (!fullscreen) {
+      if (prevFs.current) setFocus("PV_PAUSE");
+      prevFs.current = false;
+      return;
+    }
+    prevFs.current = true;
+    pokeOverlay();
+    setFocus("FS_PAUSE");
+    const onKey = (e: KeyboardEvent) => {
+      if (isBackKey(e)) {
+        e.preventDefault();
+        e.stopPropagation();
+        onExitFullscreen();
+        return;
+      }
+      if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+        // Evitar que el foco se escape a la lista que quedo detras.
+        e.stopPropagation();
+      }
+      pokeOverlay();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => {
+      window.removeEventListener("keydown", onKey, true);
+      if (fsTimer.current !== null) window.clearTimeout(fsTimer.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fullscreen]);
+
   return (
     <aside className="hot-preview">
-      <div className="hot-preview-video">
+      <div
+        className={`hot-preview-video ${fullscreen ? "fs" : ""}`}
+        onClick={() => {
+          // Click/tap sobre la vista previa = pantalla completa.
+          if (!fullscreen && channel) onEnterFullscreen();
+        }}
+      >
         <VideoPreview
           url={channel?.streamUrl ?? null}
           muted={false}
           onVideoEl={(el) => { videoElRef.current = el; }}
         />
+        {fullscreen ? (
+          <div className={`fs-overlay ${fsOverlay ? "visible" : ""}`}>
+            <div className="fs-top">
+              <div className="fs-name">{channel?.name}</div>
+              {now ? <div className="fs-now">AHORA · {now.title}</div> : null}
+            </div>
+            <div className="fs-bottom">
+              <FocusableButton
+                focusKey="FS_PAUSE"
+                className="btn hot-ctrl"
+                onEnterPress={togglePause}
+              >
+                {paused ? "▶ Reproducir" : "⏸ Pausa"}
+              </FocusableButton>
+              <FocusableButton className="btn hot-ctrl" onEnterPress={onExitFullscreen}>
+                ← Volver a la lista
+              </FocusableButton>
+            </div>
+          </div>
+        ) : null}
       </div>
       {channel ? (
         <>
           <div className="hot-preview-controls">
-            <FocusableButton className="btn hot-ctrl" onEnterPress={togglePause}>
+            <FocusableButton focusKey="PV_PAUSE" className="btn hot-ctrl" onEnterPress={togglePause}>
               {paused ? "▶ Reproducir" : "⏸ Pausa"}
             </FocusableButton>
             <FocusableButton
               className="btn hot-ctrl primary"
-              onEnterPress={() => onFullscreen(channel)}
+              onEnterPress={onEnterFullscreen}
             >
               ⛶ Pantalla completa
             </FocusableButton>
