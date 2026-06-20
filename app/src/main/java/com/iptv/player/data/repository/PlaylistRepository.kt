@@ -29,6 +29,8 @@ class PlaylistRepository(
         return id
     }
 
+    suspend fun get(id: Long): PlaylistEntity? = dao.get(id)
+
     suspend fun update(entity: PlaylistEntity) = dao.update(entity)
 
     suspend fun delete(entity: PlaylistEntity) {

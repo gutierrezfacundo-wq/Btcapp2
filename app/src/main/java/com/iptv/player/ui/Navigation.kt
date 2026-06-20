@@ -17,11 +17,14 @@ import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 
 object Routes {
-    const val Setup = "setup"
+    const val Setup = "setup?editId={editId}"
     const val Home = "home"
     const val Playlists = "playlists"
     const val Player = "player/{url}/{title}"
     const val SeriesDetail = "series/{seriesId}/{title}"
+
+    fun setup(editId: Long? = null): String =
+        if (editId == null) "setup?editId=" else "setup?editId=$editId"
 
     fun player(url: String, title: String): String {
         val u = URLEncoder.encode(url, StandardCharsets.UTF_8.name())
@@ -41,9 +44,20 @@ fun AppNavGraph(
     container: AppContainer,
     hasSource: Boolean,
 ) {
-    val start = if (hasSource) Routes.Home else Routes.Setup
+    val start = if (hasSource) Routes.Home else Routes.setup()
     NavHost(navController = navController, startDestination = start) {
-        composable(Routes.Setup) {
+        composable(
+            route = Routes.Setup,
+            arguments = listOf(
+                navArgument("editId") {
+                    type = NavType.StringType
+                    defaultValue = ""
+                    nullable = true
+                },
+            ),
+        ) { entry ->
+            val raw = entry.arguments?.getString("editId").orEmpty()
+            val editId = raw.toLongOrNull()
             SetupScreen(
                 container = container,
                 onSaved = {
@@ -54,6 +68,8 @@ fun AppNavGraph(
                         }
                     }
                 },
+                onBack = if (editId != null) ({ navController.popBackStack() }) else null,
+                editingId = editId,
             )
         }
         composable(Routes.Home) {
@@ -67,7 +83,8 @@ fun AppNavGraph(
         composable(Routes.Playlists) {
             PlaylistsScreen(
                 container = container,
-                onAddNew = { navController.navigate(Routes.Setup) },
+                onAddNew = { navController.navigate(Routes.setup()) },
+                onEdit = { id -> navController.navigate(Routes.setup(id)) },
                 onBack = { navController.popBackStack() },
             )
         }

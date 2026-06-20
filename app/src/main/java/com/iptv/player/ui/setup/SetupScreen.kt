@@ -12,6 +12,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -19,10 +21,14 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -39,14 +45,47 @@ import com.iptv.player.di.AppContainer
 fun SetupScreen(
     container: AppContainer,
     onSaved: () -> Unit,
+    onBack: (() -> Unit)? = null,
+    editingId: Long? = null,
 ) {
     val vm: SetupViewModel = viewModel(factory = SetupViewModel.Factory(container))
     val state by vm.state.collectAsState()
-    var tab by rememberSaveable { mutableStateOf(0) }
+    val editing = state.editing
+    val isEdit = editing != null
+
+    // Cargar la playlist a editar (una sola vez).
+    LaunchedEffect(editingId) {
+        if (editingId != null) vm.loadForEdit(editingId)
+    }
+
+    // Tab inicial segun el tipo de la playlist en edicion.
+    var tab by rememberSaveable(editing?.id) {
+        mutableStateOf(if (editing?.kind == "xtream") 1 else 0)
+    }
+
+    // Campos: si hay edicion, precargados; sino, vacios.
+    var nameM3u by rememberSaveable(editing?.id) { mutableStateOf(if (editing?.kind == "m3u") editing.name else "") }
+    var url by rememberSaveable(editing?.id) { mutableStateOf(editing?.m3uUrl.orEmpty()) }
+    var epg by rememberSaveable(editing?.id) { mutableStateOf(editing?.epgUrl.orEmpty()) }
+    var nameXt by rememberSaveable(editing?.id) { mutableStateOf(if (editing?.kind == "xtream") editing.name else "") }
+    var server by rememberSaveable(editing?.id) { mutableStateOf(editing?.xServer.orEmpty()) }
+    var user by rememberSaveable(editing?.id) { mutableStateOf(editing?.xUser.orEmpty()) }
+    var pass by rememberSaveable(editing?.id) { mutableStateOf(editing?.xPass.orEmpty()) }
 
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text(stringResource(R.string.setup_title)) })
+            TopAppBar(
+                title = {
+                    Text(if (isEdit) "Editar lista" else stringResource(R.string.setup_title))
+                },
+                navigationIcon = {
+                    if (onBack != null) {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Volver")
+                        }
+                    }
+                },
+            )
         }
     ) { padding ->
         Column(
@@ -62,11 +101,8 @@ fun SetupScreen(
             }
             Spacer(Modifier.height(16.dp))
             if (tab == 0) {
-                var name by rememberSaveable { mutableStateOf("") }
-                var url by rememberSaveable { mutableStateOf("") }
-                var epg by rememberSaveable { mutableStateOf("") }
                 OutlinedTextField(
-                    value = name, onValueChange = { name = it },
+                    value = nameM3u, onValueChange = { nameM3u = it },
                     label = { Text(stringResource(R.string.setup_playlist_name)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
@@ -89,20 +125,16 @@ fun SetupScreen(
                 )
                 Spacer(Modifier.height(20.dp))
                 Button(
-                    onClick = { vm.saveM3u(name.trim(), url.trim(), epg.trim().ifBlank { null }, onSaved) },
+                    onClick = { vm.saveM3u(nameM3u.trim(), url.trim(), epg.trim().ifBlank { null }, onSaved) },
                     enabled = url.isNotBlank() && !state.saving,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     if (state.saving) CircularProgressIndicator(modifier = Modifier.height(20.dp))
-                    else Text(stringResource(R.string.setup_save))
+                    else Text(if (isEdit) "Guardar cambios" else stringResource(R.string.setup_save))
                 }
             } else {
-                var name by rememberSaveable { mutableStateOf("") }
-                var server by rememberSaveable { mutableStateOf("") }
-                var user by rememberSaveable { mutableStateOf("") }
-                var pass by rememberSaveable { mutableStateOf("") }
                 OutlinedTextField(
-                    value = name, onValueChange = { name = it },
+                    value = nameXt, onValueChange = { nameXt = it },
                     label = { Text(stringResource(R.string.setup_playlist_name)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
@@ -132,12 +164,12 @@ fun SetupScreen(
                 )
                 Spacer(Modifier.height(20.dp))
                 Button(
-                    onClick = { vm.saveXtream(name.trim(), server.trim(), user.trim(), pass, onSaved) },
+                    onClick = { vm.saveXtream(nameXt.trim(), server.trim(), user.trim(), pass, onSaved) },
                     enabled = server.isNotBlank() && user.isNotBlank() && pass.isNotBlank() && !state.saving,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     if (state.saving) CircularProgressIndicator(modifier = Modifier.height(20.dp))
-                    else Text(stringResource(R.string.setup_save))
+                    else Text(if (isEdit) "Guardar cambios" else stringResource(R.string.setup_save))
                 }
             }
             state.error?.let {

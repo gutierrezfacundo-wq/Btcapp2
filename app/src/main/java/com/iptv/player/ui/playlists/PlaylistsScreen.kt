@@ -13,6 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.DriveFileRenameOutline
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExtendedFloatingActionButton
@@ -48,6 +49,7 @@ import androidx.compose.ui.res.stringResource
 fun PlaylistsScreen(
     container: AppContainer,
     onAddNew: () -> Unit,
+    onEdit: (Long) -> Unit,
     onBack: () -> Unit,
 ) {
     val vm: PlaylistsViewModel = viewModel(factory = PlaylistsViewModel.Factory(container))
@@ -85,6 +87,7 @@ fun PlaylistsScreen(
                             playlist = pl,
                             isActive = pl.id == state.activeId,
                             onSelect = { vm.setActive(pl.id) },
+                            onEdit = { onEdit(pl.id) },
                             onRename = { renaming = pl },
                             onDelete = { vm.delete(pl) },
                         )
@@ -126,6 +129,7 @@ private fun PlaylistRow(
     playlist: PlaylistEntity,
     isActive: Boolean,
     onSelect: () -> Unit,
+    onEdit: () -> Unit,
     onRename: () -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -153,8 +157,11 @@ private fun PlaylistRow(
                 overflow = TextOverflow.Ellipsis,
             )
         }
+        IconButton(onClick = onEdit) {
+            Icon(Icons.Outlined.Edit, contentDescription = "Editar conexión")
+        }
         IconButton(onClick = onRename) {
-            Icon(Icons.Outlined.Edit, contentDescription = "Renombrar")
+            Icon(Icons.Outlined.DriveFileRenameOutline, contentDescription = "Renombrar")
         }
         IconButton(onClick = onDelete) {
             Icon(Icons.Outlined.Delete, contentDescription = "Borrar")
