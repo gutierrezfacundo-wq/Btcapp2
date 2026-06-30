@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type Hls from "hls.js";
 import { FocusableButton } from "./FocusableButton";
 import { Icon } from "./Icon";
@@ -26,6 +26,29 @@ function trackLabel(t: { label?: string; language?: string }, i: number, kind: s
 export function TrackMenu({ hls, video, onClose }: { hls: Hls | null; video?: HTMLVideoElement | null; onClose: () => void }) {
   const [, setTick] = useState(0);
   const refresh = () => setTick((t) => t + 1);
+
+  // En video nativo las pistas suelen poblarse despues de loadedmetadata:
+  // re-renderizamos cuando cambian las listas para que aparezcan sin reabrir.
+  useEffect(() => {
+    if (hls || !video) return;
+    const aud = (video as unknown as { audioTracks?: EventTarget }).audioTracks;
+    const txt = video.textTracks as unknown as EventTarget | undefined;
+    const on = () => refresh();
+    aud?.addEventListener?.("addtrack", on);
+    aud?.addEventListener?.("removetrack", on);
+    aud?.addEventListener?.("change", on);
+    txt?.addEventListener?.("addtrack", on);
+    txt?.addEventListener?.("change", on);
+    video.addEventListener("loadedmetadata", on);
+    return () => {
+      aud?.removeEventListener?.("addtrack", on);
+      aud?.removeEventListener?.("removetrack", on);
+      aud?.removeEventListener?.("change", on);
+      txt?.removeEventListener?.("addtrack", on);
+      txt?.removeEventListener?.("change", on);
+      video.removeEventListener("loadedmetadata", on);
+    };
+  }, [hls, video]);
 
   // ===== HLS (en vivo / streams .m3u8) =====
   if (hls) {
