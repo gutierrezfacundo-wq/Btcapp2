@@ -11,6 +11,7 @@ import { Rail, type RailId } from "../components/Rail";
 import { TopBar } from "../components/TopBar";
 import { Hints } from "../components/Hints";
 import { VideoPreview } from "../components/VideoPreview";
+import { TrackMenu } from "../components/TrackMenu";
 import { isBackKey } from "../webos/remote-keys";
 
 type Tab = "live" | "movies" | "series" | "favorites";
@@ -275,6 +276,7 @@ function PreviewPanel({
   const [paused, setPaused] = useState(false);
   const [hls, setHls] = useState<Hls | null>(null);
   const [res, setRes] = useState<{ w: number; h: number } | null>(null);
+  const [bitrate, setBitrate] = useState(0);
   const [tracksOpen, setTracksOpen] = useState(false);
   const [fsOverlay, setFsOverlay] = useState(true);
   const fsTimer = useRef<number | null>(null);
@@ -282,7 +284,7 @@ function PreviewPanel({
   const tracksRef = useRef(false); tracksRef.current = tracksOpen;
   const ql = channel ? quality(channel.name) : null;
 
-  useEffect(() => { setPaused(false); setTracksOpen(false); }, [channel?.id]);
+  useEffect(() => { setPaused(false); setTracksOpen(false); setBitrate(0); setRes(null); }, [channel?.id]);
   const togglePause = () => { const v = videoElRef.current; if (!v) return; if (v.paused) { v.play().catch(() => undefined); setPaused(false); } else { v.pause(); setPaused(true); } };
   const poke = () => { setFsOverlay(true); if (fsTimer.current) window.clearTimeout(fsTimer.current); fsTimer.current = window.setTimeout(() => { if (!tracksRef.current) setFsOverlay(false); }, 5000); };
 
@@ -310,13 +312,18 @@ function PreviewPanel({
             onClick={() => { if (!fullscreen) onEnterFullscreen(); }}>
             <VideoPreview url={channel.streamUrl} muted={false}
               onVideoEl={(el) => { videoElRef.current = el; }} onHls={setHls}
-              onResolution={(w, h) => setRes(w > 0 ? { w, h } : null)} />
+              onResolution={(w, h) => setRes(w > 0 ? { w, h } : null)}
+              onBitrate={setBitrate} />
             {!fullscreen ? (
               <>
                 <div className="a-vid-grad" />
                 <div className="a-vid-top">
                   <span className="a-vid-live"><span className="a-livedot" /> EN VIVO</span>
-                  {res ? <span className="a-vid-feed">{res.h}p</span> : null}
+                  {res || bitrate ? (
+                    <span className="a-vid-feed">
+                      {res ? `${res.h}p` : ""}{res && bitrate ? " · " : ""}{bitrate ? `${Math.round(bitrate / 1e6)} Mbps` : ""}
+                    </span>
+                  ) : null}
                 </div>
                 <div className="a-vid-name">{channel.name}</div>
                 <div className="a-vid-chips">
@@ -334,6 +341,7 @@ function PreviewPanel({
                       {channelNumber !== null ? <span className="a-chip" style={{ background: "var(--surface2)" }}>Nº {channelNumber}</span> : null}
                       {ql ? <span className="a-chip" style={{ background: "var(--accent)", color: "#1a1500" }}>{ql}</span> : null}
                       {res ? <span className="a-chip" style={{ background: "var(--surface2)" }}>{res.w}×{res.h}</span> : null}
+                      {bitrate ? <span className="a-chip" style={{ background: "var(--surface2)" }}>{Math.round(bitrate / 1e6)} Mbps</span> : null}
                     </div>
                     {now ? <div className="a-fs-now">AHORA · {now.title}</div> : null}
                   </div>
@@ -380,46 +388,6 @@ function PreviewPanel({
   );
 }
 
-function TrackMenu({ hls, onClose }: { hls: Hls | null; onClose: () => void }) {
-  const [, setTick] = useState(0);
-  const refresh = () => setTick((t) => t + 1);
-  if (!hls) {
-    return (
-      <div className="a-trk">
-        <div className="a-trk-h"><Icon name="tune" /> Pistas</div>
-        <div className="a-trk-scroll"><div className="a-pdesc">Este stream no permite cambiar calidad, audio ni subtítulos.</div></div>
-        <FocusableButton focusKey="TRK_FIRST" className="a-trk-close" onEnterPress={onClose}>Cerrar</FocusableButton>
-      </div>
-    );
-  }
-  const levels = hls.levels ?? [];
-  const audio = hls.audioTracks ?? [];
-  const subs = hls.subtitleTracks ?? [];
-  return (
-    <div className="a-trk">
-      <div className="a-trk-h"><Icon name="tune" /> Pistas</div>
-      <div className="a-trk-scroll scroll">
-        <div className="a-trk-sec">Calidad</div>
-        <FocusableButton focusKey="TRK_FIRST" className="a-trk-item" onEnterPress={() => { hls.currentLevel = -1; refresh(); }}>Auto {hls.autoLevelEnabled ? <Icon name="check" /> : null}</FocusableButton>
-        {levels.map((l, i) => (
-          <FocusableButton key={i} className="a-trk-item" onEnterPress={() => { hls.currentLevel = i; refresh(); }}>
-            {l.height ? `${l.height}p` : `${Math.round((l.bitrate ?? 0) / 1000)}k`} {!hls.autoLevelEnabled && hls.currentLevel === i ? <Icon name="check" /> : null}
-          </FocusableButton>
-        ))}
-        {audio.length ? <div className="a-trk-sec">Audio</div> : null}
-        {audio.map((t, i) => (
-          <FocusableButton key={i} className="a-trk-item" onEnterPress={() => { hls.audioTrack = i; refresh(); }}>{t.name || t.lang || `Pista ${i + 1}`} {hls.audioTrack === i ? <Icon name="check" /> : null}</FocusableButton>
-        ))}
-        <div className="a-trk-sec">Subtítulos</div>
-        <FocusableButton className="a-trk-item" onEnterPress={() => { hls.subtitleTrack = -1; refresh(); }}>Desactivados {hls.subtitleTrack === -1 ? <Icon name="check" /> : null}</FocusableButton>
-        {subs.map((t, i) => (
-          <FocusableButton key={i} className="a-trk-item" onEnterPress={() => { hls.subtitleTrack = i; refresh(); }}>{t.name || t.lang || `Sub ${i + 1}`} {hls.subtitleTrack === i ? <Icon name="check" /> : null}</FocusableButton>
-        ))}
-      </div>
-      <FocusableButton className="a-trk-close" onEnterPress={onClose}>Cerrar</FocusableButton>
-    </div>
-  );
-}
 
 // ===================== GRID (películas / series) =====================
 function GridScreen({

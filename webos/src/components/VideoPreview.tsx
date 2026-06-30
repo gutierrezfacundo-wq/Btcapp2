@@ -10,9 +10,11 @@ interface Props {
   onHls?: (hls: Hls | null) => void;
   /** Reporta la resolucion real del video cuando se conoce o cambia. */
   onResolution?: (width: number, height: number) => void;
+  /** Reporta el bitrate (bits/s) del nivel HLS activo; 0 si no se conoce. */
+  onBitrate?: (bps: number) => void;
 }
 
-export function VideoPreview({ url, muted = true, onVideoEl, onHls, onResolution }: Props) {
+export function VideoPreview({ url, muted = true, onVideoEl, onHls, onResolution, onBitrate }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const hlsRef = useRef<Hls | null>(null);
   const [status, setStatus] = useState<"idle" | "loading" | "playing" | "error">(
@@ -43,6 +45,7 @@ export function VideoPreview({ url, muted = true, onVideoEl, onHls, onResolution
 
     setStatus("loading");
     onResolution?.(0, 0);
+    onBitrate?.(0);
     const looksLikeHls = /\.m3u8(\?|$)/i.test(url);
 
     const reportRes = () => {
@@ -62,7 +65,15 @@ export function VideoPreview({ url, muted = true, onVideoEl, onHls, onResolution
       hlsRef.current = hls;
       hls.loadSource(url);
       hls.attachMedia(video);
-      hls.on(Hls.Events.MANIFEST_PARSED, () => setStatus("playing"));
+      const reportBitrate = (level: number) => {
+        const lv = hls.levels?.[level];
+        if (lv?.bitrate) onBitrate?.(lv.bitrate);
+      };
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        setStatus("playing");
+        reportBitrate(hls.currentLevel >= 0 ? hls.currentLevel : hls.firstLevel);
+      });
+      hls.on(Hls.Events.LEVEL_SWITCHED, (_e, d) => reportBitrate(d.level));
       hls.on(Hls.Events.ERROR, (_evt, data) => {
         if (data.fatal) setStatus("error");
       });

@@ -21,6 +21,10 @@
   --secondary: var(--surface-2);
   --danger: var(--err);
 
+  /* Alias sin guion: el CSS portado del prototipo usa --surface2 / --accent2 */
+  --surface2: var(--surface-2);
+  --accent2: var(--accent-2);
+
   --radius: 14px;
   --focus-outline: 0 0 0 3px var(--ring);
   font-family: "Hanken Grotesk", "LG Smart UI", "SamsungOne", "Helvetica Neue", Arial, sans-serif;

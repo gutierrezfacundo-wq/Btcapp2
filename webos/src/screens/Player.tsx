@@ -4,6 +4,7 @@ import Hls from "hls.js";
 import { FocusContext, useFocusable, setFocus } from "@noriginmedia/norigin-spatial-navigation";
 import { FocusableButton } from "../components/FocusableButton";
 import { Icon } from "../components/Icon";
+import { TrackMenu } from "../components/TrackMenu";
 import { isBackKey, isPlayPauseKey } from "../webos/remote-keys";
 
 function fmt(t: number): string {
@@ -29,6 +30,9 @@ export function Player() {
   const [paused, setPaused] = useState(false);
   const [cur, setCur] = useState(0);
   const [dur, setDur] = useState(0);
+  const [hls, setHls] = useState<Hls | null>(null);
+  const [tracksOpen, setTracksOpen] = useState(false);
+  const tracksRef = useRef(false); tracksRef.current = tracksOpen;
   const overlayTimer = useRef<number | null>(null);
 
   const { ref, focusKey } = useFocusable({ trackChildren: true, focusKey: "PLAYER" });
@@ -42,19 +46,21 @@ export function Player() {
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !url) return;
-    let hls: Hls | null = null;
+    let hlsInst: Hls | null = null;
     if (/\.m3u8(\?|$)/i.test(url) && Hls.isSupported()) {
-      hls = new Hls({ enableWorker: true, lowLatencyMode: true });
-      hls.loadSource(url);
-      hls.attachMedia(video);
-      hls.on(Hls.Events.ERROR, (_e, d) => { if (d.fatal) setError(`Error de reproducción (${d.type})`); });
+      hlsInst = new Hls({ enableWorker: true, lowLatencyMode: true });
+      hlsInst.loadSource(url);
+      hlsInst.attachMedia(video);
+      hlsInst.on(Hls.Events.ERROR, (_e, d) => { if (d.fatal) setError(`Error de reproducción (${d.type})`); });
+      setHls(hlsInst);
     } else {
       video.src = url;
+      setHls(null);
     }
     video.play().catch(() => undefined);
     showOverlay();
     setFocus("PL_PLAY");
-    return () => { if (hls) hls.destroy(); video.removeAttribute("src"); video.load(); };
+    return () => { if (hlsInst) hlsInst.destroy(); setHls(null); video.removeAttribute("src"); video.load(); };
   }, [url]);
 
   useEffect(() => {
@@ -87,10 +93,16 @@ export function Player() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (isBackKey(e)) { e.preventDefault(); navigate(-1); return; }
+      if (isBackKey(e)) {
+        e.preventDefault();
+        if (tracksRef.current) { setTracksOpen(false); setFocus("PL_TRACKS"); return; }
+        navigate(-1); return;
+      }
       if (isPlayPauseKey(e)) { e.preventDefault(); togglePlay(); return; }
-      if (e.key === "ArrowLeft") seek(-10);
-      else if (e.key === "ArrowRight") seek(10);
+      if (!tracksRef.current) {
+        if (e.key === "ArrowLeft") seek(-10);
+        else if (e.key === "ArrowRight") seek(10);
+      }
       showOverlay();
     };
     window.addEventListener("keydown", onKey);
@@ -135,8 +147,12 @@ export function Player() {
                 <Icon name={paused ? "play_arrow" : "pause"} /> {paused ? "Reproducir" : "Pausa"}
               </FocusableButton>
               <FocusableButton className="ply-btn" onEnterPress={() => seek(10)}><Icon name="forward_10" /> 10s</FocusableButton>
+              <FocusableButton focusKey="PL_TRACKS" className="ply-btn" onEnterPress={() => { setTracksOpen((v) => !v); showOverlay(); window.setTimeout(() => setFocus("TRK_FIRST"), 60); }}>
+                <Icon name="tune" /> Audio y subtítulos
+              </FocusableButton>
             </div>
           </div>
+          {tracksOpen ? <TrackMenu hls={hls} onClose={() => { setTracksOpen(false); setFocus("PL_TRACKS"); }} /> : null}
           {error ? <div className="eo-r" style={{ position: "absolute", bottom: 180, left: 0, right: 0, textAlign: "center", color: "var(--err)" }}>{error}</div> : null}
         </div>
       </div>
