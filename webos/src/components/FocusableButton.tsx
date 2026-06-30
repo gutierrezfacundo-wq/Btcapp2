@@ -45,8 +45,9 @@ export function FocusableButton({
       className={`focusable ${focused ? "focused" : ""} ${className ?? ""}`}
       style={style}
       // Magic Remote (puntero): al pasar por encima tomamos el foco para que el
-      // D-pad continúe desde acá y no se "pierda" al usar el puntero.
-      onMouseEnter={() => { if (!disabled) focusSelf(); }}
+      // D-pad continúe desde acá. Excepción: si se está escribiendo en un input
+      // (teclado en pantalla), no robamos el foco al pasar por encima.
+      onMouseEnter={() => { if (!disabled && !(document.activeElement instanceof HTMLInputElement)) focusSelf(); }}
       onClick={() => {
         if (!disabled) { focusSelf(); onEnterPress?.(); }
       }}

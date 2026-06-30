@@ -17,9 +17,7 @@ import { TrackMenu } from "../components/TrackMenu";
 import { isBackKey } from "../webos/remote-keys";
 
 type Tab = "live" | "movies" | "series" | "favorites";
-// La lista en vivo se virtualiza (VirtualList): se renderiza completa sin tope.
-// Las grillas VOD traen imagen por item: un tope mas bajo mantiene la navegacion fluida en la TV.
-const GRID_CAP = 120;
+// Listas y grilla VOD se virtualizan (VirtualList): se renderizan completas sin tope.
 
 function initials(s: string) {
   return s.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
@@ -221,6 +219,25 @@ export function Home() {
     () => (selectedChannelId ? liveFiltered.findIndex((c) => c.id === selectedChannelId) : -1),
     [liveFiltered, selectedChannelId],
   );
+  // Categorías con "Todas" al frente, para virtualizar la columna.
+  const catItems = useMemo(() => [{ id: "__all__", name: "Todas" }, ...categories], [categories]);
+  const selCatIdx = category === null ? 0 : catItems.findIndex((c) => c.name === category);
+
+  // Datos livianos para la grilla virtualizada (sin closures por item).
+  const gridItems = useMemo(() => {
+    if (tab === "movies") return moviesFiltered.map((m) => ({ id: m.id, name: m.name, posterUrl: m.posterUrl, year: m.year, rating: m.rating }));
+    if (tab === "series") return seriesFiltered.map((s) => ({ id: s.id, name: s.name, posterUrl: s.posterUrl, year: undefined as string | undefined, rating: undefined as string | undefined }));
+    return [];
+  }, [tab, moviesFiltered, seriesFiltered]);
+  const onPickGrid = (index: number) => {
+    if (tab === "movies") {
+      const m = moviesFiltered[index];
+      if (m) play(m.streamUrl, m.name, { id: m.id, posterUrl: m.posterUrl, sub: [m.year, m.category].filter(Boolean).join(" · ") || undefined, kind: "movie" });
+    } else {
+      const s = seriesFiltered[index];
+      if (s) openSeries(s.id, s.name, s.posterUrl);
+    }
+  };
   const onRowEnter = useCallback((id: string) => {
     if (selRef.current === id) setFullscreen(true);
     else setSelectedChannelId(id);
@@ -269,16 +286,25 @@ export function Home() {
                       <FocusableInput focusKey="SEARCH_IN" value={query} onChange={setQuery} placeholder="Buscar canal…" />
                     </div>
                   ) : null}
-                  <div className="a-cats-list scroll">
-                    <FocusableButton focusKey="CAT_0" className={`a-cat ${category === null ? "sel" : ""}`} onEnterPress={() => setCategory(null)}>
-                      <span className="a-cat-n">Todas</span><span className="a-cat-t">{catalog.liveChannels.length}</span>
-                    </FocusableButton>
-                    {categories.map((c) => (
-                      <FocusableButton key={c.id} focusKey={`CATG_${c.id}`} className={`a-cat ${category === c.name ? "sel" : ""}`} onEnterPress={() => setCategory(c.name)}>
-                        <span className="a-cat-n">{c.name}</span><span className="a-cat-t">{counts.get(c.name) ?? 0}</span>
-                      </FocusableButton>
-                    ))}
-                  </div>
+                  <VirtualList
+                    className="a-cats-list scroll"
+                    items={catItems}
+                    estRowHeight={50}
+                    overscan={12}
+                    scrollToIndex={selCatIdx}
+                    getKey={(c) => c.id}
+                    renderRow={(c) => (
+                      c.id === "__all__" ? (
+                        <FocusableButton focusKey="CAT_0" className={`a-cat ${category === null ? "sel" : ""}`} onEnterPress={() => setCategory(null)}>
+                          <span className="a-cat-n">Todas</span><span className="a-cat-t">{catalog.liveChannels.length}</span>
+                        </FocusableButton>
+                      ) : (
+                        <FocusableButton focusKey={`CATG_${c.id}`} className={`a-cat ${category === c.name ? "sel" : ""}`} onEnterPress={() => setCategory(c.name)}>
+                          <span className="a-cat-n">{c.name}</span><span className="a-cat-t">{counts.get(c.name) ?? 0}</span>
+                        </FocusableButton>
+                      )
+                    )}
+                  />
                 </div>
 
                 <div className="a-list">
@@ -339,18 +365,8 @@ export function Home() {
                 onCategory={setCategory}
                 query={query}
                 onQuery={setQuery}
-                items={
-                  tab === "movies"
-                    ? moviesFiltered.slice(0, GRID_CAP).map((m) => ({
-                        id: m.id, name: m.name, posterUrl: m.posterUrl, year: m.year, rating: m.rating,
-                        onSelect: () => play(m.streamUrl, m.name, { id: m.id, posterUrl: m.posterUrl, sub: [m.year, m.category].filter(Boolean).join(" · ") || undefined, kind: "movie" }),
-                      }))
-                    : seriesFiltered.slice(0, GRID_CAP).map((s) => ({
-                        id: s.id, name: s.name, posterUrl: s.posterUrl,
-                        onSelect: () => openSeries(s.id, s.name, s.posterUrl),
-                      }))
-                }
-                total={tab === "movies" ? moviesFiltered.length : seriesFiltered.length}
+                items={gridItems}
+                onPick={onPickGrid}
               />
             )}
           </div>
@@ -501,8 +517,10 @@ function PreviewPanel({
 
 
 // ===================== GRID (películas / series) =====================
+interface GridData { id: string; name: string; posterUrl?: string; year?: string; rating?: string }
+
 function GridScreen({
-  title, count, categories, category, onCategory, query, onQuery, items, total,
+  title, count, categories, category, onCategory, query, onQuery, items, onPick,
 }: {
   title: string;
   count: number;
@@ -511,9 +529,15 @@ function GridScreen({
   onCategory: (c: string | null) => void;
   query: string;
   onQuery: (q: string) => void;
-  items: { id: string; name: string; posterUrl?: string; year?: string; rating?: string; onSelect: () => void }[];
-  total: number;
+  items: GridData[];
+  onPick: (index: number) => void;
 }) {
+  // Filas de a 6 para virtualizar la grilla (solo se montan las visibles).
+  const rows = useMemo(() => {
+    const r: GridData[][] = [];
+    for (let i = 0; i < items.length; i += 6) r.push(items.slice(i, i + 6));
+    return r;
+  }, [items]);
   return (
     <div className="grd">
       <div className="grd-h">
@@ -529,27 +553,33 @@ function GridScreen({
           <FocusableButton key={c.id} className={`chip ${category === c.name ? "on" : ""}`} onEnterPress={() => onCategory(c.name)}>{c.name}</FocusableButton>
         ))}
       </div>
-      <div className="grd-scroll scroll">
-        {items.length === 0 ? (
-          <div className="grd-empty">Sin resultados{query ? ` para «${query}»` : ""}</div>
-        ) : (
-          <div className="grd-grid">
-            {items.map((it) => (
-              <FocusableButton key={it.id} className="poster" onEnterPress={it.onSelect}>
-                <div className="poster-img">
-                  {it.posterUrl ? <img src={it.posterUrl} alt="" loading="lazy" decoding="async" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} /> : <div className="poster-ph">{initials(it.name)}</div>}
-                  {it.rating ? <div className="poster-rate"><Icon name="star" size={15} /> {it.rating}</div> : null}
-                  <div className="poster-meta">
-                    <div className="poster-name">{it.name}</div>
-                    {it.year ? <div className="poster-year">{it.year}</div> : null}
+      {items.length === 0 ? (
+        <div className="grd-scroll"><div className="grd-empty">Sin resultados{query ? ` para «${query}»` : ""}</div></div>
+      ) : (
+        <VirtualList
+          className="grd-scroll scroll"
+          items={rows}
+          estRowHeight={470}
+          overscan={3}
+          getKey={(_r, i) => `row-${i}`}
+          renderRow={(row, i) => (
+            <div className="grd-row">
+              {row.map((it, j) => (
+                <FocusableButton key={it.id} className="poster" onEnterPress={() => onPick(i * 6 + j)}>
+                  <div className="poster-img">
+                    {it.posterUrl ? <img src={it.posterUrl} alt="" loading="lazy" decoding="async" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} /> : <div className="poster-ph">{initials(it.name)}</div>}
+                    {it.rating ? <div className="poster-rate"><Icon name="star" size={15} /> {it.rating}</div> : null}
+                    <div className="poster-meta">
+                      <div className="poster-name">{it.name}</div>
+                      {it.year ? <div className="poster-year">{it.year}</div> : null}
+                    </div>
                   </div>
-                </div>
-              </FocusableButton>
-            ))}
-          </div>
-        )}
-        {total > items.length ? <div className="grd-empty" style={{ paddingTop: 24 }}>Mostrando {items.length} de {total}. Filtrá por categoría o buscá.</div> : null}
-      </div>
+                </FocusableButton>
+              ))}
+            </div>
+          )}
+        />
+      )}
     </div>
   );
 }

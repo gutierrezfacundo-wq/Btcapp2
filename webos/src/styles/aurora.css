@@ -426,6 +426,13 @@
 /* Navegación más rápida: el cambio de foco no anima box-shadow (repaint caro). */
 .a-ch{transition:transform .09s !important}
 .a-cat{transition:none !important}
+/* En items con imagen, escalar al enfocar repinta la imagen (lento en TV):
+   dejamos solo el anillo dorado, sin scale/translate. */
+.a-ch.focused,.a-ch:hover{transform:none !important}
+.poster.focused,.poster:hover{transform:none !important}
+
+/* Grilla VOD virtualizada: cada fila es una grilla de 6 columnas */
+.grd-row{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:26px;padding-bottom:26px}
 
 /* Preview de video: overlays (carga / error con Reintentar) centrados */
 .video-preview{position:relative;width:100%;height:100%}
