@@ -181,7 +181,7 @@ export function Setup() {
                   </FocusableButton>
                 </div>
 
-                <div className="edt-form">
+                <div className="edt-form scroll">
                   <div className="fld">
                     <div className="fld-l">Nombre de la lista</div>
                     <div className="fld-in"><Icon name="label" /><FocusableInput focusKey="ED_NAME" value={name} onChange={setName} placeholder="Mi proveedor" /></div>

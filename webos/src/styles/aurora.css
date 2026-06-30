@@ -131,7 +131,7 @@
   .edt-tab .ms{font-size:24px}
   .edt-tab.focused{box-shadow:0 0 0 3px var(--ring)}
   .edt-tab.on{background:var(--accent);color:#1a1500}
-  .edt-form{margin-top:28px;display:flex;flex-direction:column;gap:22px;max-width:840px}
+  .edt-form{margin-top:28px;display:flex;flex-direction:column;gap:22px;max-width:840px;flex:1;min-height:0;overflow-y:auto;padding-right:8px;padding-bottom:8px}
   .fld{display:flex;flex-direction:column;gap:9px}
   .fld-l{font-size:17px;font-weight:600;color:var(--muted);letter-spacing:.5px}
   .fld-in{display:flex;align-items:center;gap:12px;background:var(--surface);border:2px solid var(--line);border-radius:14px;padding:0 18px;transition:border-color .12s,box-shadow .12s}
@@ -145,7 +145,7 @@
   .edt-test.ok{color:var(--ok)}.edt-test.err{color:var(--err)}.edt-test.testing{color:var(--muted)}
   .edt-test .spin{width:22px;height:22px;border:3px solid var(--surface2);border-top-color:var(--accent);border-radius:50%;animation:aspin 1s linear infinite}
   @keyframes aspin{to{transform:rotate(360deg)}}
-  .edt-actions{margin-top:auto;display:flex;gap:16px;padding-top:26px}
+  .edt-actions{display:flex;gap:16px;padding-top:10px}
   .btn{display:flex;align-items:center;justify-content:center;gap:11px;padding:18px 28px;border-radius:14px;background:var(--surface2);font-size:21px;font-weight:600;border:1px solid var(--line);cursor:pointer;transition:box-shadow .12s,transform .12s,background .12s}
   .btn:hover,.btn.focused{box-shadow:0 0 0 3px var(--ring)}
   .btn.focused{transform:scale(1.02)}

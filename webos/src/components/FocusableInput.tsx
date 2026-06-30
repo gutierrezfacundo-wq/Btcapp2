@@ -23,9 +23,11 @@ export function FocusableInput({ value, onChange, placeholder, type = "text", fo
     else inputRef.current?.blur();
   }, [focused]);
 
+  // Solo foco por click, NO por hover: pasar el puntero cerca de un input
+  // (p.ej. yendo hacia el teclado en pantalla) no debe "seleccionarlo" solo.
   if (bare) {
     return (
-      <div ref={ref} className={`bare ${focused ? "focused" : ""}`} onMouseEnter={focusSelf} onClick={focusSelf}>
+      <div ref={ref} className={`bare ${focused ? "focused" : ""}`} onClick={focusSelf}>
         <input
           ref={inputRef}
           className="bare-input"
@@ -39,7 +41,7 @@ export function FocusableInput({ value, onChange, placeholder, type = "text", fo
   }
 
   return (
-    <div ref={ref} className={`focusable ${focused ? "focused" : ""}`} onMouseEnter={focusSelf} onClick={focusSelf}>
+    <div ref={ref} className={`focusable ${focused ? "focused" : ""}`} onClick={focusSelf}>
       <input
         ref={inputRef}
         className={`input ${focused ? "focused" : ""}`}
