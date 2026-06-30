@@ -86,6 +86,10 @@ export function TrackMenu({ hls, video, onClose }: { hls: Hls | null; video?: HT
   // ===== Video nativo (VOD mp4/mkv) =====
   const audio = nativeAudio(video ?? null);
   const subs = nativeSubs(video ?? null);
+  const rawSubs = video?.textTracks ? Array.from(video.textTracks) : [];
+  const subDiag = rawSubs.length
+    ? rawSubs.map((t, i) => `${i}:${t.kind || "?"}/${t.language || t.label || "?"}`).join("  ")
+    : "ninguna";
   const activeAudio = audio.findIndex((t) => t.enabled);
   const activeSub = subs.findIndex((t) => t.mode === "showing");
 
@@ -118,17 +122,16 @@ export function TrackMenu({ hls, video, onClose }: { hls: Hls | null; video?: HT
             {trackLabel(t, i, "Pista")} {activeAudio === i ? <Icon name="check" /> : null}
           </FocusableButton>
         ))}
-        {subs.length ? <div className="a-trk-sec">Subtítulos</div> : null}
-        {subs.length ? (
-          <FocusableButton focusKey={!audio.length ? "TRK_FIRST" : undefined} className="a-trk-item" onEnterPress={() => setSub(-1)}>
-            Desactivados {activeSub === -1 ? <Icon name="check" /> : null}
-          </FocusableButton>
-        ) : null}
+        <div className="a-trk-sec">Subtítulos</div>
+        <FocusableButton focusKey={!audio.length ? "TRK_FIRST" : undefined} className="a-trk-item" onEnterPress={() => setSub(-1)}>
+          Desactivados {activeSub === -1 ? <Icon name="check" /> : null}
+        </FocusableButton>
         {subs.map((t, i) => (
           <FocusableButton key={i} className="a-trk-item" onEnterPress={() => setSub(i)}>
             {trackLabel(t, i, "Sub")} {activeSub === i ? <Icon name="check" /> : null}
           </FocusableButton>
         ))}
+        <div className="a-pdesc" style={{ fontSize: 14, opacity: 0.7, marginTop: 8 }}>diag pistas de texto: {subDiag}</div>
       </div>
       <FocusableButton className="a-trk-close" onEnterPress={onClose}>Cerrar</FocusableButton>
     </div>
