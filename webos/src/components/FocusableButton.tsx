@@ -4,6 +4,8 @@ import { useFocusable } from "@noriginmedia/norigin-spatial-navigation";
 interface Props {
   onEnterPress?: () => void;
   onFocus?: () => void;
+  /** Devolver false cancela la navegación por defecto en esa dirección. */
+  onArrowPress?: (direction: string) => boolean;
   children: ReactNode;
   className?: string;
   style?: CSSProperties;
@@ -14,6 +16,7 @@ interface Props {
 export function FocusableButton({
   onEnterPress,
   onFocus,
+  onArrowPress,
   children,
   className,
   style,
@@ -22,6 +25,7 @@ export function FocusableButton({
 }: Props) {
   const { ref, focused, focusSelf } = useFocusable({
     focusKey,
+    onArrowPress: (direction) => (onArrowPress ? onArrowPress(direction) : true),
     onEnterPress: () => {
       if (!disabled) onEnterPress?.();
     },

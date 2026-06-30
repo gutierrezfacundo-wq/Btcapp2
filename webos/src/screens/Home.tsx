@@ -40,7 +40,7 @@ function fmtClock(ms: number) {
  * filas cuyo `sel`/`fav` cambió, no las 250. Los callbacks deben ser estables.
  */
 const ChannelRow = memo(function ChannelRow({
-  channel, num, sel, fav, epg, onEnter, onFav,
+  channel, num, sel, fav, epg, onEnter, onFav, onArrow,
 }: {
   channel: Channel;
   num: number | string;
@@ -49,6 +49,7 @@ const ChannelRow = memo(function ChannelRow({
   epg: Map<string, EpgProgram[]>;
   onEnter: (id: string) => void;
   onFav: (c: Channel) => void;
+  onArrow: (dir: string) => boolean;
 }) {
   const now = findNowPlaying(epg, channel.tvgId);
   const ql = quality(channel.name);
@@ -57,6 +58,7 @@ const ChannelRow = memo(function ChannelRow({
       focusKey={`CH_${channel.id}`}
       className={`a-ch ${sel ? "playing" : ""}`}
       onEnterPress={() => onEnter(channel.id)}
+      onArrowPress={onArrow}
     >
       <span className="a-ch-num">{num}</span>
       <span className="a-ch-logo">{channel.logoUrl ? <img src={channel.logoUrl} alt="" loading="lazy" decoding="async" style={{ width: "100%", height: "100%", objectFit: "contain", borderRadius: 11 }} /> : initials(channel.name)}</span>
@@ -204,6 +206,17 @@ export function Home() {
   const favIds = useMemo(() => new Set(favorites.map((f) => f.id)), [favorites]);
   const selRef = useRef(selectedChannelId);
   selRef.current = selectedChannelId;
+
+  // Al volver a la izquierda desde un canal, enfocar la categoría seleccionada.
+  const selCatKey = category === null ? "CAT_0" : `CATG_${categories.find((c) => c.name === category)?.id ?? ""}`;
+  const selCatKeyRef = useRef(selCatKey);
+  selCatKeyRef.current = selCatKey;
+  const onChannelLeft = useCallback((dir: string) => {
+    if (dir !== "left") return true;
+    setFocus(selCatKeyRef.current);
+    return false;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const onRowEnter = useCallback((id: string) => {
     if (selRef.current === id) setFullscreen(true);
     else setSelectedChannelId(id);
@@ -257,7 +270,7 @@ export function Home() {
                       <span className="a-cat-n">Todas</span><span className="a-cat-t">{catalog.liveChannels.length}</span>
                     </FocusableButton>
                     {categories.map((c) => (
-                      <FocusableButton key={c.id} className={`a-cat ${category === c.name ? "sel" : ""}`} onEnterPress={() => setCategory(c.name)}>
+                      <FocusableButton key={c.id} focusKey={`CATG_${c.id}`} className={`a-cat ${category === c.name ? "sel" : ""}`} onEnterPress={() => setCategory(c.name)}>
                         <span className="a-cat-n">{c.name}</span><span className="a-cat-t">{counts.get(c.name) ?? 0}</span>
                       </FocusableButton>
                     ))}
@@ -277,6 +290,7 @@ export function Home() {
                         epg={epgByChannel}
                         onEnter={onRowEnter}
                         onFav={onRowFav}
+                        onArrow={onChannelLeft}
                       />
                     ))}
                     {liveFiltered.length > RENDER_CAP ? (
