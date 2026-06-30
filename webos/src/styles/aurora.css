@@ -434,6 +434,20 @@
 /* Grilla VOD virtualizada: cada fila es una grilla de 6 columnas */
 .grd-row{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:26px;padding-bottom:26px}
 
+/* Vincular con el celular (QR) */
+.pair{flex:1;display:flex;align-items:center;justify-content:center;padding:40px}
+.pair-card{background:var(--surface);border:1px solid var(--line);border-radius:24px;padding:40px;display:flex;gap:48px;align-items:center;max-width:1100px}
+.pair-card .ms{color:var(--accent)}
+.pair-qr{width:320px;height:320px;flex-shrink:0;background:#f3f2f5;border-radius:18px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.pair-qr img{display:block;width:320px;height:320px}
+.pair-side{display:flex;flex-direction:column;gap:16px;min-width:0}
+.pair-title{font-family:'Schibsted Grotesk',sans-serif;font-size:34px;font-weight:800}
+.pair-desc{font-size:20px;color:var(--muted);line-height:1.5;max-width:520px}
+.pair-step{font-size:23px;display:flex;align-items:center;gap:14px}
+.pair-num{width:34px;height:34px;flex-shrink:0;border-radius:50%;background:var(--accent);color:#1a1500;font-weight:800;display:flex;align-items:center;justify-content:center;font-size:18px}
+.pair-code{font-family:'Space Grotesk',monospace;font-size:24px;letter-spacing:3px;color:var(--accent);margin-top:6px}
+.pair-wait{font-size:18px;color:var(--muted);margin-top:4px}
+
 /* Preview de video: overlays (carga / error con Reintentar) centrados */
 .video-preview{position:relative;width:100%;height:100%}
 .video-preview-overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;background:rgba(0,0,0,.6);text-align:center;padding:24px;color:var(--text)}

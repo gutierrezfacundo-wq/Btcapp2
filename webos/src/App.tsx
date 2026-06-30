@@ -6,6 +6,7 @@ import { Hub } from "./screens/Hub";
 import { Home } from "./screens/Home";
 import { SeriesDetail } from "./screens/SeriesDetail";
 import { Player } from "./screens/Player";
+import { Pair } from "./screens/Pair";
 import { useAppStore } from "./store/useAppStore";
 import { isBackKey } from "./webos/remote-keys";
 
@@ -57,6 +58,7 @@ export default function App() {
       <Route path="/home" element={<Home />} />
       <Route path="/series/:id" element={<SeriesDetail />} />
       <Route path="/player" element={<Player />} />
+      <Route path="/pair" element={<Pair />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

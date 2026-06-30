@@ -14,6 +14,7 @@ const CATALOG_CACHE_KEY = "iptv.catalog.v1";
 const HISTORY_KEY = "iptv.history.v1";
 const SUBS_KEY = "iptv.subtitlesApiKey.v1";   // API key de OpenSubtitles (la ingresa el usuario)
 const PROGRESS_KEY = "iptv.progress.v1";      // posición de reproducción por contenido (continuar viendo)
+const COMPANION_KEY = "iptv.companionUrl.v1"; // URL del companion (web app + relay) para vincular con el celular
 
 function genId(): string {
   return `src-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`;
@@ -158,6 +159,8 @@ interface AppState {
   subtitlesApiKey: string;
   /** Posición de reproducción por contenido (segundos) para "continuar viendo". */
   progress: Record<string, { pos: number; dur: number }>;
+  /** URL base del companion (web app + relay) para vincular con el celular vía QR. */
+  companionUrl: string;
   epgByChannel: Map<string, EpgProgram[]>;
 
   /** Indica si una seccion VOD ya se cargo a demanda. */
@@ -187,6 +190,7 @@ interface AppState {
   setSubtitlesApiKey: (key: string) => void;
   saveProgress: (id: string, pos: number, dur: number) => void;
   clearProgress: (id: string) => void;
+  setCompanionUrl: (url: string) => void;
 }
 
 const emptyCatalog: Catalog = {
@@ -213,6 +217,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   history: loadHistory(),
   subtitlesApiKey: (() => { try { return localStorage.getItem(SUBS_KEY) ?? ""; } catch { return ""; } })(),
   progress: (() => { try { return JSON.parse(localStorage.getItem(PROGRESS_KEY) ?? "{}"); } catch { return {}; } })(),
+  companionUrl: (() => { try { return localStorage.getItem(COMPANION_KEY) ?? ""; } catch { return ""; } })(),
   epgByChannel: new Map(),
   loadedSections: { movies: false, series: false },
   ui: { tab: "live", category: null, selectedChannelId: null },
@@ -427,6 +432,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     delete next[id];
     try { localStorage.setItem(PROGRESS_KEY, JSON.stringify(next)); } catch { /* ignore */ }
     set({ progress: next });
+  },
+
+  setCompanionUrl: (url) => {
+    const u = url.trim().replace(/\/+$/, "");
+    try { localStorage.setItem(COMPANION_KEY, u); } catch { /* ignore */ }
+    set({ companionUrl: u });
   },
 }));
 

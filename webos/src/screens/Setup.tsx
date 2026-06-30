@@ -35,6 +35,8 @@ export function Setup() {
   const setActiveSource = useAppStore((s) => s.setActiveSource);
   const subtitlesApiKey = useAppStore((s) => s.subtitlesApiKey);
   const setSubtitlesApiKey = useAppStore((s) => s.setSubtitlesApiKey);
+  const companionUrl = useAppStore((s) => s.companionUrl);
+  const setCompanionUrl = useAppStore((s) => s.setCompanionUrl);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isNew, setIsNew] = useState(sources.length === 0);
@@ -255,6 +257,18 @@ export function Setup() {
                       <FocusableInput value={subtitlesApiKey} onChange={setSubtitlesApiKey} placeholder="Pegá tu API key (opensubtitles.com)" />
                     </div>
                     <div className="a-pdesc" style={{ marginTop: 6 }}>Necesaria para buscar y descargar subtítulos desde el reproductor. Se genera gratis en opensubtitles.com → API Consumer.</div>
+                  </div>
+
+                  <div className="fld" style={{ marginTop: 18 }}>
+                    <label className="fld-l"><Icon name="qr_code_2" /> Configurar desde el celular (QR)</label>
+                    <div className="fld-in">
+                      <Icon name="link" />
+                      <FocusableInput value={companionUrl} onChange={setCompanionUrl} placeholder="URL de tu companion, ej. https://tu-proyecto.pages.dev" />
+                    </div>
+                    <div className="a-pdesc" style={{ marginTop: 6 }}>Pegá la URL de la app web que desplegaste (Cloudflare Pages). Después tocá “Vincular” para mostrar el QR.</div>
+                    <FocusableButton className="btn primary" style={{ marginTop: 10 }} disabled={!companionUrl} onEnterPress={() => navigate("/pair")}>
+                      <Icon name="qr_code_2" /> Vincular con el celular
+                    </FocusableButton>
                   </div>
                 </div>
               </div>
