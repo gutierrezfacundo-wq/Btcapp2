@@ -7,6 +7,7 @@ import {
 } from "@noriginmedia/norigin-spatial-navigation";
 import { useAppStore } from "../store/useAppStore";
 import { FocusableButton } from "../components/FocusableButton";
+import { Icon } from "../components/Icon";
 
 type SectionId = "live" | "movies" | "series" | "favorites";
 
@@ -14,13 +15,14 @@ interface Tile {
   id: SectionId;
   title: string;
   subtitle: string;
-  emoji: string;
-  color: string;
+  icon: string;
 }
 
 export function Hub() {
   const navigate = useNavigate();
   const source = useAppStore((s) => s.source);
+  const sources = useAppStore((s) => s.sources);
+  const activeSourceId = useAppStore((s) => s.activeSourceId);
   const catalog = useAppStore((s) => s.catalog);
   const favorites = useAppStore((s) => s.favorites);
   const loading = useAppStore((s) => s.loading);
@@ -31,7 +33,8 @@ export function Hub() {
   const ensureMovies = useAppStore((s) => s.ensureMovies);
   const ensureSeries = useAppStore((s) => s.ensureSeries);
   const reload = useAppStore((s) => s.reload);
-  const clearSource = useAppStore((s) => s.clearSource);
+
+  const activeName = sources.find((s) => s.id === activeSourceId)?.name ?? "Sin lista";
 
   useEffect(() => {
     if (!source) navigate("/setup");
@@ -39,43 +42,33 @@ export function Hub() {
 
   const { ref, focusKey } = useFocusable({ trackChildren: true, focusKey: "HUB" });
   useEffect(() => {
-    setFocus("HUB");
+    setFocus("HUB_TILE_0");
   }, []);
 
   const tiles: Tile[] = [
     {
       id: "live",
       title: "En vivo",
-      subtitle: catalog.liveChannels.length
-        ? `${catalog.liveChannels.length} canales`
-        : "—",
-      emoji: "📺",
-      color: "#1e3a8a",
+      subtitle: catalog.liveChannels.length ? `${catalog.liveChannels.length} canales` : "—",
+      icon: "live_tv",
     },
     {
       id: "movies",
       title: "Películas",
-      subtitle: loadedSections.movies
-        ? `${catalog.movies.length} películas`
-        : "Cargar al entrar",
-      emoji: "🎬",
-      color: "#7c2d12",
+      subtitle: loadedSections.movies ? `${catalog.movies.length} películas` : "Cargar al entrar",
+      icon: "movie",
     },
     {
       id: "series",
       title: "Series",
-      subtitle: loadedSections.series
-        ? `${catalog.series.length} series`
-        : "Cargar al entrar",
-      emoji: "🎞️",
-      color: "#581c87",
+      subtitle: loadedSections.series ? `${catalog.series.length} series` : "Cargar al entrar",
+      icon: "video_library",
     },
     {
       id: "favorites",
       title: "Favoritos",
       subtitle: `${favorites.length} guardados`,
-      emoji: "★",
-      color: "#854d0e",
+      icon: "star",
     },
   ];
 
@@ -87,52 +80,47 @@ export function Hub() {
 
   return (
     <FocusContext.Provider value={focusKey}>
-      <div className="page hub" ref={ref}>
-        <div className="topbar" style={{ display: "flex", justifyContent: "space-between" }}>
-          <span>IPTV Player</span>
-          <div style={{ display: "flex", gap: 12 }}>
-            <FocusableButton className="btn" onEnterPress={reload}>↻ Recargar</FocusableButton>
-            <FocusableButton
-              className="btn"
-              onEnterPress={() => {
-                clearSource();
-                navigate("/setup");
-              }}
-            >
-              ⚙ Cambiar fuente
-            </FocusableButton>
-          </div>
+      <div className="page hub-aurora" ref={ref}>
+        <div className="a-top">
+          <div className="a-logo">IPTV<span> PLAYER</span></div>
+          <div className="a-spacer" />
+          <FocusableButton className="hub-active" onEnterPress={() => navigate("/setup")}>
+            <Icon name="playlist_play" />
+            <span className="hub-active-label">Lista activa</span>
+            <span className="hub-active-name">{activeName}</span>
+          </FocusableButton>
+          <FocusableButton className="a-railbtn hub-top-btn" onEnterPress={reload}>
+            <Icon name="refresh" />
+          </FocusableButton>
         </div>
 
         {loading || loadingStep ? (
           <div className="hub-status">
             <div className="spinner" />
-            <div style={{ marginTop: 12, fontSize: 22 }}>
-              {loadingStep ?? "Cargando…"}
-            </div>
+            <div className="hub-status-step">{loadingStep ?? "Cargando…"}</div>
             {loadingProgress ? (
-              <div style={{ opacity: 0.6, fontSize: 18, marginTop: 4 }}>
-                {loadingProgress.current} / {loadingProgress.total}
-              </div>
+              <div className="hub-status-prog">{loadingProgress.current} / {loadingProgress.total}</div>
             ) : null}
           </div>
         ) : error ? (
           <div className="hub-status">
+            <Icon name="wifi_off" className="hub-status-icon" />
             <div className="error" style={{ padding: 0 }}>{error}</div>
-            <FocusableButton className="btn primary" onEnterPress={reload}>
-              Reintentar
-            </FocusableButton>
+            <div style={{ display: "flex", gap: 16 }}>
+              <FocusableButton className="btn primary" onEnterPress={reload}>Reintentar</FocusableButton>
+              <FocusableButton className="btn" onEnterPress={() => navigate("/setup")}>Editar lista</FocusableButton>
+            </div>
           </div>
         ) : (
           <div className="hub-grid">
-            {tiles.map((t) => (
+            {tiles.map((t, i) => (
               <FocusableButton
                 key={t.id}
+                focusKey={`HUB_TILE_${i}`}
                 className="hub-tile"
-                style={{ background: `linear-gradient(135deg, ${t.color}, #0E0E10)` }}
                 onEnterPress={() => onSelect(t.id)}
               >
-                <div className="hub-tile-emoji">{t.emoji}</div>
+                <Icon name={t.icon} className="hub-tile-icon" />
                 <div className="hub-tile-title">{t.title}</div>
                 <div className="hub-tile-sub">{t.subtitle}</div>
               </FocusableButton>

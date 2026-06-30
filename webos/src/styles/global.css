@@ -1,19 +1,43 @@
 :root {
-  /* Paleta "Hot IPTV": azul marino oscuro + acentos amarillo/naranja */
-  --bg: #0a1525;
-  --bg-deep: #050a14;
-  --surface: #0f1d33;
-  --surface-2: #15263f;
-  --text: #e9eef7;
-  --muted: #8ea3c2;
-  --primary: #ffc107;        /* amarillo principal: categoria seleccionada, acentos */
-  --primary-dark: #f59e0b;
-  --secondary: #2d6cdf;      /* azul: chips de numero de canal */
-  --accent: #ff6b35;         /* naranja: borde del canal seleccionado */
-  --danger: #ef4444;
-  --radius: 12px;
-  --focus-outline: 0 0 0 3px var(--accent), 0 0 0 6px rgba(255, 107, 53, 0.25);
-  font-family: "LG Smart UI", "SamsungOne", "Helvetica Neue", Arial, sans-serif;
+  /* ===== Identidad "Aurora": grafito casi negro + dorado calido ===== */
+  --bg: #0a0a0c;
+  --bg-deep: #08080a;
+  --surface: #16161a;
+  --surface-2: #1f1f25;
+  --line: rgba(255, 255, 255, 0.07);
+  --text: #f3f2f5;
+  --muted: #8a8a94;
+  --accent: #d8b46a;          /* dorado: foco, activos, primario */
+  --accent-2: #e7c987;        /* dorado claro: degradados */
+  --soft: rgba(216, 180, 106, 0.13);   /* fondos suaves del acento */
+  --ring: rgba(216, 180, 106, 0.40);   /* anillo de foco */
+  --ok: #5fcaa0;
+  --err: #ff5d6c;
+  --live: #ff5470;            /* punto/chip "EN VIVO" */
+
+  /* Alias de compat con clases existentes (--primary/--secondary/--danger) */
+  --primary: var(--accent);
+  --primary-dark: var(--accent-2);
+  --secondary: var(--surface-2);
+  --danger: var(--err);
+
+  --radius: 14px;
+  --focus-outline: 0 0 0 3px var(--ring);
+  font-family: "Hanken Grotesk", "LG Smart UI", "SamsungOne", "Helvetica Neue", Arial, sans-serif;
+}
+
+/* Icon font helper */
+.ms {
+  font-family: "Material Symbols Outlined";
+  font-weight: normal;
+  font-style: normal;
+  line-height: 1;
+  letter-spacing: normal;
+  white-space: nowrap;
+  display: inline-block;
+  -webkit-font-feature-settings: "liga";
+  font-feature-settings: "liga";
+  -webkit-font-smoothing: antialiased;
 }
 
 * {
@@ -25,9 +49,12 @@ html, body, #root {
   height: 1080px;
   margin: 0;
   padding: 0;
-  background: var(--bg);
   color: var(--text);
   overflow: hidden;
+}
+
+body {
+  background: radial-gradient(130% 90% at 78% -10%, #1a1a20 0%, #0c0c0f 52%, #08080a 100%);
 }
 
 body {
@@ -66,9 +93,9 @@ a { color: var(--primary); text-decoration: none; }
 }
 
 .btn.primary {
-  background: var(--primary);
-  color: white;
-  font-weight: 600;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: #1a1408;
+  font-weight: 700;
 }
 
 .btn:disabled {

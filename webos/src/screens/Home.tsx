@@ -11,6 +11,7 @@ import { FocusableButton } from "../components/FocusableButton";
 import { FocusableInput } from "../components/FocusableInput";
 import { PosterCard } from "../components/PosterCard";
 import { VideoPreview } from "../components/VideoPreview";
+import { Icon } from "../components/Icon";
 import { isBackKey } from "../webos/remote-keys";
 import type Hls from "hls.js";
 
@@ -18,17 +19,17 @@ type Tab = "live" | "movies" | "series" | "favorites";
 
 const SIDEBAR_ITEMS: {
   id: Tab | "search" | "reload" | "settings" | "hub";
-  emoji: string;
+  icon: string;
   label: string;
 }[] = [
-  { id: "hub", emoji: "⌂", label: "Inicio" },
-  { id: "live", emoji: "📺", label: "En vivo" },
-  { id: "movies", emoji: "🎬", label: "Películas" },
-  { id: "series", emoji: "🎞️", label: "Series" },
-  { id: "favorites", emoji: "★", label: "Favoritos" },
-  { id: "search", emoji: "🔍", label: "Buscar" },
-  { id: "reload", emoji: "↻", label: "Recargar" },
-  { id: "settings", emoji: "⚙", label: "Ajustes" },
+  { id: "hub", icon: "home", label: "Inicio" },
+  { id: "live", icon: "live_tv", label: "En vivo" },
+  { id: "movies", icon: "movie", label: "Películas" },
+  { id: "series", icon: "video_library", label: "Series" },
+  { id: "favorites", icon: "star", label: "Favoritos" },
+  { id: "search", icon: "search", label: "Buscar" },
+  { id: "reload", icon: "refresh", label: "Recargar" },
+  { id: "settings", icon: "settings", label: "Ajustes" },
 ];
 
 const RENDER_CAP = 500;
@@ -222,7 +223,7 @@ export function Home() {
       <div className="page hot" ref={ref}>
         {/* Topbar mini con logo + indicador "Live" */}
         <div className="hot-topbar">
-          <span className="hot-logo">🔥 IPTV Player</span>
+          <span className="hot-logo">IPTV<span> PLAYER</span></span>
           {tab === "live" && category ? (
             <span className="hot-badge">{category}</span>
           ) : null}
@@ -245,7 +246,7 @@ export function Home() {
                 }`}
                 onEnterPress={() => onSidebarPress(it.id)}
               >
-                <span className="hot-icon-glyph">{it.emoji}</span>
+                <Icon name={it.icon} className="hot-icon-glyph" />
               </FocusableButton>
             ))}
           </nav>
@@ -340,7 +341,7 @@ export function Home() {
                 cap={RENDER_CAP}
               />
             ) : (
-              <FavoritesList favorites={favorites} channelNumbers={channelNumbers} onPlay={play} />
+              <FavoritesList favorites={favorites} onPlay={play} />
             )}
           </main>
 
@@ -510,7 +511,7 @@ function PreviewPanel({
                 className="btn hot-ctrl"
                 onEnterPress={togglePause}
               >
-                {paused ? "▶ Reproducir" : "⏸ Pausa"}
+                <Icon name={paused ? "play_arrow" : "pause"} /> {paused ? "Reproducir" : "Pausa"}
               </FocusableButton>
               <FocusableButton
                 focusKey="FS_TRACKS"
@@ -521,10 +522,10 @@ function PreviewPanel({
                   window.setTimeout(() => setFocus("TRK_FIRST"), 60);
                 }}
               >
-                ⚙ Calidad / Audio / Sub
+                <Icon name="tune" /> Pistas
               </FocusableButton>
               <FocusableButton className="btn hot-ctrl" onEnterPress={onExitFullscreen}>
-                ← Volver a la lista
+                <Icon name="arrow_back" /> Volver
               </FocusableButton>
             </div>
             {tracksOpen ? (
@@ -543,13 +544,13 @@ function PreviewPanel({
         <>
           <div className="hot-preview-controls">
             <FocusableButton focusKey="PV_PAUSE" className="btn hot-ctrl" onEnterPress={togglePause}>
-              {paused ? "▶ Reproducir" : "⏸ Pausa"}
+              <Icon name={paused ? "play_arrow" : "pause"} /> {paused ? "Reproducir" : "Pausa"}
             </FocusableButton>
             <FocusableButton
               className="btn hot-ctrl primary"
               onEnterPress={onEnterFullscreen}
             >
-              ⛶ Pantalla completa
+              <Icon name="fullscreen" /> Pantalla completa
             </FocusableButton>
           </div>
           <div className="hot-preview-info">
@@ -629,14 +630,14 @@ function LiveChannelList({
               {c.logoUrl ? (
                 <img src={c.logoUrl} alt="" />
               ) : (
-                <div className="hot-channel-logo-placeholder">📺</div>
+                <div className="hot-channel-logo-placeholder"><Icon name="live_tv" /></div>
               )}
             </div>
             <div className="hot-channel-info">
               <div className="hot-channel-name">{c.name}</div>
               {now ? <div className="hot-channel-now">{now.title}</div> : null}
             </div>
-            {isFavorite(c.id) ? <span className="hot-channel-fav" onClick={(e) => { e.stopPropagation(); onToggleFavorite(c); }}>★</span> : null}
+            {isFavorite(c.id) ? <span className="hot-channel-fav" onClick={(e) => { e.stopPropagation(); onToggleFavorite(c); }}><Icon name="star" /></span> : null}
           </FocusableButton>
         );
       })}
@@ -668,9 +669,8 @@ function PosterGrid({ items, total, cap }: {
   );
 }
 
-function FavoritesList({ favorites, channelNumbers, onPlay }: {
+function FavoritesList({ favorites, onPlay }: {
   favorites: Array<{ id: string; name: string; streamUrl: string; logoUrl?: string; kind: string }>;
-  channelNumbers: Map<string, number>;
   onPlay: (url: string, title: string) => void;
 }) {
   if (favorites.length === 0) return <div className="hot-status">Sin favoritos</div>;
@@ -682,9 +682,9 @@ function FavoritesList({ favorites, channelNumbers, onPlay }: {
           className="hot-channel"
           onEnterPress={() => onPlay(f.streamUrl, f.name)}
         >
-          <div className="hot-channel-num">{channelNumbers.get(f.id) ?? "★"}</div>
+          <div className="hot-channel-num"><Icon name="star" /></div>
           <div className="hot-channel-logo">
-            {f.logoUrl ? <img src={f.logoUrl} alt="" /> : <div className="hot-channel-logo-placeholder">★</div>}
+            {f.logoUrl ? <img src={f.logoUrl} alt="" /> : <div className="hot-channel-logo-placeholder"><Icon name="star" /></div>}
           </div>
           <div className="hot-channel-info">
             <div className="hot-channel-name">{f.name}</div>

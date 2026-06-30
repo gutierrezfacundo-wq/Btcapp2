@@ -64,6 +64,16 @@ export type SourceConfig =
   | { kind: "m3u"; playlistUrl: string; epgUrl?: string }
   | { kind: "xtream"; server: string; username: string; password: string };
 
+/** Una lista guardada (varias coexisten; una es la activa). */
+export interface SavedSource {
+  id: string;
+  name: string;
+  config: SourceConfig;
+  channelCount?: number;
+  status?: "ok" | "error";
+  lastUpdated?: number;
+}
+
 export function xtreamPlayerApi(s: Extract<SourceConfig, { kind: "xtream" }>): string {
   return `${s.server.replace(/\/$/, "")}/player_api.php?username=${encodeURIComponent(
     s.username,

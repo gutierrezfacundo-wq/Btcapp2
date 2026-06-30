@@ -1,14 +1,62 @@
 import { create } from "zustand";
-import type { Catalog, EpgProgram, MediaKind, SourceConfig } from "../data/types";
+import type { Catalog, EpgProgram, MediaKind, SavedSource, SourceConfig } from "../data/types";
 import { xtreamXmltvUrl } from "../data/types";
 import { loadM3uCatalog } from "../data/m3uCatalog";
 import { loadXtreamLive, loadXtreamMovies, loadXtreamSeries } from "../data/xtream";
 import { groupByChannel, parseXmltv } from "../data/xmltv";
 import { fetchText } from "../data/http";
 
-const SOURCE_KEY = "iptv.source.v1";
+const SOURCE_KEY = "iptv.source.v1";          // legacy (fuente unica) — se migra
+const SOURCES_KEY = "iptv.sources.v1";        // nuevo: array de listas guardadas
+const ACTIVE_KEY = "iptv.activeSource.v1";    // nuevo: id de la lista activa
 const FAVORITES_KEY = "iptv.favorites.v1";
 const CATALOG_CACHE_KEY = "iptv.catalog.v1";
+
+function genId(): string {
+  return `src-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`;
+}
+
+/** Carga las listas guardadas, migrando la fuente unica vieja si hace falta. */
+function loadSavedSources(): { sources: SavedSource[]; activeId: string | null } {
+  try {
+    const raw = localStorage.getItem(SOURCES_KEY);
+    if (raw) {
+      const sources = JSON.parse(raw) as SavedSource[];
+      const activeId = localStorage.getItem(ACTIVE_KEY) || sources[0]?.id || null;
+      return { sources, activeId };
+    }
+  } catch {
+    /* ignore */
+  }
+  // Migracion: fuente unica legacy -> primer SavedSource activo
+  try {
+    const legacy = localStorage.getItem(SOURCE_KEY);
+    if (legacy) {
+      const config = JSON.parse(legacy) as SourceConfig;
+      const migrated: SavedSource = {
+        id: genId(),
+        name: config.kind === "xtream" ? "Mi lista Xtream" : "Mi lista M3U",
+        config,
+      };
+      localStorage.setItem(SOURCES_KEY, JSON.stringify([migrated]));
+      localStorage.setItem(ACTIVE_KEY, migrated.id);
+      return { sources: [migrated], activeId: migrated.id };
+    }
+  } catch {
+    /* ignore */
+  }
+  return { sources: [], activeId: null };
+}
+
+function persistSources(sources: SavedSource[], activeId: string | null) {
+  try {
+    localStorage.setItem(SOURCES_KEY, JSON.stringify(sources));
+    if (activeId) localStorage.setItem(ACTIVE_KEY, activeId);
+    else localStorage.removeItem(ACTIVE_KEY);
+  } catch {
+    /* ignore */
+  }
+}
 
 interface CatalogCacheEntry {
   sourceKey: string;
@@ -57,15 +105,6 @@ export interface FavoriteItem {
   kind: MediaKind;
 }
 
-function loadSource(): SourceConfig | null {
-  try {
-    const raw = localStorage.getItem(SOURCE_KEY);
-    return raw ? (JSON.parse(raw) as SourceConfig) : null;
-  } catch {
-    return null;
-  }
-}
-
 function loadFavorites(): FavoriteItem[] {
   try {
     const raw = localStorage.getItem(FAVORITES_KEY);
@@ -76,7 +115,12 @@ function loadFavorites(): FavoriteItem[] {
 }
 
 interface AppState {
+  /** Listas guardadas y cual esta activa. */
+  sources: SavedSource[];
+  activeSourceId: string | null;
+  /** Config de la fuente activa (derivado; null si no hay activa). */
   source: SourceConfig | null;
+
   catalog: Catalog;
   loading: boolean;
   loadingStep: string | null;
@@ -96,7 +140,12 @@ interface AppState {
   };
   setUi: (patch: Partial<AppState["ui"]>) => void;
 
-  setSource: (s: SourceConfig) => Promise<void>;
+  // Multi-lista
+  addSource: (name: string, config: SourceConfig) => string;
+  updateSource: (id: string, patch: { name?: string; config?: SourceConfig }) => void;
+  removeSource: (id: string) => void;
+  setActiveSource: (id: string) => Promise<void>;
+
   clearSource: () => void;
   reload: () => Promise<void>;
   ensureMovies: () => Promise<void>;
@@ -114,8 +163,12 @@ const emptyCatalog: Catalog = {
   seriesCategories: [],
 };
 
+const initial = loadSavedSources();
+
 export const useAppStore = create<AppState>((set, get) => ({
-  source: loadSource(),
+  sources: initial.sources,
+  activeSourceId: initial.activeId,
+  source: initial.sources.find((s) => s.id === initial.activeId)?.config ?? null,
   catalog: emptyCatalog,
   loading: false,
   loadingStep: null,
@@ -127,16 +180,56 @@ export const useAppStore = create<AppState>((set, get) => ({
   ui: { tab: "live", category: null, selectedChannelId: null },
   setUi: (patch) => set({ ui: { ...get().ui, ...patch } }),
 
-  setSource: async (s) => {
-    localStorage.setItem(SOURCE_KEY, JSON.stringify(s));
-    set({ source: s });
+  addSource: (name, config) => {
+    const entry: SavedSource = { id: genId(), name: name.trim() || "Lista", config };
+    const sources = [...get().sources, entry];
+    persistSources(sources, get().activeSourceId);
+    set({ sources });
+    return entry.id;
+  },
+
+  updateSource: (id, patch) => {
+    const sources = get().sources.map((s) =>
+      s.id === id ? { ...s, ...(patch.name != null ? { name: patch.name } : {}), ...(patch.config ? { config: patch.config } : {}) } : s,
+    );
+    persistSources(sources, get().activeSourceId);
+    const isActive = id === get().activeSourceId;
+    set({
+      sources,
+      ...(isActive ? { source: sources.find((s) => s.id === id)?.config ?? null } : {}),
+    });
+  },
+
+  removeSource: (id) => {
+    const remaining = get().sources.filter((s) => s.id !== id);
+    let activeId = get().activeSourceId;
+    if (activeId === id) activeId = remaining[0]?.id ?? null;
+    persistSources(remaining, activeId);
+    set({
+      sources: remaining,
+      activeSourceId: activeId,
+      source: remaining.find((s) => s.id === activeId)?.config ?? null,
+    });
+    if (activeId) void get().reload();
+    else set({ catalog: emptyCatalog, epgByChannel: new Map() });
+  },
+
+  setActiveSource: async (id) => {
+    const src = get().sources.find((s) => s.id === id);
+    if (!src) return;
+    persistSources(get().sources, id);
+    set({
+      activeSourceId: id,
+      source: src.config,
+      catalog: emptyCatalog,
+      loadedSections: { movies: false, series: false },
+      ui: { tab: "live", category: null, selectedChannelId: null },
+    });
     await get().reload();
   },
 
   clearSource: () => {
-    localStorage.removeItem(SOURCE_KEY);
     set({
-      source: null,
       catalog: emptyCatalog,
       epgByChannel: new Map(),
       loadedSections: { movies: false, series: false },
