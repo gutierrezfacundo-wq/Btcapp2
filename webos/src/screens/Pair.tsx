@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { FocusContext, useFocusable, setFocus } from "@noriginmedia/norigin-spatial-navigation";
 import QRCode from "qrcode";
 import { useAppStore } from "../store/useAppStore";
 import type { SourceConfig } from "../data/types";
+import { encodeB64Url } from "../data/b64url";
 import { FocusableButton } from "../components/FocusableButton";
 import { Icon } from "../components/Icon";
 import { isBackKey } from "../webos/remote-keys";
@@ -24,10 +25,15 @@ interface CompanionPayload {
 
 export function Pair() {
   const navigate = useNavigate();
+  const location = useLocation();
   const companionUrl = useAppStore((s) => s.companionUrl);
   const addSource = useAppStore((s) => s.addSource);
   const setActiveSource = useAppStore((s) => s.setActiveSource);
   const setSubtitlesApiKey = useAppStore((s) => s.setSubtitlesApiKey);
+
+  // Config actual del editor (si vinimos desde "Vincular con el celular" en Mis
+  // Listas): se manda codificada en el propio QR para precargar el formulario.
+  const prefill = (location.state as { prefill?: CompanionPayload } | null)?.prefill;
 
   const codeRef = useRef(genCode());
   const code = codeRef.current;
@@ -37,7 +43,8 @@ export function Pair() {
   const { ref, focusKey } = useFocusable({ trackChildren: true, focusKey: "PAIR" });
   useEffect(() => { setFocus("PAIR_CANCEL"); }, []);
 
-  const pairUrl = companionUrl ? `${companionUrl}/?code=${code}` : "";
+  const cfgParam = prefill && (prefill.source || prefill.name || prefill.subtitlesApiKey) ? `&cfg=${encodeB64Url(prefill)}` : "";
+  const pairUrl = companionUrl ? `${companionUrl}/?code=${code}${cfgParam}` : "";
 
   useEffect(() => {
     if (!pairUrl) return;

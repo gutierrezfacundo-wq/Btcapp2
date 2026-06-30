@@ -266,7 +266,12 @@ export function Setup() {
                       <FocusableInput value={companionUrl} onChange={setCompanionUrl} placeholder="URL de tu companion, ej. https://tu-proyecto.pages.dev" />
                     </div>
                     <div className="a-pdesc" style={{ marginTop: 6 }}>Pegá la URL de la app web que desplegaste (Cloudflare Pages). Después tocá “Vincular” para mostrar el QR.</div>
-                    <FocusableButton className="btn primary" style={{ marginTop: 10 }} disabled={!companionUrl} onEnterPress={() => navigate("/pair")}>
+                    <FocusableButton
+                      className="btn primary"
+                      style={{ marginTop: 10 }}
+                      disabled={!companionUrl}
+                      onEnterPress={() => navigate("/pair", { state: { prefill: { name, subtitlesApiKey, source: config } } })}
+                    >
                       <Icon name="qr_code_2" /> Vincular con el celular
                     </FocusableButton>
                   </div>

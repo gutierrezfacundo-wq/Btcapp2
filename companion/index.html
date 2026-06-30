@@ -84,6 +84,37 @@
   var kind = "xtream";
   if (!code) document.getElementById("nocode").style.display = "block";
 
+  function decodeB64Url(s){
+    try {
+      s = s.replace(/-/g, "+").replace(/_/g, "/");
+      while (s.length % 4) s += "=";
+      return JSON.parse(decodeURIComponent(escape(atob(s))));
+    } catch (e) { return null; }
+  }
+
+  // Precarga: si la TV mandó la config actual codificada en el QR (?cfg=...),
+  // rellenamos el formulario para editar en vez de tipear todo de cero.
+  var cfgRaw = params.get("cfg");
+  if (cfgRaw) {
+    var cfg = decodeB64Url(cfgRaw);
+    if (cfg) {
+      if (cfg.name) document.getElementById("name").value = cfg.name;
+      if (cfg.subtitlesApiKey) document.getElementById("osk").value = cfg.subtitlesApiKey;
+      if (cfg.source) {
+        if (cfg.source.kind === "m3u") {
+          if (cfg.source.playlistUrl) document.getElementById("m3uUrl").value = cfg.source.playlistUrl;
+          if (cfg.source.epgUrl) document.getElementById("epgUrl").value = cfg.source.epgUrl;
+          setTab("m3u");
+        } else if (cfg.source.kind === "xtream") {
+          if (cfg.source.server) document.getElementById("server").value = cfg.source.server;
+          if (cfg.source.username) document.getElementById("user").value = cfg.source.username;
+          if (cfg.source.password) document.getElementById("pass").value = cfg.source.password;
+          setTab("xtream");
+        }
+      }
+    }
+  }
+
   function setTab(k){
     kind = k;
     document.getElementById("t-xt").classList.toggle("on", k==="xtream");
