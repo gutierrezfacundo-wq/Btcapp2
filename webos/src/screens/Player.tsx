@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import Hls from "hls.js";
 import { FocusContext, useFocusable, setFocus } from "@noriginmedia/norigin-spatial-navigation";
 import { FocusableButton } from "../components/FocusableButton";
@@ -23,6 +23,10 @@ export function Player() {
   const title = params.get("title") ?? "";
   const meta = params.get("meta") ?? "";
   const navigate = useNavigate();
+  const location = useLocation();
+  // navigate(-1) es poco confiable en webOS (HashRouter); volvemos a un destino explícito.
+  const from = (location.state as { from?: string } | null)?.from;
+  const goBack = () => navigate(from ?? "/hub", { replace: true });
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [overlayVisible, setOverlayVisible] = useState(true);
@@ -96,7 +100,7 @@ export function Player() {
       if (isBackKey(e)) {
         e.preventDefault();
         if (tracksRef.current) { setTracksOpen(false); setFocus("PL_TRACKS"); return; }
-        navigate(-1); return;
+        goBack(); return;
       }
       if (isPlayPauseKey(e)) { e.preventDefault(); togglePlay(); return; }
       if (!tracksRef.current) {
@@ -120,7 +124,7 @@ export function Player() {
         <div className="ply-grad" style={{ opacity: overlayVisible ? 1 : 0, transition: "opacity .25s" }} />
         <div style={{ opacity: overlayVisible ? 1 : 0, transition: "opacity .25s", pointerEvents: overlayVisible ? "auto" : "none" }}>
           <div className="ply-top">
-            <FocusableButton className="ply-back" onEnterPress={() => navigate(-1)}>
+            <FocusableButton className="ply-back" onEnterPress={goBack}>
               <Icon name="arrow_back" /> Volver
             </FocusableButton>
             <div className="ply-titwrap">
@@ -152,7 +156,7 @@ export function Player() {
               </FocusableButton>
             </div>
           </div>
-          {tracksOpen ? <TrackMenu hls={hls} onClose={() => { setTracksOpen(false); setFocus("PL_TRACKS"); }} /> : null}
+          {tracksOpen ? <TrackMenu hls={hls} video={videoRef.current} onClose={() => { setTracksOpen(false); setFocus("PL_TRACKS"); }} /> : null}
           {error ? <div className="eo-r" style={{ position: "absolute", bottom: 180, left: 0, right: 0, textAlign: "center", color: "var(--err)" }}>{error}</div> : null}
         </div>
       </div>

@@ -150,18 +150,23 @@ export function Home() {
   const play = (url: string, title: string, hist?: { id: string; posterUrl?: string; sub?: string; kind: "live" | "movie" | "series-episode" }) => {
     const route = `/player?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}${hist?.sub ? `&meta=${encodeURIComponent(hist.sub)}` : ""}`;
     if (hist) pushHistory({ id: hist.id, name: title, route, posterUrl: hist.posterUrl, sub: hist.sub, kind: hist.kind });
-    navigate(route);
+    navigate(route, { state: { from: `/home?tab=${tab}` } });
   };
   const openSeries = (id: string, name: string, posterUrl?: string) => {
     const route = `/series/${id}?name=${encodeURIComponent(name)}`;
     pushHistory({ id: `series:${id}`, name, route, posterUrl, kind: "series-episode" });
-    navigate(route);
+    navigate(route, { state: { from: `/home?tab=series` } });
   };
 
   const selectedChannel = selectedChannelId
     ? catalog.liveChannels.find((c) => c.id === selectedChannelId) ?? null : null;
 
   const title = tab === "live" ? "En vivo" : tab === "movies" ? "Películas" : tab === "series" ? "Series" : "Favoritos";
+
+  // Películas/Series se bajan a demanda: mostramos spinner mientras la sección carga.
+  const sectionLoading =
+    (tab === "movies" && !loadedSections.movies) || (tab === "series" && !loadedSections.series);
+  const retrySection = () => { if (tab === "movies") ensureMovies(); else if (tab === "series") ensureSeries(); };
 
   return (
     <FocusContext.Provider value={focusKey}>
@@ -251,6 +256,20 @@ export function Home() {
               </>
             ) : tab === "favorites" ? (
               <FavScreen favorites={favorites} onPlay={(url, title, h) => play(url, title, h)} onToggle={toggleFavorite} />
+            ) : sectionLoading ? (
+              error ? (
+                <div className="ld">
+                  <Icon name="wifi_off" className="eo-ic" />
+                  <div className="ld-step" style={{ color: "var(--err)" }}>{error}</div>
+                  <FocusableButton className="btn primary" onEnterPress={retrySection}>Reintentar</FocusableButton>
+                </div>
+              ) : (
+                <div className="ld">
+                  <div className="ld-spin spinner" />
+                  <div className="ld-step">{loadingStep ?? (tab === "movies" ? "Cargando películas…" : "Cargando series…")}</div>
+                  {loadingProgress ? <div className="ld-count">{loadingProgress.current} / {loadingProgress.total}</div> : null}
+                </div>
+              )
             ) : (
               <GridScreen
                 title={title}

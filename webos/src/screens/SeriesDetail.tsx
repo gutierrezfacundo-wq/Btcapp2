@@ -10,6 +10,7 @@ import { Rail } from "../components/Rail";
 import { TopBar } from "../components/TopBar";
 import { Hints } from "../components/Hints";
 import { useRailNav } from "../hooks/useRailNav";
+import { isBackKey } from "../webos/remote-keys";
 
 function initials(s: string) {
   return s.split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
@@ -44,6 +45,13 @@ export function SeriesDetail() {
 
   useEffect(() => { setFocus("SER_PLAY"); }, [episodes]);
 
+  const goBack = () => navigate("/home?tab=series");
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (isBackKey(e)) { e.preventDefault(); goBack(); } };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const seasons = useMemo(
     () => (episodes ? [...new Set(episodes.map((e) => e.seasonNumber))].sort((a, b) => a - b) : []),
     [episodes],
@@ -59,7 +67,7 @@ export function SeriesDetail() {
     const meta = `T${ep.seasonNumber} · E${ep.episodeNumber}${ep.duration ? ` · ${ep.duration}` : ""}`;
     const route = `/player?url=${encodeURIComponent(ep.streamUrl)}&title=${encodeURIComponent(ft)}&meta=${encodeURIComponent(meta)}`;
     pushHistory({ id: `series:${id}`, name: title, route, posterUrl: info?.posterUrl, sub: meta, kind: "series-episode" });
-    navigate(route);
+    navigate(route, { state: { from: `/series/${id}?name=${encodeURIComponent(title)}` } });
   };
 
   return (
@@ -76,7 +84,7 @@ export function SeriesDetail() {
             ) : (
               <div className="det">
                 <div className="det-top">
-                  <FocusableButton className="det-back" onEnterPress={() => navigate(-1)}>
+                  <FocusableButton className="det-back" onEnterPress={goBack}>
                     <Icon name="arrow_back" /> Volver a Series
                   </FocusableButton>
                 </div>
