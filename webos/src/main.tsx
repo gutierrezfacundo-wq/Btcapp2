@@ -9,9 +9,9 @@ import "./styles/aurora.css";
 initSpatial({
   debug: false,
   visualDebug: false,
-  // Menos throttle = el foco responde mas rapido al D-pad.
-  throttle: 40,
-  throttleKeypresses: true,
+  // Sin throttle el foco responde inmediato a cada pulsacion del D-pad.
+  throttle: 0,
+  throttleKeypresses: false,
 });
 
 ReactDOM.createRoot(document.getElementById("root")!).render(

@@ -17,7 +17,7 @@ import { isBackKey } from "../webos/remote-keys";
 
 type Tab = "live" | "movies" | "series" | "favorites";
 // Tope de filas en vivo: menos elementos enfocables = D-pad mas rapido en la TV.
-const RENDER_CAP = 250;
+const RENDER_CAP = 120;
 // Las grillas VOD traen imagen por item: un tope mas bajo mantiene la navegacion fluida en la TV.
 const GRID_CAP = 120;
 

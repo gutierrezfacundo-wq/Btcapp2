@@ -77,7 +77,9 @@ a { color: var(--primary); text-decoration: none; }
 
 .focusable {
   outline: none;
-  transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease;
+  /* Solo animamos transform (GPU). Animar box-shadow repinta cada frame y
+     hace lenta la navegación en la TV; el anillo de foco aparece instantáneo. */
+  transition: transform 90ms ease;
 }
 
 .focusable:focus,

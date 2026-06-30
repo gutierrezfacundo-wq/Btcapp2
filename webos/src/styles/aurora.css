@@ -423,6 +423,10 @@
    ganaban por orden, dejándolos scrollables solo por D-pad). */
 .scroll{overflow-y:auto !important}
 
+/* Navegación más rápida: el cambio de foco no anima box-shadow (repaint caro). */
+.a-ch{transition:transform .09s !important}
+.a-cat{transition:none !important}
+
 /* Lista en vivo / categorias mas compactas: entran mas elementos */
 .a-ch{height:74px;margin-bottom:7px}
 .a-ch-num{font-size:19px;width:48px}
