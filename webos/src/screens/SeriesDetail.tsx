@@ -62,12 +62,18 @@ export function SeriesDetail() {
   );
 
   const pushHistory = useAppStore((s) => s.pushHistory);
+  const toggleFavorite = useAppStore((s) => s.toggleFavorite);
+  const favorites = useAppStore((s) => s.favorites);
+  const favId = `series:${id}`;
+  const isFav = favorites.some((f) => f.id === favId);
+  const toggleFav = () => toggleFavorite({ id: favId, name: title, streamUrl: seasonEpisodes[0]?.streamUrl ?? episodes?.[0]?.streamUrl ?? "", logoUrl: info?.posterUrl ?? meta?.posterUrl, kind: "series-episode" });
   const play = (ep: Episode) => {
     const ft = `${title} · T${ep.seasonNumber} · E${ep.episodeNumber}`;
     const meta = `T${ep.seasonNumber} · E${ep.episodeNumber}${ep.duration ? ` · ${ep.duration}` : ""}`;
     const route = `/player?url=${encodeURIComponent(ep.streamUrl)}&title=${encodeURIComponent(ft)}&meta=${encodeURIComponent(meta)}`;
     pushHistory({ id: `series:${id}`, name: title, route, posterUrl: info?.posterUrl, sub: meta, kind: "series-episode" });
-    navigate(route, { state: { from: `/series/${id}?name=${encodeURIComponent(title)}` } });
+    const fav = { id: `series:${id}`, name: title, streamUrl: ep.streamUrl, logoUrl: info?.posterUrl, kind: "series-episode" as const };
+    navigate(route, { state: { from: `/series/${id}?name=${encodeURIComponent(title)}`, fav, cid: ep.id } });
   };
 
   return (
@@ -101,11 +107,16 @@ export function SeriesDetail() {
                       {seasons.length ? <span className="det-mchip">{seasons.length} temporada{seasons.length > 1 ? "s" : ""}</span> : null}
                     </div>
                     {info?.plot || meta?.plot ? <div className="det-syn">{info?.plot || meta?.plot}</div> : null}
-                    {seasonEpisodes[0] ? (
-                      <FocusableButton focusKey="SER_PLAY" className="det-play" onEnterPress={() => play(seasonEpisodes[0])}>
-                        <Icon name="play_arrow" /> Reproducir T{seasonEpisodes[0].seasonNumber} · E{seasonEpisodes[0].episodeNumber}
+                    <div style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
+                      {seasonEpisodes[0] ? (
+                        <FocusableButton focusKey="SER_PLAY" className="det-play" onEnterPress={() => play(seasonEpisodes[0])}>
+                          <Icon name="play_arrow" /> Reproducir T{seasonEpisodes[0].seasonNumber} · E{seasonEpisodes[0].episodeNumber}
+                        </FocusableButton>
+                      ) : null}
+                      <FocusableButton className="btn" onEnterPress={toggleFav}>
+                        <Icon name={isFav ? "star" : "star_border"} /> {isFav ? "En favoritos" : "Favorito"}
                       </FocusableButton>
-                    ) : null}
+                    </div>
                   </div>
                 </div>
                 {seasons.length > 1 ? (

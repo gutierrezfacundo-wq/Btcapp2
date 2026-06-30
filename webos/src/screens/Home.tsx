@@ -189,7 +189,8 @@ export function Home() {
   const play = (url: string, title: string, hist?: { id: string; posterUrl?: string; sub?: string; kind: "live" | "movie" | "series-episode" }) => {
     const route = `/player?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}${hist?.sub ? `&meta=${encodeURIComponent(hist.sub)}` : ""}`;
     if (hist) pushHistory({ id: hist.id, name: title, route, posterUrl: hist.posterUrl, sub: hist.sub, kind: hist.kind });
-    navigate(route, { state: { from: `/home?tab=${tab}` } });
+    const fav = hist ? { id: hist.id, name: title, streamUrl: url, logoUrl: hist.posterUrl, kind: hist.kind } : undefined;
+    navigate(route, { state: { from: `/home?tab=${tab}`, fav, cid: hist?.id } });
   };
   const openSeries = (id: string, name: string, posterUrl?: string) => {
     const route = `/series/${id}?name=${encodeURIComponent(name)}`;
@@ -405,6 +406,10 @@ function PreviewPanel({
   const prevFs = useRef(false);
   const tracksRef = useRef(false); tracksRef.current = tracksOpen;
   const ql = channel ? quality(channel.name) : null;
+  const toggleFavorite = useAppStore((s) => s.toggleFavorite);
+  const favorites = useAppStore((s) => s.favorites);
+  const isFav = !!channel && favorites.some((f) => f.id === channel.id);
+  const toggleFav = () => { if (channel) toggleFavorite({ id: channel.id, name: channel.name, streamUrl: channel.streamUrl, logoUrl: channel.logoUrl, kind: "live" }); };
 
   useEffect(() => { setPaused(false); setTracksOpen(false); setBitrate(0); setRes(null); }, [channel?.id]);
   const togglePause = () => { const v = videoElRef.current; if (!v) return; if (v.paused) { v.play().catch(() => undefined); setPaused(false); } else { v.pause(); setPaused(true); } };
@@ -476,6 +481,7 @@ function PreviewPanel({
                     <div className="a-fs-ctrls">
                       <FocusableButton focusKey="FS_PAUSE" className="a-fs-btn" onEnterPress={togglePause}><Icon name={paused ? "play_arrow" : "pause"} /> {paused ? "Reproducir" : "Pausa"}</FocusableButton>
                       <FocusableButton focusKey="FS_TRACKS" className="a-fs-btn" onEnterPress={() => { setTracksOpen((v) => !v); poke(); window.setTimeout(() => setFocus("TRK_FIRST"), 60); }}><Icon name="tune" /> Pistas</FocusableButton>
+                      <FocusableButton className="a-fs-btn" onEnterPress={toggleFav}><Icon name={isFav ? "star" : "star_border"} /> {isFav ? "Quitar" : "Favorito"}</FocusableButton>
                       <FocusableButton className="a-fs-btn" onEnterPress={onExitFullscreen}><Icon name="arrow_back" /> Volver</FocusableButton>
                     </div>
                   </div>
@@ -506,6 +512,7 @@ function PreviewPanel({
               <div className="a-ctrls">
                 <FocusableButton focusKey="PV_PAUSE" className="a-btn" onEnterPress={togglePause}><Icon name={paused ? "play_arrow" : "pause"} /> {paused ? "Reproducir" : "Pausa"}</FocusableButton>
                 <FocusableButton className="a-btn primary" onEnterPress={onEnterFullscreen}><Icon name="fullscreen" /> Pantalla completa</FocusableButton>
+                <FocusableButton className="a-btn" onEnterPress={toggleFav}><Icon name={isFav ? "star" : "star_border"} /> {isFav ? "Quitar" : "Favorito"}</FocusableButton>
               </div>
             </>
           ) : null}

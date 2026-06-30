@@ -5,7 +5,7 @@ import { FocusContext, useFocusable, setFocus } from "@noriginmedia/norigin-spat
 import { FocusableButton } from "../components/FocusableButton";
 import { Icon } from "../components/Icon";
 import { TrackMenu } from "../components/TrackMenu";
-import { useAppStore } from "../store/useAppStore";
+import { useAppStore, type FavoriteItem } from "../store/useAppStore";
 import { searchSubtitles, downloadSubtitleVtt, type SubtitleResult } from "../data/opensubtitles";
 import { isBackKey, isPlayPauseKey } from "../webos/remote-keys";
 
@@ -51,6 +51,23 @@ export function Player() {
   const [subError, setSubError] = useState<string | null>(null);
   const [subUrl, setSubUrl] = useState<string | null>(null);
   const subQuery = title.split(" · ")[0].trim();
+
+  // ===== Favoritos / Continuar viendo =====
+  const cid = (location.state as { cid?: string } | null)?.cid;
+  const fav = (location.state as { fav?: FavoriteItem } | null)?.fav;
+  const toggleFavorite = useAppStore((s) => s.toggleFavorite);
+  const favorites = useAppStore((s) => s.favorites);
+  const isFav = !!fav && favorites.some((f) => f.id === fav.id);
+  const saveProgress = useAppStore((s) => s.saveProgress);
+  const clearProgress = useAppStore((s) => s.clearProgress);
+  const resumeAt = useRef(cid ? (useAppStore.getState().progress[cid]?.pos ?? 0) : 0);
+  const resumedRef = useRef(false);
+  const lastSave = useRef(0);
+  const [resumed, setResumed] = useState(false);
+  const restart = () => {
+    const v = videoRef.current; if (!v) return;
+    v.currentTime = 0; if (cid) clearProgress(cid); resumeAt.current = 0; setResumed(false); showOverlay();
+  };
 
   const openSubs = () => {
     setSubsOpen(true); showOverlay();
@@ -110,6 +127,16 @@ export function Player() {
       video.src = url;
       setHls(null);
     }
+    // Continuar viendo: saltar a la posición guardada en cuanto haya metadata.
+    if (resumeAt.current > 5) {
+      const seekOnce = () => {
+        if (resumedRef.current) return;
+        resumedRef.current = true;
+        try { video.currentTime = resumeAt.current; setResumed(true); } catch { /* noop */ }
+      };
+      video.addEventListener("loadedmetadata", seekOnce, { once: true });
+      video.addEventListener("canplay", seekOnce, { once: true });
+    }
     video.play().catch(() => undefined);
     showOverlay();
     setFocus("PL_PLAY");
@@ -119,7 +146,14 @@ export function Player() {
 
   useEffect(() => {
     const v = videoRef.current; if (!v) return;
-    const onTime = () => { setCur(v.currentTime); setDur(v.duration || 0); };
+    const onTime = () => {
+      setCur(v.currentTime); setDur(v.duration || 0);
+      // Guardar progreso cada ~5s para "continuar viendo".
+      if (cid && v.duration && Math.abs(v.currentTime - lastSave.current) > 5) {
+        lastSave.current = v.currentTime;
+        saveProgress(cid, v.currentTime, v.duration);
+      }
+    };
     const onPlay = () => setPaused(false);
     const onPause = () => setPaused(true);
     v.addEventListener("timeupdate", onTime);
@@ -131,7 +165,9 @@ export function Player() {
       v.removeEventListener("durationchange", onTime);
       v.removeEventListener("play", onPlay);
       v.removeEventListener("pause", onPause);
+      if (cid && v.duration) saveProgress(cid, v.currentTime, v.duration);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -188,6 +224,7 @@ export function Player() {
             <div className="ply-titwrap">
               <div className="ply-tit">{title}</div>
               {meta ? <div className="ply-sub">{meta}</div> : null}
+              {resumed && resumeAt.current > 5 ? <div className="ply-sub" style={{ color: "var(--accent)" }}>Continuando desde {fmt(resumeAt.current)}</div> : null}
             </div>
           </div>
 
@@ -215,6 +252,16 @@ export function Player() {
               <FocusableButton focusKey="PL_SUBS" className="ply-btn" onEnterPress={openSubs}>
                 <Icon name="subtitles" /> Buscar subtítulos
               </FocusableButton>
+              {resumeAt.current > 5 ? (
+                <FocusableButton className="ply-btn" onEnterPress={restart}>
+                  <Icon name="restart_alt" /> Reiniciar
+                </FocusableButton>
+              ) : null}
+              {fav ? (
+                <FocusableButton className="ply-btn" onEnterPress={() => toggleFavorite(fav)}>
+                  <Icon name={isFav ? "star" : "star_border"} /> {isFav ? "En favoritos" : "Favorito"}
+                </FocusableButton>
+              ) : null}
             </div>
           </div>
           {tracksOpen ? <TrackMenu hls={hls} video={videoRef.current} onClose={() => { setTracksOpen(false); setFocus("PL_TRACKS"); }} /> : null}

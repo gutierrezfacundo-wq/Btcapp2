@@ -13,6 +13,7 @@ const FAVORITES_KEY = "iptv.favorites.v1";
 const CATALOG_CACHE_KEY = "iptv.catalog.v1";
 const HISTORY_KEY = "iptv.history.v1";
 const SUBS_KEY = "iptv.subtitlesApiKey.v1";   // API key de OpenSubtitles (la ingresa el usuario)
+const PROGRESS_KEY = "iptv.progress.v1";      // posición de reproducción por contenido (continuar viendo)
 
 function genId(): string {
   return `src-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`;
@@ -155,6 +156,8 @@ interface AppState {
   history: HistoryItem[];
   /** API key de OpenSubtitles para buscar/descargar subtítulos (vacío = desactivado). */
   subtitlesApiKey: string;
+  /** Posición de reproducción por contenido (segundos) para "continuar viendo". */
+  progress: Record<string, { pos: number; dur: number }>;
   epgByChannel: Map<string, EpgProgram[]>;
 
   /** Indica si una seccion VOD ya se cargo a demanda. */
@@ -182,6 +185,8 @@ interface AppState {
   isFavorite: (id: string) => boolean;
   pushHistory: (item: Omit<HistoryItem, "at">) => void;
   setSubtitlesApiKey: (key: string) => void;
+  saveProgress: (id: string, pos: number, dur: number) => void;
+  clearProgress: (id: string) => void;
 }
 
 const emptyCatalog: Catalog = {
@@ -207,6 +212,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   favorites: loadFavorites(),
   history: loadHistory(),
   subtitlesApiKey: (() => { try { return localStorage.getItem(SUBS_KEY) ?? ""; } catch { return ""; } })(),
+  progress: (() => { try { return JSON.parse(localStorage.getItem(PROGRESS_KEY) ?? "{}"); } catch { return {}; } })(),
   epgByChannel: new Map(),
   loadedSections: { movies: false, series: false },
   ui: { tab: "live", category: null, selectedChannelId: null },
@@ -405,6 +411,22 @@ export const useAppStore = create<AppState>((set, get) => ({
     const k = key.trim();
     try { localStorage.setItem(SUBS_KEY, k); } catch { /* ignore */ }
     set({ subtitlesApiKey: k });
+  },
+
+  saveProgress: (id, pos, dur) => {
+    if (!id || !isFinite(pos) || !isFinite(dur) || dur <= 0) return;
+    const next = { ...get().progress };
+    // Cerca del final o del principio: no guardamos (se considera "visto"/sin empezar).
+    if (pos < 15 || pos > dur - 30) delete next[id];
+    else next[id] = { pos, dur };
+    try { localStorage.setItem(PROGRESS_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+    set({ progress: next });
+  },
+  clearProgress: (id) => {
+    const next = { ...get().progress };
+    delete next[id];
+    try { localStorage.setItem(PROGRESS_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+    set({ progress: next });
   },
 }));
 
