@@ -417,3 +417,17 @@
 
 .grd-chips{flex-wrap:nowrap;overflow:hidden}
 .grd-chips .chip{flex-shrink:0}
+
+/* Lista en vivo / categorias mas compactas: entran mas elementos */
+.a-ch{height:74px;margin-bottom:7px}
+.a-ch-num{font-size:19px;width:48px}
+.a-ch-logo{width:54px;height:54px;font-size:20px}
+.a-ch-name{font-size:21px}
+.a-ch-now{font-size:16px}
+.a-cat{padding:12px 24px}
+.a-cat-n{font-size:20px}
+.a-cat-t{font-size:15px}
+
+/* Panel de subtitulos online: idioma + release */
+.a-trk-lang{font-family:'Space Grotesk',monospace;font-size:15px;font-weight:700;color:var(--accent);background:var(--soft);padding:2px 9px;border-radius:6px;flex-shrink:0}
+.a-trk-rel{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left;margin-left:10px;font-size:19px}

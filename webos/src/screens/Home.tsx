@@ -403,14 +403,13 @@ function PreviewPanel({
             {!fullscreen ? (
               <>
                 <div className="a-vid-grad" />
-                <div className="a-vid-top">
-                  <span className="a-vid-live"><span className="a-livedot" /> EN VIVO</span>
-                  {res || bitrate ? (
+                {res || bitrate ? (
+                  <div className="a-vid-top">
                     <span className="a-vid-feed">
                       {res ? `${res.h}p` : ""}{res && bitrate ? " · " : ""}{bitrate ? `${Math.round(bitrate / 1e6)} Mbps` : ""}
                     </span>
-                  ) : null}
-                </div>
+                  </div>
+                ) : null}
                 <div className="a-vid-name">{channel.name}</div>
                 <div className="a-vid-chips">
                   {channelNumber !== null ? <span className="a-chip" style={{ background: "var(--surface2)" }}>Nº {channelNumber}</span> : null}

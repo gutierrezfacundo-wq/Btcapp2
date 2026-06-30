@@ -5,6 +5,8 @@ import { FocusContext, useFocusable, setFocus } from "@noriginmedia/norigin-spat
 import { FocusableButton } from "../components/FocusableButton";
 import { Icon } from "../components/Icon";
 import { TrackMenu } from "../components/TrackMenu";
+import { useAppStore } from "../store/useAppStore";
+import { searchSubtitles, downloadSubtitleVtt, type SubtitleResult } from "../data/opensubtitles";
 import { isBackKey, isPlayPauseKey } from "../webos/remote-keys";
 
 function fmt(t: number): string {
@@ -38,6 +40,52 @@ export function Player() {
   const [tracksOpen, setTracksOpen] = useState(false);
   const tracksRef = useRef(false); tracksRef.current = tracksOpen;
   const overlayTimer = useRef<number | null>(null);
+
+  // ===== Subtítulos online (OpenSubtitles) =====
+  const subtitlesApiKey = useAppStore((s) => s.subtitlesApiKey);
+  const [subsOpen, setSubsOpen] = useState(false);
+  const subsRef = useRef(false); subsRef.current = subsOpen;
+  const [subResults, setSubResults] = useState<SubtitleResult[] | null>(null);
+  const [subLoading, setSubLoading] = useState(false);
+  const [subError, setSubError] = useState<string | null>(null);
+  const [subUrl, setSubUrl] = useState<string | null>(null);
+  const subQuery = title.split(" · ")[0].trim();
+
+  const openSubs = () => {
+    setSubsOpen(true); showOverlay();
+    window.setTimeout(() => setFocus("SUB_FIRST"), 60);
+    if (subResults || subLoading) return;
+    setSubLoading(true); setSubError(null);
+    searchSubtitles(subtitlesApiKey, subQuery)
+      .then((r) => setSubResults(r))
+      .catch((e) => setSubError(e instanceof Error ? e.message : "Error de búsqueda"))
+      .finally(() => setSubLoading(false));
+  };
+
+  const pickSub = async (fileId: number) => {
+    setSubLoading(true); setSubError(null);
+    try {
+      const vtt = await downloadSubtitleVtt(subtitlesApiKey, fileId);
+      const blob = new Blob([vtt], { type: "text/vtt" });
+      setSubUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return URL.createObjectURL(blob); });
+      setSubsOpen(false); setFocus("PL_SUBS");
+    } catch (e) {
+      setSubError(e instanceof Error ? e.message : "No se pudo descargar");
+    } finally {
+      setSubLoading(false);
+    }
+  };
+
+  // Activa la pista recién cargada y limpia el blob al desmontar.
+  useEffect(() => {
+    const v = videoRef.current; if (!v || !subUrl) return;
+    const t = window.setTimeout(() => {
+      const tracks = v.textTracks;
+      for (let i = 0; i < tracks.length; i++) tracks[i].mode = i === tracks.length - 1 ? "showing" : "disabled";
+    }, 120);
+    return () => window.clearTimeout(t);
+  }, [subUrl]);
+  useEffect(() => () => { if (subUrl) URL.revokeObjectURL(subUrl); }, [subUrl]);
 
   const { ref, focusKey } = useFocusable({ trackChildren: true, focusKey: "PLAYER" });
 
@@ -99,11 +147,12 @@ export function Player() {
     const onKey = (e: KeyboardEvent) => {
       if (isBackKey(e)) {
         e.preventDefault();
+        if (subsRef.current) { setSubsOpen(false); setFocus("PL_SUBS"); return; }
         if (tracksRef.current) { setTracksOpen(false); setFocus("PL_TRACKS"); return; }
         goBack(); return;
       }
       if (isPlayPauseKey(e)) { e.preventDefault(); togglePlay(); return; }
-      if (!tracksRef.current) {
+      if (!tracksRef.current && !subsRef.current) {
         if (e.key === "ArrowLeft") seek(-10);
         else if (e.key === "ArrowRight") seek(10);
       }
@@ -120,7 +169,9 @@ export function Player() {
     <FocusContext.Provider value={focusKey}>
       <div className="ply" ref={ref} onMouseMove={showOverlay} style={{ position: "fixed" }}>
         <video ref={videoRef} autoPlay playsInline controls={false}
-          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain", background: "#000" }} />
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain", background: "#000" }}>
+          {subUrl ? <track kind="subtitles" src={subUrl} default /> : null}
+        </video>
         <div className="ply-grad" style={{ opacity: overlayVisible ? 1 : 0, transition: "opacity .25s" }} />
         <div style={{ opacity: overlayVisible ? 1 : 0, transition: "opacity .25s", pointerEvents: overlayVisible ? "auto" : "none" }}>
           <div className="ply-top">
@@ -154,9 +205,38 @@ export function Player() {
               <FocusableButton focusKey="PL_TRACKS" className="ply-btn" onEnterPress={() => { setTracksOpen((v) => !v); showOverlay(); window.setTimeout(() => setFocus("TRK_FIRST"), 60); }}>
                 <Icon name="tune" /> Audio y subtítulos
               </FocusableButton>
+              <FocusableButton focusKey="PL_SUBS" className="ply-btn" onEnterPress={openSubs}>
+                <Icon name="subtitles" /> Buscar subtítulos
+              </FocusableButton>
             </div>
           </div>
           {tracksOpen ? <TrackMenu hls={hls} video={videoRef.current} onClose={() => { setTracksOpen(false); setFocus("PL_TRACKS"); }} /> : null}
+          {subsOpen ? (
+            <div className="a-trk">
+              <div className="a-trk-h"><Icon name="subtitles" /> Subtítulos · «{subQuery}»</div>
+              <div className="a-trk-scroll scroll">
+                {!subtitlesApiKey ? (
+                  <div className="a-pdesc">Configurá tu API key de OpenSubtitles en Mis Listas para buscar subtítulos.</div>
+                ) : subLoading ? (
+                  <div className="a-pdesc"><span className="spinner" style={{ width: 22, height: 22, display: "inline-block", verticalAlign: "middle", marginRight: 8 }} /> Buscando…</div>
+                ) : subError ? (
+                  <div className="a-pdesc" style={{ color: "var(--err)" }}>{subError}</div>
+                ) : subResults && subResults.length ? (
+                  <>
+                    {subUrl ? <FocusableButton focusKey="SUB_FIRST" className="a-trk-item" onEnterPress={() => { setSubUrl((p) => { if (p) URL.revokeObjectURL(p); return null; }); setSubsOpen(false); setFocus("PL_SUBS"); }}>Desactivar subtítulos</FocusableButton> : null}
+                    {subResults.map((r, i) => (
+                      <FocusableButton key={r.fileId} focusKey={!subUrl && i === 0 ? "SUB_FIRST" : undefined} className="a-trk-item" onEnterPress={() => pickSub(r.fileId)}>
+                        <span className="a-trk-lang">{r.language}</span><span className="a-trk-rel">{r.release}</span>
+                      </FocusableButton>
+                    ))}
+                  </>
+                ) : (
+                  <div className="a-pdesc">Sin resultados para «{subQuery}».</div>
+                )}
+              </div>
+              <FocusableButton focusKey={!subtitlesApiKey || subError || !subResults?.length ? "SUB_FIRST" : undefined} className="a-trk-close" onEnterPress={() => { setSubsOpen(false); setFocus("PL_SUBS"); }}>Cerrar</FocusableButton>
+            </div>
+          ) : null}
           {error ? <div className="eo-r" style={{ position: "absolute", bottom: 180, left: 0, right: 0, textAlign: "center", color: "var(--err)" }}>{error}</div> : null}
         </div>
       </div>

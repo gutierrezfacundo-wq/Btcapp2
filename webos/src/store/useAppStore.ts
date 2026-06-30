@@ -12,6 +12,7 @@ const ACTIVE_KEY = "iptv.activeSource.v1";    // nuevo: id de la lista activa
 const FAVORITES_KEY = "iptv.favorites.v1";
 const CATALOG_CACHE_KEY = "iptv.catalog.v1";
 const HISTORY_KEY = "iptv.history.v1";
+const SUBS_KEY = "iptv.subtitlesApiKey.v1";   // API key de OpenSubtitles (la ingresa el usuario)
 
 function genId(): string {
   return `src-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`;
@@ -152,6 +153,8 @@ interface AppState {
   error: string | null;
   favorites: FavoriteItem[];
   history: HistoryItem[];
+  /** API key de OpenSubtitles para buscar/descargar subtítulos (vacío = desactivado). */
+  subtitlesApiKey: string;
   epgByChannel: Map<string, EpgProgram[]>;
 
   /** Indica si una seccion VOD ya se cargo a demanda. */
@@ -178,6 +181,7 @@ interface AppState {
   toggleFavorite: (item: FavoriteItem) => void;
   isFavorite: (id: string) => boolean;
   pushHistory: (item: Omit<HistoryItem, "at">) => void;
+  setSubtitlesApiKey: (key: string) => void;
 }
 
 const emptyCatalog: Catalog = {
@@ -202,6 +206,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   error: null,
   favorites: loadFavorites(),
   history: loadHistory(),
+  subtitlesApiKey: (() => { try { return localStorage.getItem(SUBS_KEY) ?? ""; } catch { return ""; } })(),
   epgByChannel: new Map(),
   loadedSections: { movies: false, series: false },
   ui: { tab: "live", category: null, selectedChannelId: null },
@@ -394,6 +399,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     const next = [entry, ...get().history.filter((h) => h.id !== item.id)].slice(0, HISTORY_MAX);
     try { localStorage.setItem(HISTORY_KEY, JSON.stringify(next)); } catch { /* ignore */ }
     set({ history: next });
+  },
+
+  setSubtitlesApiKey: (key) => {
+    const k = key.trim();
+    try { localStorage.setItem(SUBS_KEY, k); } catch { /* ignore */ }
+    set({ subtitlesApiKey: k });
   },
 }));
 
