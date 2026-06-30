@@ -82,7 +82,7 @@ export function Hub() {
     <FocusContext.Provider value={focusKey}>
       <div className="page hub-aurora" ref={ref}>
         <div className="a-top">
-          <div className="a-logo">IPTV<span> PLAYER</span></div>
+          <div className="a-logo">POTR<span>I</span></div>
           <div className="a-spacer" />
           <FocusableButton className="hub-active" onEnterPress={() => navigate("/setup")}>
             <Icon name="playlist_play" />

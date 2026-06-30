@@ -142,7 +142,7 @@ export function Setup() {
               <Icon name="arrow_back" />
             </FocusableButton>
           ) : null}
-          <div className="a-logo">IPTV<span> PLAYER</span></div>
+          <div className="a-logo">POTR<span>I</span></div>
           <div className="a-catnow">Mis listas</div>
         </div>
 

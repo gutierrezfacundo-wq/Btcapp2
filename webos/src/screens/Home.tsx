@@ -223,7 +223,7 @@ export function Home() {
       <div className="page hot" ref={ref}>
         {/* Topbar mini con logo + indicador "Live" */}
         <div className="hot-topbar">
-          <span className="hot-logo">IPTV<span> PLAYER</span></span>
+          <span className="hot-logo">POTR<span>I</span></span>
           {tab === "live" && category ? (
             <span className="hot-badge">{category}</span>
           ) : null}
