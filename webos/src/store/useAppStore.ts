@@ -11,6 +11,7 @@ const SOURCES_KEY = "iptv.sources.v1";        // nuevo: array de listas guardada
 const ACTIVE_KEY = "iptv.activeSource.v1";    // nuevo: id de la lista activa
 const FAVORITES_KEY = "iptv.favorites.v1";
 const CATALOG_CACHE_KEY = "iptv.catalog.v1";
+const HISTORY_KEY = "iptv.history.v1";
 
 function genId(): string {
   return `src-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`;
@@ -114,6 +115,29 @@ function loadFavorites(): FavoriteItem[] {
   }
 }
 
+/** Item "Seguir viendo": ultimo contenido abierto (canal / pelicula / serie). */
+export interface HistoryItem {
+  id: string;
+  name: string;
+  /** Ruta para volver a abrirlo (player o detalle de serie). */
+  route: string;
+  posterUrl?: string;
+  sub?: string;
+  kind: MediaKind;
+  at: number;
+}
+
+const HISTORY_MAX = 12;
+
+function loadHistory(): HistoryItem[] {
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY);
+    return raw ? (JSON.parse(raw) as HistoryItem[]) : [];
+  } catch {
+    return [];
+  }
+}
+
 interface AppState {
   /** Listas guardadas y cual esta activa. */
   sources: SavedSource[];
@@ -127,6 +151,7 @@ interface AppState {
   loadingProgress: { current: number; total: number } | null;
   error: string | null;
   favorites: FavoriteItem[];
+  history: HistoryItem[];
   epgByChannel: Map<string, EpgProgram[]>;
 
   /** Indica si una seccion VOD ya se cargo a demanda. */
@@ -152,6 +177,7 @@ interface AppState {
   ensureSeries: () => Promise<void>;
   toggleFavorite: (item: FavoriteItem) => void;
   isFavorite: (id: string) => boolean;
+  pushHistory: (item: Omit<HistoryItem, "at">) => void;
 }
 
 const emptyCatalog: Catalog = {
@@ -175,6 +201,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   loadingProgress: null,
   error: null,
   favorites: loadFavorites(),
+  history: loadHistory(),
   epgByChannel: new Map(),
   loadedSections: { movies: false, series: false },
   ui: { tab: "live", category: null, selectedChannelId: null },
@@ -361,6 +388,13 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   isFavorite: (id) => get().favorites.some((f) => f.id === id),
+
+  pushHistory: (item) => {
+    const entry: HistoryItem = { ...item, at: Date.now() };
+    const next = [entry, ...get().history.filter((h) => h.id !== item.id)].slice(0, HISTORY_MAX);
+    try { localStorage.setItem(HISTORY_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+    set({ history: next });
+  },
 }));
 
 async function loadEpg(url: string) {

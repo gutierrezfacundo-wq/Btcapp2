@@ -52,9 +52,13 @@ export function SeriesDetail() {
     [episodes, season],
   );
 
+  const pushHistory = useAppStore((s) => s.pushHistory);
   const play = (ep: Episode) => {
     const ft = `${title} · T${ep.seasonNumber} · E${ep.episodeNumber}`;
-    navigate(`/player?url=${encodeURIComponent(ep.streamUrl)}&title=${encodeURIComponent(ft)}`);
+    const meta = `T${ep.seasonNumber} · E${ep.episodeNumber}${ep.duration ? ` · ${ep.duration}` : ""}`;
+    const route = `/player?url=${encodeURIComponent(ep.streamUrl)}&title=${encodeURIComponent(ft)}&meta=${encodeURIComponent(meta)}`;
+    pushHistory({ id: `series:${id}`, name: title, route, posterUrl: info?.posterUrl, sub: meta, kind: "series-episode" });
+    navigate(route);
   };
 
   return (
@@ -109,11 +113,14 @@ export function SeriesDetail() {
                     seasonEpisodes.map((ep) => (
                       <FocusableButton key={ep.id} className="ep-row" onEnterPress={() => play(ep)}>
                         <span className="ep-num">E{String(ep.episodeNumber).padStart(2, "0")}</span>
-                        <span className="ep-thumb"><Icon name="play_arrow" /></span>
+                        <span className="ep-thumb">
+                          {ep.thumbUrl ? <img src={ep.thumbUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 10 }} /> : <Icon name="play_arrow" />}
+                        </span>
                         <span className="ep-mid">
                           <div className="ep-title">{ep.title}</div>
-                          <div className="ep-sub">T{ep.seasonNumber} · E{ep.episodeNumber}</div>
+                          <div className="ep-sub">{ep.plot ? ep.plot : `T${ep.seasonNumber} · E${ep.episodeNumber}`}</div>
                         </span>
+                        {ep.duration ? <span className="ep-dur">{ep.duration}</span> : null}
                       </FocusableButton>
                     ))
                   )}

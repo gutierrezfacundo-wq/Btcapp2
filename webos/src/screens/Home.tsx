@@ -129,10 +129,17 @@ export function Home() {
     if (idx >= 0 && idx < RENDER_CAP) window.setTimeout(() => setFocus(`CH_${selectedChannelId}`), 60);
   }, [tab, selectedChannelId, liveFiltered]);
 
-  const play = (url: string, title: string) =>
-    navigate(`/player?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}`);
-  const openSeries = (id: string, name: string) =>
-    navigate(`/series/${id}?name=${encodeURIComponent(name)}`);
+  const pushHistory = useAppStore((s) => s.pushHistory);
+  const play = (url: string, title: string, hist?: { id: string; posterUrl?: string; sub?: string; kind: "live" | "movie" | "series-episode" }) => {
+    const route = `/player?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}${hist?.sub ? `&meta=${encodeURIComponent(hist.sub)}` : ""}`;
+    if (hist) pushHistory({ id: hist.id, name: title, route, posterUrl: hist.posterUrl, sub: hist.sub, kind: hist.kind });
+    navigate(route);
+  };
+  const openSeries = (id: string, name: string, posterUrl?: string) => {
+    const route = `/series/${id}?name=${encodeURIComponent(name)}`;
+    pushHistory({ id: `series:${id}`, name, route, posterUrl, kind: "series-episode" });
+    navigate(route);
+  };
 
   const selectedChannel = selectedChannelId
     ? catalog.liveChannels.find((c) => c.id === selectedChannelId) ?? null : null;
@@ -201,6 +208,9 @@ export function Home() {
                           <span className="a-ch-info">
                             <div className="a-ch-name">{c.name}</div>
                             {now ? <div className="a-ch-now">{now.title}</div> : null}
+                            {now && now.stopMs > now.startMs ? (
+                              <div className="a-ch-prog"><i style={{ width: `${Math.max(0, Math.min(100, ((Date.now() - now.startMs) / (now.stopMs - now.startMs)) * 100))}%` }} /></div>
+                            ) : null}
                           </span>
                           {ql ? <span className="a-ch-q">{ql}</span> : null}
                           {isFavorite(c.id) ? <span className="a-ch-fav" onClick={(e) => { e.stopPropagation(); toggleFavorite({ id: c.id, name: c.name, streamUrl: c.streamUrl, logoUrl: c.logoUrl, kind: c.kind }); }}><Icon name="star" /></span> : null}
@@ -223,7 +233,7 @@ export function Home() {
                 />
               </>
             ) : tab === "favorites" ? (
-              <FavScreen favorites={favorites} onPlay={play} onToggle={toggleFavorite} />
+              <FavScreen favorites={favorites} onPlay={(url, title, h) => play(url, title, h)} onToggle={toggleFavorite} />
             ) : (
               <GridScreen
                 title={title}
@@ -237,11 +247,11 @@ export function Home() {
                   tab === "movies"
                     ? moviesFiltered.slice(0, RENDER_CAP).map((m) => ({
                         id: m.id, name: m.name, posterUrl: m.posterUrl, year: m.year, rating: m.rating,
-                        onSelect: () => play(m.streamUrl, m.name),
+                        onSelect: () => play(m.streamUrl, m.name, { id: m.id, posterUrl: m.posterUrl, sub: [m.year, m.category].filter(Boolean).join(" · ") || undefined, kind: "movie" }),
                       }))
                     : seriesFiltered.slice(0, RENDER_CAP).map((s) => ({
                         id: s.id, name: s.name, posterUrl: s.posterUrl,
-                        onSelect: () => openSeries(s.id, s.name),
+                        onSelect: () => openSeries(s.id, s.name, s.posterUrl),
                       }))
                 }
                 total={tab === "movies" ? moviesFiltered.length : seriesFiltered.length}
@@ -346,6 +356,12 @@ function PreviewPanel({
                     {now ? <div className="a-fs-now">AHORA · {now.title}</div> : null}
                   </div>
                   <div className="a-fs-bottom">
+                    {now && now.stopMs > now.startMs ? (
+                      <div className="a-fs-bar">
+                        <span className="a-pbar-track"><i style={{ display: "block", height: "100%", width: `${progPct}%`, background: "var(--accent)", borderRadius: 4 }} /></span>
+                        <span className="a-pbar-time">{fmtClock(now.stopMs)}</span>
+                      </div>
+                    ) : null}
                     <div className="a-fs-ctrls">
                       <FocusableButton focusKey="FS_PAUSE" className="a-fs-btn" onEnterPress={togglePause}><Icon name={paused ? "play_arrow" : "pause"} /> {paused ? "Reproducir" : "Pausa"}</FocusableButton>
                       <FocusableButton focusKey="FS_TRACKS" className="a-fs-btn" onEnterPress={() => { setTracksOpen((v) => !v); poke(); window.setTimeout(() => setFocus("TRK_FIRST"), 60); }}><Icon name="tune" /> Pistas</FocusableButton>
@@ -455,7 +471,7 @@ function favBadgeLabel(kind: string) { return kind === "live" ? "EN VIVO" : kind
 
 function FavScreen({ favorites, onPlay, onToggle }: {
   favorites: { id: string; name: string; streamUrl: string; logoUrl?: string; kind: string }[];
-  onPlay: (url: string, title: string) => void;
+  onPlay: (url: string, title: string, h?: { id: string; posterUrl?: string; sub?: string; kind: "live" | "movie" | "series-episode" }) => void;
   onToggle: (i: { id: string; name: string; streamUrl: string; logoUrl?: string; kind: "live" | "movie" | "series-episode" }) => void;
 }) {
   const [filter, setFilter] = useState("all");
@@ -471,10 +487,10 @@ function FavScreen({ favorites, onPlay, onToggle }: {
       </div>
       <div className="fav-list scroll">
         {shown.length === 0 ? <div className="grd-empty">Sin favoritos</div> : shown.map((f) => (
-          <FocusableButton key={f.id} className="fav-row" onEnterPress={() => onPlay(f.streamUrl, f.name)}>
+          <FocusableButton key={f.id} className="fav-row" onEnterPress={() => onPlay(f.streamUrl, f.name, { id: f.id, posterUrl: f.logoUrl, sub: favBadgeLabel(f.kind), kind: f.kind as "live" | "movie" | "series-episode" })}>
             <span className={`fav-badge ${favBadge(f.kind)}`}>{favBadgeLabel(f.kind)}</span>
             <span className="fav-thumb">{f.logoUrl ? <img src={f.logoUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "contain", borderRadius: 10 }} /> : initials(f.name)}</span>
-            <span className="fav-mid"><div className="fav-name">{f.name}</div></span>
+            <span className="fav-mid"><div className="fav-name">{f.name}</div><div className="fav-meta">{favBadgeLabel(f.kind)}</div></span>
             <span className="fav-star" onClick={(e) => { e.stopPropagation(); onToggle({ id: f.id, name: f.name, streamUrl: f.streamUrl, logoUrl: f.logoUrl, kind: f.kind as "live" | "movie" | "series-episode" }); }}><Icon name="star" /></span>
             <Icon name="play_circle" className="fav-go" />
           </FocusableButton>

@@ -25,6 +25,7 @@ export function Hub() {
   const source = useAppStore((s) => s.source);
   const catalog = useAppStore((s) => s.catalog);
   const favorites = useAppStore((s) => s.favorites);
+  const history = useAppStore((s) => s.history);
   const loading = useAppStore((s) => s.loading);
   const loadingStep = useAppStore((s) => s.loadingStep);
   const loadingProgress = useAppStore((s) => s.loadingProgress);
@@ -95,6 +96,22 @@ export function Hub() {
                     </FocusableButton>
                   ))}
                 </div>
+                {history.length ? (
+                  <div className="hub-cont">
+                    <div className="hub-cont-h">Seguir viendo</div>
+                    <div className="hub-rowscroll scroll">
+                      {history.slice(0, 8).map((h, i) => (
+                        <FocusableButton key={h.id} focusKey={`HUB_C_${i}`} className="hub-mini" onEnterPress={() => navigate(h.route)}>
+                          <div className="hub-mini-p">
+                            {h.posterUrl ? <img src={h.posterUrl} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} /> : null}
+                            {h.sub ? <span className="hub-mini-tag">{h.sub}</span> : null}
+                          </div>
+                          <div className="hub-mini-t">{h.name}</div>
+                        </FocusableButton>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
               </div>
             )}
           </div>

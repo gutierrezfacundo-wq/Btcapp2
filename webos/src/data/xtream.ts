@@ -54,6 +54,11 @@ interface XtSeriesInfoDto {
     container_extension?: string;
     episode_num?: number;
     season?: number;
+    info?: {
+      movie_image?: string;
+      duration?: string;
+      plot?: string;
+    };
   }>>;
 }
 
@@ -187,6 +192,9 @@ export async function loadSeriesEpisodes(
         episodeNumber: e.episode_num ?? 0,
         title: e.title,
         streamUrl: xtreamStreamSeries(source, e.id, ext),
+        thumbUrl: e.info?.movie_image || undefined,
+        duration: e.info?.duration || undefined,
+        plot: e.info?.plot || undefined,
       });
     }
   }

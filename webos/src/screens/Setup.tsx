@@ -167,7 +167,7 @@ export function Setup() {
 
               {/* Editor */}
               <div className="edt">
-                <div className="edt-h"><Icon name="key" /> {isNew ? "Nueva lista" : "Editar lista"}</div>
+                <div className="edt-h"><Icon name="vpn_key" /> {isNew ? "Nueva lista" : "Editar lista"}</div>
                 <div className="edt-tabs">
                   <FocusableButton className={`edt-tab ${tab === "xtream" ? "on" : ""}`} onEnterPress={() => setTab("xtream")}>
                     <Icon name="dns" /> Xtream Codes
@@ -234,6 +234,11 @@ export function Setup() {
                     <FocusableButton className="btn primary grow" onEnterPress={() => onSave(true)} disabled={!config}>
                       <Icon name="save" /> {isNew ? "Crear y activar" : "Guardar cambios"}
                     </FocusableButton>
+                    {editingId && editingId !== activeSourceId ? (
+                      <FocusableButton className="btn" onEnterPress={async () => { await setActiveSource(editingId); navigate("/hub"); }}>
+                        <Icon name="bolt" /> Activar
+                      </FocusableButton>
+                    ) : null}
                     {editingId ? (
                       <FocusableButton className="btn danger" onEnterPress={() => { removeSource(editingId); loadIntoEditor(null); }}>
                         <Icon name="delete" /> Eliminar

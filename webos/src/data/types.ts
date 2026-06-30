@@ -36,6 +36,12 @@ export interface Episode {
   episodeNumber: number;
   title: string;
   streamUrl: string;
+  /** Miniatura 16:9 del episodio (info.movie_image). */
+  thumbUrl?: string;
+  /** Duración legible, ej "45:00" (info.duration). */
+  duration?: string;
+  /** Sinopsis corta del episodio (info.plot). */
+  plot?: string;
 }
 
 export interface Category {
