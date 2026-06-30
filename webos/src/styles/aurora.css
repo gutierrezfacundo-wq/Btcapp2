@@ -417,3 +417,5 @@
 .bare{flex:1;display:flex;border-radius:10px;transition:box-shadow .12s}
 .bare-input{flex:1;width:100%;background:transparent;border:none;outline:none;color:var(--text);font:inherit;font-size:21px;padding:14px 2px}
 .bare.focused{box-shadow:0 0 0 3px var(--ring)}
+
+.a-body{flex:1;display:flex;min-height:0}
