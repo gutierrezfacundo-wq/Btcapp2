@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
+import { getCurrentFocusKey, setFocus } from "@noriginmedia/norigin-spatial-navigation";
 import { Setup } from "./screens/Setup";
 import { Hub } from "./screens/Hub";
 import { Home } from "./screens/Home";
@@ -31,6 +32,21 @@ export default function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  useEffect(() => {
+    // Recuperación de foco: si el D-pad "se pierde" (el puntero del Magic Remote
+    // movió el foco fuera, o se desmontó el elemento enfocado), al apretar una
+    // flecha sin ningún elemento enfocado, restauramos el último foco conocido.
+    const ARROWS = [37, 38, 39, 40];
+    const onKey = (e: KeyboardEvent) => {
+      if (!ARROWS.includes(e.keyCode)) return;
+      if (document.querySelector(".focused")) return; // ya hay foco visible
+      const last = getCurrentFocusKey();
+      if (last) setFocus(last);
+    };
+    window.addEventListener("keydown", onKey, true); // captura: antes que norigin
+    return () => window.removeEventListener("keydown", onKey, true);
   }, []);
 
   return (

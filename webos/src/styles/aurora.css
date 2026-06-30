@@ -418,6 +418,11 @@
 .grd-chips{flex-wrap:nowrap;overflow:hidden}
 .grd-chips .chip{flex-shrink:0}
 
+/* Scroll con rueda del Magic Remote: los contenedores .scroll deben poder
+   desplazarse (las reglas .grd-scroll/.a-list-vp/etc. ponen overflow:hidden y
+   ganaban por orden, dejándolos scrollables solo por D-pad). */
+.scroll{overflow-y:auto !important}
+
 /* Lista en vivo / categorias mas compactas: entran mas elementos */
 .a-ch{height:74px;margin-bottom:7px}
 .a-ch-num{font-size:19px;width:48px}

@@ -20,7 +20,7 @@ export function FocusableButton({
   focusKey,
   disabled,
 }: Props) {
-  const { ref, focused } = useFocusable({
+  const { ref, focused, focusSelf } = useFocusable({
     focusKey,
     onEnterPress: () => {
       if (!disabled) onEnterPress?.();
@@ -40,8 +40,11 @@ export function FocusableButton({
       ref={ref}
       className={`focusable ${focused ? "focused" : ""} ${className ?? ""}`}
       style={style}
+      // Magic Remote (puntero): al pasar por encima tomamos el foco para que el
+      // D-pad continúe desde acá y no se "pierda" al usar el puntero.
+      onMouseEnter={() => { if (!disabled) focusSelf(); }}
       onClick={() => {
-        if (!disabled) onEnterPress?.();
+        if (!disabled) { focusSelf(); onEnterPress?.(); }
       }}
     >
       {children}

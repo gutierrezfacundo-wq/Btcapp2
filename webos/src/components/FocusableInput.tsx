@@ -13,7 +13,7 @@ interface Props {
 
 export function FocusableInput({ value, onChange, placeholder, type = "text", focusKey, bare = true }: Props) {
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const { ref, focused } = useFocusable({
+  const { ref, focused, focusSelf } = useFocusable({
     focusKey,
     onEnterPress: () => inputRef.current?.focus(),
   });
@@ -25,7 +25,7 @@ export function FocusableInput({ value, onChange, placeholder, type = "text", fo
 
   if (bare) {
     return (
-      <div ref={ref} className={`bare ${focused ? "focused" : ""}`}>
+      <div ref={ref} className={`bare ${focused ? "focused" : ""}`} onMouseEnter={focusSelf} onClick={focusSelf}>
         <input
           ref={inputRef}
           className="bare-input"
@@ -39,7 +39,7 @@ export function FocusableInput({ value, onChange, placeholder, type = "text", fo
   }
 
   return (
-    <div ref={ref} className={`focusable ${focused ? "focused" : ""}`}>
+    <div ref={ref} className={`focusable ${focused ? "focused" : ""}`} onMouseEnter={focusSelf} onClick={focusSelf}>
       <input
         ref={inputRef}
         className={`input ${focused ? "focused" : ""}`}
