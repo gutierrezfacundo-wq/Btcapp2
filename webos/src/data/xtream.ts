@@ -5,6 +5,7 @@ import type {
   Episode,
   Movie,
   SeriesInfo,
+  SeriesMeta,
   SourceConfig,
 } from "./types";
 import { fetchJson } from "./http";
@@ -48,6 +49,15 @@ interface XtSeriesDto {
 }
 
 interface XtSeriesInfoDto {
+  info?: {
+    rating?: string | number;
+    rating_5based?: number;
+    releaseDate?: string;
+    release_date?: string;
+    genre?: string;
+    plot?: string;
+    cover?: string;
+  };
   episodes?: Record<string, Array<{
     id: string;
     title: string;
@@ -177,9 +187,18 @@ export async function loadXtreamCatalog(
 export async function loadSeriesEpisodes(
   source: Extract<SourceConfig, { kind: "xtream" }>,
   seriesId: string,
-): Promise<Episode[]> {
+): Promise<{ episodes: Episode[]; meta: SeriesMeta }> {
   const url = `${xtreamPlayerApi(source)}&action=get_series_info&series_id=${seriesId}`;
   const info = await getJson<XtSeriesInfoDto>(url);
+  const yearRaw = info.info?.releaseDate || info.info?.release_date || "";
+  const ratingNum = info.info?.rating != null ? String(info.info.rating).trim() : "";
+  const meta: SeriesMeta = {
+    rating: ratingNum && ratingNum !== "0" ? ratingNum : undefined,
+    year: yearRaw ? yearRaw.slice(0, 4) : undefined,
+    genre: info.info?.genre || undefined,
+    plot: info.info?.plot || undefined,
+    posterUrl: info.info?.cover || undefined,
+  };
   const episodes: Episode[] = [];
   for (const [seasonKey, list] of Object.entries(info.episodes ?? {})) {
     const seasonFromKey = parseInt(seasonKey, 10) || 0;
@@ -203,5 +222,5 @@ export async function loadSeriesEpisodes(
       ? a.seasonNumber - b.seasonNumber
       : a.episodeNumber - b.episodeNumber,
   );
-  return episodes;
+  return { episodes, meta };
 }

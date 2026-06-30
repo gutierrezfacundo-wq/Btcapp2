@@ -29,6 +29,15 @@ export interface SeriesInfo {
   plot?: string;
 }
 
+/** Metadatos del detalle de serie (de get_series_info.info). */
+export interface SeriesMeta {
+  rating?: string;
+  year?: string;
+  genre?: string;
+  plot?: string;
+  posterUrl?: string;
+}
+
 export interface Episode {
   id: string;
   seriesId: string;

@@ -3,7 +3,7 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { FocusContext, useFocusable, setFocus } from "@noriginmedia/norigin-spatial-navigation";
 import { useAppStore } from "../store/useAppStore";
 import { loadSeriesEpisodes } from "../data/xtream";
-import type { Episode } from "../data/types";
+import type { Episode, SeriesMeta } from "../data/types";
 import { FocusableButton } from "../components/FocusableButton";
 import { Icon } from "../components/Icon";
 import { Rail } from "../components/Rail";
@@ -26,6 +26,7 @@ export function SeriesDetail() {
   const info = useMemo(() => series.find((s) => s.id === id), [series, id]);
 
   const [episodes, setEpisodes] = useState<Episode[] | null>(null);
+  const [meta, setMeta] = useState<SeriesMeta | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [season, setSeason] = useState<number | null>(null);
 
@@ -37,7 +38,7 @@ export function SeriesDetail() {
       return;
     }
     loadSeriesEpisodes(source, id)
-      .then((eps) => { setEpisodes(eps); if (eps.length) setSeason(eps[0].seasonNumber); })
+      .then(({ episodes: eps, meta: m }) => { setEpisodes(eps); setMeta(m); if (eps.length) setSeason(eps[0].seasonNumber); })
       .catch((e) => setError(e instanceof Error ? e.message : "Error"));
   }, [source, id]);
 
@@ -81,15 +82,17 @@ export function SeriesDetail() {
                 </div>
                 <div className="det-hero">
                   <div className="det-art">
-                    {info?.posterUrl ? <img src={info.posterUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 18 }} /> : initials(title)}
+                    {info?.posterUrl || meta?.posterUrl ? <img src={info?.posterUrl || meta?.posterUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 18 }} /> : initials(title)}
                   </div>
                   <div className="det-info">
                     <div className="det-title">{title}</div>
                     <div className="det-meta">
-                      {info?.category ? <span className="det-mchip">{info.category}</span> : null}
+                      {meta?.rating ? <span className="det-mchip rate"><Icon name="star" /> {meta.rating}</span> : null}
+                      {meta?.year ? <span className="det-mchip">{meta.year}</span> : null}
+                      {meta?.genre ? <span className="det-mchip">{meta.genre}</span> : info?.category ? <span className="det-mchip">{info.category}</span> : null}
                       {seasons.length ? <span className="det-mchip">{seasons.length} temporada{seasons.length > 1 ? "s" : ""}</span> : null}
                     </div>
-                    {info?.plot ? <div className="det-syn">{info.plot}</div> : null}
+                    {info?.plot || meta?.plot ? <div className="det-syn">{info?.plot || meta?.plot}</div> : null}
                     {seasonEpisodes[0] ? (
                       <FocusableButton focusKey="SER_PLAY" className="det-play" onEnterPress={() => play(seasonEpisodes[0])}>
                         <Icon name="play_arrow" /> Reproducir T{seasonEpisodes[0].seasonNumber} · E{seasonEpisodes[0].episodeNumber}
