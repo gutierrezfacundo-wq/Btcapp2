@@ -7,7 +7,6 @@ import { SeriesDetail } from "./screens/SeriesDetail";
 import { Player } from "./screens/Player";
 import { useAppStore } from "./store/useAppStore";
 import { isBackKey } from "./webos/remote-keys";
-import "./styles/components.css";
 
 export default function App() {
   const source = useAppStore((s) => s.source);

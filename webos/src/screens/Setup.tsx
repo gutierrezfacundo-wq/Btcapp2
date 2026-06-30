@@ -4,6 +4,10 @@ import { FocusContext, useFocusable, setFocus } from "@noriginmedia/norigin-spat
 import { FocusableButton } from "../components/FocusableButton";
 import { FocusableInput } from "../components/FocusableInput";
 import { Icon } from "../components/Icon";
+import { Rail } from "../components/Rail";
+import { TopBar } from "../components/TopBar";
+import { Hints } from "../components/Hints";
+import { useRailNav } from "../hooks/useRailNav";
 import { useAppStore } from "../store/useAppStore";
 import { fetchJson, fetchText } from "../data/http";
 import { parseM3u } from "../data/m3u";
@@ -11,8 +15,18 @@ import type { SavedSource, SourceConfig } from "../data/types";
 
 type Tab = "xtream" | "m3u";
 
+function relTime(ms?: number): string {
+  if (!ms) return "—";
+  const d = Date.now() - ms;
+  const h = Math.floor(d / 3600000);
+  if (h < 1) return "recién";
+  if (h < 24) return `hace ${h} h`;
+  return `hace ${Math.floor(h / 24)} días`;
+}
+
 export function Setup() {
   const navigate = useNavigate();
+  const railNav = useRailNav();
   const sources = useAppStore((s) => s.sources);
   const activeSourceId = useAppStore((s) => s.activeSourceId);
   const addSource = useAppStore((s) => s.addSource);
@@ -20,10 +34,8 @@ export function Setup() {
   const removeSource = useAppStore((s) => s.removeSource);
   const setActiveSource = useAppStore((s) => s.setActiveSource);
 
-  // null = creando nueva; string = editando esa id
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isNew, setIsNew] = useState(sources.length === 0);
-
   const [tab, setTab] = useState<Tab>("xtream");
   const [name, setName] = useState("");
   const [server, setServer] = useState("");
@@ -43,56 +55,42 @@ export function Setup() {
   const loadIntoEditor = (s: SavedSource | null) => {
     setTestResult(null);
     if (!s) {
-      setIsNew(true);
-      setEditingId(null);
-      setTab("xtream");
-      setName(""); setServer(""); setUser(""); setPass("");
-      setM3uUrl(""); setEpgUrl("");
+      setIsNew(true); setEditingId(null); setTab("xtream");
+      setName(""); setServer(""); setUser(""); setPass(""); setM3uUrl(""); setEpgUrl("");
       setFocus("ED_NAME");
       return;
     }
-    setIsNew(false);
-    setEditingId(s.id);
-    setName(s.name);
+    setIsNew(false); setEditingId(s.id); setName(s.name);
     if (s.config.kind === "xtream") {
-      setTab("xtream");
-      setServer(s.config.server); setUser(s.config.username); setPass(s.config.password);
+      setTab("xtream"); setServer(s.config.server); setUser(s.config.username); setPass(s.config.password);
       setM3uUrl(""); setEpgUrl("");
     } else {
-      setTab("m3u");
-      setM3uUrl(s.config.playlistUrl); setEpgUrl(s.config.epgUrl ?? "");
+      setTab("m3u"); setM3uUrl(s.config.playlistUrl); setEpgUrl(s.config.epgUrl ?? "");
       setServer(""); setUser(""); setPass("");
     }
     setFocus("ED_NAME");
   };
 
-  const buildConfig = (): SourceConfig | null => {
+  const config = useMemo<SourceConfig | null>(() => {
     if (tab === "xtream") {
       if (!server.trim() || !user.trim() || !pass) return null;
       return { kind: "xtream", server: server.trim(), username: user.trim(), password: pass };
     }
     if (!m3uUrl.trim()) return null;
     return { kind: "m3u", playlistUrl: m3uUrl.trim(), epgUrl: epgUrl.trim() || undefined };
-  };
-  const config = buildConfig();
+  }, [tab, server, user, pass, m3uUrl, epgUrl]);
 
   const onTest = async () => {
     if (!config) return;
-    setTesting(true);
-    setTestResult(null);
+    setTesting(true); setTestResult(null);
     try {
       if (config.kind === "m3u") {
-        const text = await fetchText(config.playlistUrl, 30000);
-        const ch = parseM3u(text).length;
-        setTestResult(ch > 0 ? `ok:${ch} canales detectados` : "warn:Descargó pero no parece un M3U válido");
+        const ch = parseM3u(await fetchText(config.playlistUrl, 30000)).length;
+        setTestResult(ch > 0 ? `ok:Conexión OK · ${ch} canales` : "err:Descargó pero no es un M3U válido");
       } else {
         const url = `${config.server.replace(/\/+$/, "")}/player_api.php?username=${encodeURIComponent(config.username)}&password=${encodeURIComponent(config.password)}`;
         const info = await fetchJson<{ user_info?: { auth?: number; status?: string } }>(url, 20000);
-        setTestResult(
-          info.user_info?.auth === 1
-            ? `ok:Usuario válido (${info.user_info.status ?? "activo"})`
-            : "warn:El servidor rechazó las credenciales",
-        );
+        setTestResult(info.user_info?.auth === 1 ? `ok:Conexión OK · usuario válido` : "err:Credenciales rechazadas");
       }
     } catch (e) {
       setTestResult(`err:${e instanceof Error ? e.message : "Error de conexión"}`);
@@ -108,182 +106,146 @@ export function Setup() {
       if (activate) await setActiveSource(editingId);
     } else {
       const id = addSource(name, config);
-      if (activate || sources.length === 0) {
-        await setActiveSource(id);
-        navigate("/hub");
-        return;
-      }
-      setEditingId(id);
-      setIsNew(false);
+      if (activate || sources.length === 0) { await setActiveSource(id); navigate("/hub"); return; }
+      setEditingId(id); setIsNew(false);
     }
   };
 
-  const onDelete = () => {
-    if (editingId) {
-      removeSource(editingId);
-      loadIntoEditor(null);
-    }
-  };
-
-  const editorTitle = isNew ? "Nueva lista" : "Editar lista";
-
-  const testTone = useMemo(() => {
+  const tone = useMemo(() => {
     if (!testResult) return null;
     const [k, ...rest] = testResult.split(":");
-    return { kind: k as "ok" | "warn" | "err", msg: rest.join(":") };
+    return { kind: k as "ok" | "err", msg: rest.join(":") };
   }, [testResult]);
 
   return (
     <FocusContext.Provider value={focusKey}>
-      <div className="page mylists" ref={ref}>
-        <div className="a-top">
-          {sources.length > 0 ? (
-            <FocusableButton className="a-railbtn back-inline" onEnterPress={() => navigate("/hub")}>
-              <Icon name="arrow_back" />
-            </FocusableButton>
-          ) : null}
-          <div className="a-logo">POTR<span>I</span></div>
-          <div className="a-catnow">Mis listas</div>
-        </div>
-
-        <div className="ml-body">
-          {/* Columna fuentes */}
-          <aside className="ml-sources">
-            <div className="ml-sources-h">
-              <span className="ml-sources-t">LISTAS</span>
-              <span className="ml-sources-c">{sources.length}</span>
-            </div>
-            <div className="ml-sources-list">
-              {sources.map((s, i) => {
-                const active = s.id === activeSourceId;
-                const editing = s.id === editingId;
-                return (
-                  <FocusableButton
-                    key={s.id}
-                    focusKey={`SRC_${i}`}
-                    className={`ml-src ${editing ? "editing" : ""}`}
-                    onEnterPress={() => loadIntoEditor(s)}
-                  >
-                    <div className="ml-src-top">
-                      <span className={`ml-badge ${s.config.kind}`}>
-                        {s.config.kind === "xtream" ? "XTREAM" : "M3U"}
-                      </span>
-                      {active ? <span className="ml-active-flag">● Activa</span> : null}
-                    </div>
-                    <div className="ml-src-name">{s.name}</div>
-                    <div className="ml-src-sub">
-                      {s.config.kind === "xtream"
-                        ? `${s.config.server} · ${s.config.username}`
-                        : s.config.playlistUrl}
-                    </div>
-                  </FocusableButton>
-                );
-              })}
-              <FocusableButton
-                focusKey={`SRC_${sources.length}`}
-                className="ml-add"
-                onEnterPress={() => loadIntoEditor(null)}
-              >
-                <Icon name="add_circle" /> Agregar lista
-              </FocusableButton>
-            </div>
-          </aside>
-
-          {/* Editor */}
-          <main className="ml-editor">
-            <div className="ml-editor-t">{editorTitle}</div>
-            <div className="ml-tabs">
-              <FocusableButton
-                className={`ml-tab ${tab === "xtream" ? "on" : ""}`}
-                onEnterPress={() => setTab("xtream")}
-              >
-                Xtream Codes
-              </FocusableButton>
-              <FocusableButton
-                className={`ml-tab ${tab === "m3u" ? "on" : ""}`}
-                onEnterPress={() => setTab("m3u")}
-              >
-                Lista M3U
-              </FocusableButton>
-            </div>
-
-            <div className="ml-fields">
-              <label className="ml-field">
-                <span className="ml-label"><Icon name="label" /> Nombre</span>
-                <FocusableInput focusKey="ED_NAME" value={name} onChange={setName} placeholder="Mi proveedor" />
-              </label>
-
-              {tab === "xtream" ? (
-                <>
-                  <label className="ml-field">
-                    <span className="ml-label"><Icon name="dns" /> Servidor</span>
-                    <FocusableInput value={server} onChange={setServer} placeholder="http://host:puerto" />
-                  </label>
-                  <label className="ml-field">
-                    <span className="ml-label"><Icon name="person" /> Usuario</span>
-                    <FocusableInput value={user} onChange={setUser} placeholder="Usuario" />
-                  </label>
-                  <label className="ml-field">
-                    <span className="ml-label"><Icon name="vpn_key" /> Contraseña</span>
-                    <div className="ml-pass">
-                      <FocusableInput
-                        value={pass}
-                        onChange={setPass}
-                        placeholder="Contraseña"
-                        type={showPass ? "text" : "password"}
-                      />
-                      <FocusableButton className="ml-eye" onEnterPress={() => setShowPass((v) => !v)}>
-                        <Icon name={showPass ? "visibility_off" : "visibility"} />
-                      </FocusableButton>
-                    </div>
-                  </label>
-                </>
-              ) : (
-                <>
-                  <label className="ml-field">
-                    <span className="ml-label"><Icon name="link" /> URL de la lista</span>
-                    <FocusableInput value={m3uUrl} onChange={setM3uUrl} placeholder="http://…/lista.m3u" />
-                  </label>
-                  <label className="ml-field">
-                    <span className="ml-label"><Icon name="schedule" /> URL EPG (opcional)</span>
-                    <FocusableInput value={epgUrl} onChange={setEpgUrl} placeholder="http://…/xmltv.php" />
-                  </label>
-                </>
-              )}
-
-              {testTone ? (
-                <div className={`ml-test ${testTone.kind}`}>
-                  <Icon name={testTone.kind === "ok" ? "check_circle" : testTone.kind === "warn" ? "info" : "wifi_off"} />
-                  {testTone.msg}
+      <div className="ascreen" ref={ref}>
+        <TopBar title="Mis Listas" />
+        <div className="a-body">
+          <Rail active="settings" onSelect={railNav} />
+          <div className="a-screen">
+            <div className="lists">
+              {/* Columna fuentes */}
+              <div className="src-col">
+                <div className="src-h">
+                  <div className="src-h-t">Mis Listas</div>
+                  <div className="src-h-c">{sources.length} listas</div>
                 </div>
-              ) : null}
+                <div className="src-list scroll">
+                  {sources.map((s, i) => {
+                    const active = s.id === activeSourceId;
+                    return (
+                      <FocusableButton
+                        key={s.id}
+                        focusKey={`SRC_${i}`}
+                        className={`src-card ${s.id === editingId ? "editing" : ""} ${active ? "active-src" : ""}`}
+                        onEnterPress={() => loadIntoEditor(s)}
+                      >
+                        <div className="src-card-top">
+                          <span className={`src-badge ${s.config.kind}`}>{s.config.kind === "xtream" ? "XTREAM" : "M3U"}</span>
+                          <span className="src-name">{s.name}</span>
+                          {active ? <span className="src-activeflag"><Icon name="bolt" /> Activa</span> : null}
+                        </div>
+                        <div className="src-meta">
+                          {s.config.kind === "xtream" ? `${s.config.server} · ${s.config.username}` : s.config.playlistUrl}
+                        </div>
+                        <div className="src-foot">
+                          <span className={`src-status ${active ? "active" : s.status === "error" ? "error" : "ok"}`}>
+                            <span className="dot" /> {active ? "Activa" : s.status === "error" ? "Error de conexión" : "Conectada"}
+                          </span>
+                          {s.channelCount != null ? <><span className="sep">·</span><span>{s.channelCount} canales</span></> : null}
+                          <span className="sep">·</span><span>{relTime(s.lastUpdated)}</span>
+                        </div>
+                      </FocusableButton>
+                    );
+                  })}
+                  <FocusableButton focusKey={`SRC_${sources.length}`} className="src-add" onEnterPress={() => loadIntoEditor(null)}>
+                    <Icon name="add_circle" /> Agregar lista
+                  </FocusableButton>
+                </div>
+              </div>
 
-              <div className="ml-actions">
-                <FocusableButton className="btn" onEnterPress={onTest} disabled={!config || testing}>
-                  {testing ? "Probando…" : "Probar conexión"}
-                </FocusableButton>
-                <FocusableButton className="btn primary" onEnterPress={() => onSave(true)} disabled={!config}>
-                  {isNew ? "Crear y activar" : "Guardar y activar"}
-                </FocusableButton>
-                {!isNew ? (
-                  <FocusableButton className="btn" onEnterPress={() => onSave(false)} disabled={!config}>
-                    Guardar
+              {/* Editor */}
+              <div className="edt">
+                <div className="edt-h"><Icon name="key" /> {isNew ? "Nueva lista" : "Editar lista"}</div>
+                <div className="edt-tabs">
+                  <FocusableButton className={`edt-tab ${tab === "xtream" ? "on" : ""}`} onEnterPress={() => setTab("xtream")}>
+                    <Icon name="dns" /> Xtream Codes
                   </FocusableButton>
-                ) : null}
-                {editingId && editingId !== activeSourceId ? (
-                  <FocusableButton className="btn" onEnterPress={() => setActiveSource(editingId)}>
-                    Activar
+                  <FocusableButton className={`edt-tab ${tab === "m3u" ? "on" : ""}`} onEnterPress={() => setTab("m3u")}>
+                    <Icon name="link" /> Lista M3U
                   </FocusableButton>
-                ) : null}
-                {editingId ? (
-                  <FocusableButton className="btn danger" onEnterPress={onDelete}>
-                    <Icon name="delete" /> Eliminar
-                  </FocusableButton>
-                ) : null}
+                </div>
+
+                <div className="edt-form">
+                  <div className="fld">
+                    <div className="fld-l">Nombre de la lista</div>
+                    <div className="fld-in"><Icon name="label" /><FocusableInput focusKey="ED_NAME" value={name} onChange={setName} placeholder="Mi proveedor" /></div>
+                  </div>
+
+                  {tab === "xtream" ? (
+                    <>
+                      <div className="fld">
+                        <div className="fld-l">Servidor</div>
+                        <div className="fld-in"><Icon name="dns" /><FocusableInput value={server} onChange={setServer} placeholder="http://host:puerto" /></div>
+                      </div>
+                      <div className="fld-row">
+                        <div className="fld">
+                          <div className="fld-l">Usuario</div>
+                          <div className="fld-in"><Icon name="person" /><FocusableInput value={user} onChange={setUser} placeholder="Usuario" /></div>
+                        </div>
+                        <div className="fld">
+                          <div className="fld-l">Contraseña</div>
+                          <div className="fld-in">
+                            <Icon name="lock" />
+                            <FocusableInput value={pass} onChange={setPass} placeholder="Contraseña" type={showPass ? "text" : "password"} />
+                            <FocusableButton className="eye" onEnterPress={() => setShowPass((v) => !v)}>
+                              <Icon name={showPass ? "visibility_off" : "visibility"} />
+                            </FocusableButton>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="fld">
+                        <div className="fld-l">URL de la lista (.m3u / .m3u8)</div>
+                        <div className="fld-in"><Icon name="link" /><FocusableInput value={m3uUrl} onChange={setM3uUrl} placeholder="http://…/lista.m3u" /></div>
+                      </div>
+                      <div className="fld">
+                        <div className="fld-l">URL EPG XMLTV (opcional)</div>
+                        <div className="fld-in"><Icon name="schedule" /><FocusableInput value={epgUrl} onChange={setEpgUrl} placeholder="http://…/xmltv.php" /></div>
+                      </div>
+                    </>
+                  )}
+
+                  {tone ? (
+                    <div className={`edt-test ${tone.kind}`}>
+                      <Icon name={tone.kind === "ok" ? "check_circle" : "wifi_off"} /> {tone.msg}
+                    </div>
+                  ) : testing ? (
+                    <div className="edt-test testing"><span className="spin" /> Probando…</div>
+                  ) : null}
+
+                  <div className="edt-actions">
+                    <FocusableButton className="btn ghost" onEnterPress={onTest} disabled={!config || testing}>
+                      <Icon name="wifi" /> Probar conexión
+                    </FocusableButton>
+                    <FocusableButton className="btn primary grow" onEnterPress={() => onSave(true)} disabled={!config}>
+                      <Icon name="save" /> {isNew ? "Crear y activar" : "Guardar cambios"}
+                    </FocusableButton>
+                    {editingId ? (
+                      <FocusableButton className="btn danger" onEnterPress={() => { removeSource(editingId); loadIntoEditor(null); }}>
+                        <Icon name="delete" /> Eliminar
+                      </FocusableButton>
+                    ) : null}
+                  </div>
+                </div>
               </div>
             </div>
-          </main>
+          </div>
         </div>
+        <Hints items={[{ k: "↕↔", label: "Navegar" }, { k: "OK", label: "Seleccionar" }, { k: "Esc", label: "Volver" }]} />
       </div>
     </FocusContext.Provider>
   );

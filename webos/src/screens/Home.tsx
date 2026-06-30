@@ -1,43 +1,38 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import {
-  FocusContext,
-  useFocusable,
-  setFocus,
-} from "@noriginmedia/norigin-spatial-navigation";
+import { FocusContext, useFocusable, setFocus } from "@noriginmedia/norigin-spatial-navigation";
+import type Hls from "hls.js";
 import { useAppStore } from "../store/useAppStore";
 import { findNextProgram, findNowPlaying } from "../data/xmltv";
 import { FocusableButton } from "../components/FocusableButton";
 import { FocusableInput } from "../components/FocusableInput";
-import { PosterCard } from "../components/PosterCard";
-import { VideoPreview } from "../components/VideoPreview";
 import { Icon } from "../components/Icon";
+import { Rail, type RailId } from "../components/Rail";
+import { TopBar } from "../components/TopBar";
+import { Hints } from "../components/Hints";
+import { VideoPreview } from "../components/VideoPreview";
 import { isBackKey } from "../webos/remote-keys";
-import type Hls from "hls.js";
 
 type Tab = "live" | "movies" | "series" | "favorites";
-
-const SIDEBAR_ITEMS: {
-  id: Tab | "search" | "reload" | "settings" | "hub";
-  icon: string;
-  label: string;
-}[] = [
-  { id: "hub", icon: "home", label: "Inicio" },
-  { id: "live", icon: "live_tv", label: "En vivo" },
-  { id: "movies", icon: "movie", label: "Películas" },
-  { id: "series", icon: "video_library", label: "Series" },
-  { id: "favorites", icon: "star", label: "Favoritos" },
-  { id: "search", icon: "search", label: "Buscar" },
-  { id: "reload", icon: "refresh", label: "Recargar" },
-  { id: "settings", icon: "settings", label: "Ajustes" },
-];
-
 const RENDER_CAP = 500;
+
+function initials(s: string) {
+  return s.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
+}
+function quality(name: string): string | null {
+  if (/4k|uhd|2160/i.test(name)) return "4K";
+  if (/fhd|1080/i.test(name)) return "FHD";
+  if (/\bhd\b|720/i.test(name)) return "HD";
+  if (/\bsd\b|480/i.test(name)) return "SD";
+  return null;
+}
+function fmtClock(ms: number) {
+  return new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
 
 export function Home() {
   const navigate = useNavigate();
   const [search] = useSearchParams();
-  const initialTab = (search.get("tab") as Tab) ?? "live";
 
   const catalog = useAppStore((s) => s.catalog);
   const favorites = useAppStore((s) => s.favorites);
@@ -47,784 +42,476 @@ export function Home() {
   const error = useAppStore((s) => s.error);
   const source = useAppStore((s) => s.source);
   const reload = useAppStore((s) => s.reload);
+  const ensureMovies = useAppStore((s) => s.ensureMovies);
+  const ensureSeries = useAppStore((s) => s.ensureSeries);
+  const loadedSections = useAppStore((s) => s.loadedSections);
   const toggleFavorite = useAppStore((s) => s.toggleFavorite);
   const isFavorite = useAppStore((s) => s.isFavorite);
   const epgByChannel = useAppStore((s) => s.epgByChannel);
   const ui = useAppStore((s) => s.ui);
   const setUi = useAppStore((s) => s.setUi);
 
-  // Estado respaldado en el store: al volver de otra pantalla se restaura
-  // donde estabas (pestaña, categoria, canal elegido).
-  const [tab, setTabState] = useState<Tab>((search.get("tab") as Tab) ?? ui.tab ?? initialTab);
+  const [tab, setTabState] = useState<Tab>((search.get("tab") as Tab) ?? ui.tab ?? "live");
   const [category, setCategoryState] = useState<string | null>(ui.category);
-  const [selectedChannelId, setSelectedChannelIdState] = useState<string | null>(
-    ui.selectedChannelId,
-  );
+  const [selectedChannelId, setSelectedChannelIdState] = useState<string | null>(ui.selectedChannelId);
   const setTab = (t: Tab) => { setTabState(t); setUi({ tab: t }); };
   const setCategory = (c: string | null) => { setCategoryState(c); setUi({ category: c }); };
-  const setSelectedChannelId = (id: string | null) => {
-    setSelectedChannelIdState(id);
-    setUi({ selectedChannelId: id });
-  };
+  const setSelectedChannelId = (id: string | null) => { setSelectedChannelIdState(id); setUi({ selectedChannelId: id }); };
 
   const [query, setQuery] = useState("");
-  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(search.get("search") === "1");
   const [fullscreen, setFullscreen] = useState(false);
 
-  useEffect(() => {
-    if (!source) navigate("/setup");
-  }, [source, navigate]);
+  useEffect(() => { if (!source) navigate("/setup"); }, [source, navigate]);
 
-  // Reset de filtros SOLO al cambiar de pestaña (no en el primer render,
-  // para no pisar el estado restaurado).
-  const firstTabRun = useRef(true);
   useEffect(() => {
-    if (firstTabRun.current) {
-      firstTabRun.current = false;
-      return;
-    }
-    setCategory(null);
-    setQuery("");
-    setSearchOpen(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab]);
+    if (tab === "movies" && !loadedSections.movies) ensureMovies();
+    if (tab === "series" && !loadedSections.series) ensureSeries();
+  }, [tab, loadedSections, ensureMovies, ensureSeries]);
 
   const { ref, focusKey } = useFocusable({ trackChildren: true, focusKey: "HOME" });
-
-  // Foco inicial: si hay un canal recordado lo maneja el efecto de
-  // restauracion; si no, a la primera categoria.
-  const restoredFocus = useRef(false);
+  const restored = useRef(false);
   useEffect(() => {
-    if (tab === "live" && ui.selectedChannelId && !restoredFocus.current) return;
+    if (tab === "live" && ui.selectedChannelId && !restored.current) return;
     setFocus("CAT_0");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab]);
+  }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // === Datos por pestaña ===
-  const tabData = useMemo(() => {
-    if (tab === "live") {
-      return {
-        categories: catalog.liveCategories,
-        getCategoryItems: (cat: string | null) =>
-          cat ? catalog.liveChannels.filter((c) => c.groupTitle === cat) : catalog.liveChannels,
-        totalCount: catalog.liveChannels.length,
-      };
-    }
-    if (tab === "movies") {
-      return {
-        categories: catalog.movieCategories,
-        getCategoryItems: () => [], // gestionado abajo
-        totalCount: catalog.movies.length,
-      };
-    }
-    if (tab === "series") {
-      return {
-        categories: catalog.seriesCategories,
-        getCategoryItems: () => [],
-        totalCount: catalog.series.length,
-      };
-    }
-    return {
-      categories: [],
-      getCategoryItems: () => [],
-      totalCount: favorites.length,
-    };
-  }, [tab, catalog, favorites]);
+  const railSelect = (id: RailId) => {
+    if (id === "hub") navigate("/hub");
+    else if (id === "settings") navigate("/setup");
+    else if (id === "reload") reload();
+    else if (id === "search") { setSearchOpen((v) => !v); window.setTimeout(() => setFocus("SEARCH_IN"), 60); }
+    else { setTab(id as Tab); setCategory(null); setQuery(""); }
+  };
 
-  const filteredChannels = useMemo(() => {
-    if (tab !== "live") return [];
-    const byCat = category
-      ? catalog.liveChannels.filter((c) => c.groupTitle === category)
-      : catalog.liveChannels;
-    const norm = query.trim().toLowerCase();
-    return norm ? byCat.filter((c) => c.name.toLowerCase().includes(norm)) : byCat;
-  }, [tab, catalog.liveChannels, category, query]);
-
-  // Restaurar el foco al canal donde estabas (una sola vez, cuando la lista
-  // ya esta renderizada).
-  useEffect(() => {
-    if (restoredFocus.current) return;
-    if (tab !== "live" || !selectedChannelId) {
-      restoredFocus.current = true;
-      return;
-    }
-    const idx = filteredChannels.findIndex((c) => c.id === selectedChannelId);
-    if (idx >= 0 && idx < RENDER_CAP) {
-      restoredFocus.current = true;
-      window.setTimeout(() => setFocus(`CH_${selectedChannelId}`), 60);
-    } else if (filteredChannels.length > 0) {
-      // El canal recordado no esta en la vista actual: foco normal.
-      restoredFocus.current = true;
-      setFocus("CAT_0");
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, selectedChannelId, filteredChannels]);
-
-  const filteredMovies = useMemo(() => {
-    if (tab !== "movies") return [];
-    const byCat = category
-      ? catalog.movies.filter((m) => m.category === category)
-      : catalog.movies;
-    const norm = query.trim().toLowerCase();
-    return norm ? byCat.filter((m) => m.name.toLowerCase().includes(norm)) : byCat;
-  }, [tab, catalog.movies, category, query]);
-
-  const filteredSeries = useMemo(() => {
-    if (tab !== "series") return [];
-    const byCat = category
-      ? catalog.series.filter((s) => s.category === category)
-      : catalog.series;
-    const norm = query.trim().toLowerCase();
-    return norm ? byCat.filter((s) => s.name.toLowerCase().includes(norm)) : byCat;
-  }, [tab, catalog.series, category, query]);
-
-  // Numeracion global y estable: el numero de cada canal es su posicion en
-  // la lista completa del proveedor. No depende de la categoria ni del
-  // filtro, asi nunca hay dos canales "1".
+  // ===== Datos =====
   const channelNumbers = useMemo(() => {
-    const map = new Map<string, number>();
-    catalog.liveChannels.forEach((c, i) => map.set(c.id, i + 1));
-    return map;
+    const m = new Map<string, number>();
+    catalog.liveChannels.forEach((c, i) => m.set(c.id, i + 1));
+    return m;
   }, [catalog.liveChannels]);
 
-  // Pre-calcular conteos por categoría una sola vez por pestaña.
-  // Antes esto se hacia O(N) por cada categoria en cada render -> con 55k
-  // canales y 56 categorias eran 3 millones de ops por render = lag enorme.
-  const categoryCounts = useMemo(() => {
-    const map = new Map<string, number>();
-    const incr = (key?: string) => {
-      if (!key) return;
-      map.set(key, (map.get(key) ?? 0) + 1);
-    };
-    if (tab === "live") catalog.liveChannels.forEach((c) => incr(c.groupTitle));
-    else if (tab === "movies") catalog.movies.forEach((m) => incr(m.category ?? undefined));
-    else if (tab === "series") catalog.series.forEach((s) => incr(s.category ?? undefined));
-    return map;
+  const categories = tab === "live" ? catalog.liveCategories
+    : tab === "movies" ? catalog.movieCategories
+    : tab === "series" ? catalog.seriesCategories : [];
+
+  const counts = useMemo(() => {
+    const m = new Map<string, number>();
+    const inc = (k?: string) => { if (k) m.set(k, (m.get(k) ?? 0) + 1); };
+    if (tab === "live") catalog.liveChannels.forEach((c) => inc(c.groupTitle));
+    else if (tab === "movies") catalog.movies.forEach((x) => inc(x.category ?? undefined));
+    else if (tab === "series") catalog.series.forEach((x) => inc(x.category ?? undefined));
+    return m;
   }, [tab, catalog]);
 
-  const onSidebarPress = (id: typeof SIDEBAR_ITEMS[number]["id"]) => {
-    if (id === "hub") navigate("/hub");
-    else if (id === "search") setSearchOpen((v) => !v);
-    else if (id === "reload") reload();
-    else if (id === "settings") navigate("/setup");
-    else setTab(id);
-  };
+  const q = query.trim().toLowerCase();
+  const liveFiltered = useMemo(() => {
+    if (tab !== "live") return [];
+    const byCat = category ? catalog.liveChannels.filter((c) => c.groupTitle === category) : catalog.liveChannels;
+    return q ? byCat.filter((c) => c.name.toLowerCase().includes(q)) : byCat;
+  }, [tab, catalog.liveChannels, category, q]);
+  const moviesFiltered = useMemo(() => {
+    if (tab !== "movies") return [];
+    const byCat = category ? catalog.movies.filter((m) => m.category === category) : catalog.movies;
+    return q ? byCat.filter((m) => m.name.toLowerCase().includes(q)) : byCat;
+  }, [tab, catalog.movies, category, q]);
+  const seriesFiltered = useMemo(() => {
+    if (tab !== "series") return [];
+    const byCat = category ? catalog.series.filter((s) => s.category === category) : catalog.series;
+    return q ? byCat.filter((s) => s.name.toLowerCase().includes(q)) : byCat;
+  }, [tab, catalog.series, category, q]);
 
-  const play = (url: string, title: string) => {
+  useEffect(() => {
+    if (restored.current || tab !== "live" || !selectedChannelId) { restored.current = true; return; }
+    const idx = liveFiltered.findIndex((c) => c.id === selectedChannelId);
+    restored.current = true;
+    if (idx >= 0 && idx < RENDER_CAP) window.setTimeout(() => setFocus(`CH_${selectedChannelId}`), 60);
+  }, [tab, selectedChannelId, liveFiltered]);
+
+  const play = (url: string, title: string) =>
     navigate(`/player?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}`);
-  };
-  const openSeries = (id: string, name: string) => {
+  const openSeries = (id: string, name: string) =>
     navigate(`/series/${id}?name=${encodeURIComponent(name)}`);
-  };
 
-  // === Render ===
+  const selectedChannel = selectedChannelId
+    ? catalog.liveChannels.find((c) => c.id === selectedChannelId) ?? null : null;
+
+  const title = tab === "live" ? "En vivo" : tab === "movies" ? "Películas" : tab === "series" ? "Series" : "Favoritos";
+
   return (
     <FocusContext.Provider value={focusKey}>
-      <div className="page hot" ref={ref}>
-        {/* Topbar mini con logo + indicador "Live" */}
-        <div className="hot-topbar">
-          <span className="hot-logo">POTR<span>I</span></span>
-          {tab === "live" && category ? (
-            <span className="hot-badge">{category}</span>
-          ) : null}
-          {loadingStep ? (
-            <span className="hot-loading">
-              {loadingStep}
-              {loadingProgress ? ` (${loadingProgress.current}/${loadingProgress.total})` : ""}
-            </span>
-          ) : null}
-        </div>
-
-        <div className="hot-body">
-          {/* Sidebar de iconos */}
-          <nav className="hot-icons">
-            {SIDEBAR_ITEMS.map((it) => (
-              <FocusableButton
-                key={it.id}
-                className={`hot-icon ${
-                  (it.id === tab || (it.id === "search" && searchOpen)) ? "active" : ""
-                }`}
-                onEnterPress={() => onSidebarPress(it.id)}
-              >
-                <Icon name={it.icon} className="hot-icon-glyph" />
-              </FocusableButton>
-            ))}
-          </nav>
-
-          {/* Columna 2: categorias */}
-          <aside className="hot-cats">
-            <div className="hot-cats-header">
-              <div className="hot-cats-title">
-                {tab === "live" ? "EN VIVO" :
-                  tab === "movies" ? "PELÍCULAS" :
-                    tab === "series" ? "SERIES" : "FAVORITOS"}
-              </div>
-              <div className="hot-cats-sub">TOTAL: {tabData.totalCount}</div>
-            </div>
-            {searchOpen ? (
-              <div style={{ padding: "8px 12px" }}>
-                <FocusableInput
-                  value={query}
-                  onChange={setQuery}
-                  placeholder="Buscar…"
-                  focusKey="SEARCH_INPUT"
-                />
-              </div>
-            ) : null}
-            <div className="hot-cats-list">
-              <FocusableButton
-                className={`hot-cat ${category === null ? "selected" : ""}`}
-                focusKey="CAT_0"
-                onEnterPress={() => setCategory(null)}
-              >
-                <div className="hot-cat-name">Todas</div>
-                <div className="hot-cat-total">TOTAL: {tabData.totalCount}</div>
-              </FocusableButton>
-              {tabData.categories.map((c) => (
-                <FocusableButton
-                  key={c.id}
-                  className={`hot-cat ${category === c.name ? "selected" : ""}`}
-                  onEnterPress={() => setCategory(c.name)}
-                >
-                  <div className="hot-cat-name">{c.name}</div>
-                  <div className="hot-cat-total">TOTAL: {categoryCounts.get(c.name) ?? 0}</div>
-                </FocusableButton>
-              ))}
-            </div>
-          </aside>
-
-          {/* Columna 3: items */}
-          <main className="hot-items">
+      <div className="ascreen" ref={ref}>
+        <TopBar
+          title={title}
+          center={tab === "live" && category ? <div className="a-catnow">{category}</div> : undefined}
+        />
+        <div className="a-body">
+          <Rail active={tab} onSelect={railSelect} reloading={loading} />
+          <div className={`a-screen ${tab === "live" && !loading && !error ? "live-row" : ""}`}>
             {loading && !catalog.liveChannels.length ? (
-              <div className="hot-status"><div className="spinner" /> Cargando…</div>
-            ) : error ? (
-              <div className="hot-status">
-                <div className="error" style={{ padding: 0 }}>{error}</div>
+              <div className="ld">
+                <div className="ld-spin spinner" />
+                <div className="ld-step">{loadingStep ?? "Cargando…"}</div>
+                {loadingProgress ? <div className="ld-count">{loadingProgress.current} / {loadingProgress.total}</div> : null}
+              </div>
+            ) : error && !catalog.liveChannels.length ? (
+              <div className="ld">
+                <Icon name="wifi_off" className="eo-ic" />
+                <div className="ld-step" style={{ color: "var(--err)" }}>{error}</div>
                 <FocusableButton className="btn primary" onEnterPress={reload}>Reintentar</FocusableButton>
               </div>
             ) : tab === "live" ? (
-              <LiveChannelList
-                channels={filteredChannels.slice(0, RENDER_CAP)}
-                totalFiltered={filteredChannels.length}
-                cap={RENDER_CAP}
-                selectedChannelId={selectedChannelId}
-                channelNumbers={channelNumbers}
-                onChannelEnter={(c) => {
-                  // OK 1: arranca en el preview con sonido.
-                  // OK 2 (mismo canal): expande a pantalla completa SIN recargar
-                  // (es el mismo <video> del preview, solo cambia el layout).
-                  if (selectedChannelId === c.id) setFullscreen(true);
-                  else setSelectedChannelId(c.id);
-                }}
-                epgByChannel={epgByChannel}
-                isFavorite={isFavorite}
-                onToggleFavorite={(c) =>
-                  toggleFavorite({
-                    id: c.id, name: c.name, streamUrl: c.streamUrl, logoUrl: c.logoUrl, kind: c.kind,
-                  })
-                }
-              />
-            ) : tab === "movies" ? (
-              <PosterGrid
-                items={filteredMovies.slice(0, RENDER_CAP).map((m) => ({
-                  id: m.id, title: m.name, posterUrl: m.posterUrl, onSelect: () => play(m.streamUrl, m.name),
-                }))}
-                total={filteredMovies.length}
-                cap={RENDER_CAP}
-              />
-            ) : tab === "series" ? (
-              <PosterGrid
-                items={filteredSeries.slice(0, RENDER_CAP).map((s) => ({
-                  id: s.id, title: s.name, posterUrl: s.posterUrl, onSelect: () => openSeries(s.id, s.name),
-                }))}
-                total={filteredSeries.length}
-                cap={RENDER_CAP}
-              />
-            ) : (
-              <FavoritesList favorites={favorites} onPlay={play} />
-            )}
-          </main>
+              <>
+                <div className="a-cats">
+                  <div className="a-cats-h"><span className="a-cats-t">Categorías</span><span className="a-cats-c">{categories.length}</span></div>
+                  {searchOpen ? (
+                    <div className="a-search">
+                      <Icon name="search" />
+                      <FocusableInput focusKey="SEARCH_IN" value={query} onChange={setQuery} placeholder="Buscar canal…" />
+                    </div>
+                  ) : null}
+                  <div className="a-cats-list scroll">
+                    <FocusableButton focusKey="CAT_0" className={`a-cat ${category === null ? "sel" : ""}`} onEnterPress={() => setCategory(null)}>
+                      <span className="a-cat-n">Todas</span><span className="a-cat-t">{catalog.liveChannels.length}</span>
+                    </FocusableButton>
+                    {categories.map((c) => (
+                      <FocusableButton key={c.id} className={`a-cat ${category === c.name ? "sel" : ""}`} onEnterPress={() => setCategory(c.name)}>
+                        <span className="a-cat-n">{c.name}</span><span className="a-cat-t">{counts.get(c.name) ?? 0}</span>
+                      </FocusableButton>
+                    ))}
+                  </div>
+                </div>
 
-          {/* Columna 4: preview (solo en En vivo) */}
-          {tab === "live" ? (
-            <PreviewPanel
-              channel={
-                selectedChannelId
-                  ? catalog.liveChannels.find((c) => c.id === selectedChannelId) ?? null
-                  : null
-              }
-              channelNumber={
-                selectedChannelId ? channelNumbers.get(selectedChannelId) ?? null : null
-              }
-              epgByChannel={epgByChannel}
-              fullscreen={fullscreen}
-              onEnterFullscreen={() => setFullscreen(true)}
-              onExitFullscreen={() => setFullscreen(false)}
-            />
-          ) : null}
+                <div className="a-list">
+                  <div className="a-list-h">Canales · {category ?? "Todas"} · {liveFiltered.length}</div>
+                  <div className="a-list-vp scroll">
+                    {liveFiltered.slice(0, RENDER_CAP).map((c) => {
+                      const now = findNowPlaying(epgByChannel, c.tvgId);
+                      const ql = quality(c.name);
+                      const sel = c.id === selectedChannelId;
+                      return (
+                        <FocusableButton
+                          key={c.id} focusKey={`CH_${c.id}`}
+                          className={`a-ch ${sel ? "playing" : ""}`}
+                          onEnterPress={() => { if (sel) setFullscreen(true); else setSelectedChannelId(c.id); }}
+                        >
+                          <span className="a-ch-num">{channelNumbers.get(c.id) ?? "—"}</span>
+                          <span className="a-ch-logo">{c.logoUrl ? <img src={c.logoUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "contain", borderRadius: 11 }} /> : initials(c.name)}</span>
+                          <span className="a-ch-info">
+                            <div className="a-ch-name">{c.name}</div>
+                            {now ? <div className="a-ch-now">{now.title}</div> : null}
+                          </span>
+                          {ql ? <span className="a-ch-q">{ql}</span> : null}
+                          {isFavorite(c.id) ? <span className="a-ch-fav" onClick={(e) => { e.stopPropagation(); toggleFavorite({ id: c.id, name: c.name, streamUrl: c.streamUrl, logoUrl: c.logoUrl, kind: c.kind }); }}><Icon name="star" /></span> : null}
+                        </FocusableButton>
+                      );
+                    })}
+                    {liveFiltered.length > RENDER_CAP ? (
+                      <div className="grd-empty" style={{ padding: 20 }}>Mostrando {RENDER_CAP} de {liveFiltered.length}. Elegí categoría o buscá.</div>
+                    ) : null}
+                  </div>
+                </div>
+
+                <PreviewPanel
+                  channel={selectedChannel}
+                  channelNumber={selectedChannelId ? channelNumbers.get(selectedChannelId) ?? null : null}
+                  epgByChannel={epgByChannel}
+                  fullscreen={fullscreen}
+                  onEnterFullscreen={() => setFullscreen(true)}
+                  onExitFullscreen={() => setFullscreen(false)}
+                />
+              </>
+            ) : tab === "favorites" ? (
+              <FavScreen favorites={favorites} onPlay={play} onToggle={toggleFavorite} />
+            ) : (
+              <GridScreen
+                title={title}
+                count={tab === "movies" ? moviesFiltered.length : seriesFiltered.length}
+                categories={categories}
+                category={category}
+                onCategory={setCategory}
+                query={query}
+                onQuery={setQuery}
+                items={
+                  tab === "movies"
+                    ? moviesFiltered.slice(0, RENDER_CAP).map((m) => ({
+                        id: m.id, name: m.name, posterUrl: m.posterUrl, year: m.year, rating: m.rating,
+                        onSelect: () => play(m.streamUrl, m.name),
+                      }))
+                    : seriesFiltered.slice(0, RENDER_CAP).map((s) => ({
+                        id: s.id, name: s.name, posterUrl: s.posterUrl,
+                        onSelect: () => openSeries(s.id, s.name),
+                      }))
+                }
+                total={tab === "movies" ? moviesFiltered.length : seriesFiltered.length}
+              />
+            )}
+          </div>
         </div>
+        <Hints items={tab === "live"
+          ? [{ k: "↕↔", label: "Navegar" }, { k: "OK", label: "Ver / Pantalla completa" }, { k: "F", label: "Favorito" }, { k: "Esc", label: "Volver" }]
+          : [{ k: "↕↔", label: "Navegar" }, { k: "OK", label: "Seleccionar" }, { k: "Esc", label: "Volver" }]} />
       </div>
     </FocusContext.Provider>
   );
 }
 
-interface PreviewChannel {
-  id: string;
-  name: string;
-  streamUrl: string;
-  logoUrl?: string;
-  tvgId?: string;
-}
-
-/** Detecta la calidad declarada en el nombre del canal (4K| UHD, FHD, etc). */
-function qualityFromName(name: string): string | null {
-  if (/4k|uhd|2160/i.test(name)) return "4K UHD";
-  if (/fhd|1080/i.test(name)) return "FHD";
-  if (/\bhd\b|720/i.test(name)) return "HD";
-  if (/\bsd\b|480/i.test(name)) return "SD";
-  return null;
-}
-
-interface PreviewProps {
-  channel: PreviewChannel | null;
-  channelNumber: number | null;
-  epgByChannel: unknown;
-  fullscreen: boolean;
-  onEnterFullscreen: () => void;
-  onExitFullscreen: () => void;
-}
+// ===================== PREVIEW + FULLSCREEN + TRACKS =====================
+interface PreviewChannel { id: string; name: string; streamUrl: string; logoUrl?: string; tvgId?: string }
 
 function PreviewPanel({
   channel, channelNumber, epgByChannel, fullscreen, onEnterFullscreen, onExitFullscreen,
-}: PreviewProps) {
+}: {
+  channel: PreviewChannel | null;
+  channelNumber: number | null;
+  epgByChannel: Map<string, ReturnType<typeof findNowPlaying>[]> | unknown;
+  fullscreen: boolean;
+  onEnterFullscreen: () => void;
+  onExitFullscreen: () => void;
+}) {
   const now = channel ? findNowPlaying(epgByChannel as never, channel.tvgId) : null;
   const next = channel ? findNextProgram(epgByChannel as never, channel.tvgId) : null;
   const videoElRef = useRef<HTMLVideoElement | null>(null);
   const [paused, setPaused] = useState(false);
-  const [fsOverlay, setFsOverlay] = useState(true);
-  const fsTimer = useRef<number | null>(null);
-  const prevFs = useRef(false);
   const [hls, setHls] = useState<Hls | null>(null);
   const [res, setRes] = useState<{ w: number; h: number } | null>(null);
   const [tracksOpen, setTracksOpen] = useState(false);
-  const tracksOpenRef = useRef(false);
-  tracksOpenRef.current = tracksOpen;
-  const quality = channel ? qualityFromName(channel.name) : null;
+  const [fsOverlay, setFsOverlay] = useState(true);
+  const fsTimer = useRef<number | null>(null);
+  const prevFs = useRef(false);
+  const tracksRef = useRef(false); tracksRef.current = tracksOpen;
+  const ql = channel ? quality(channel.name) : null;
 
-  // Al cambiar de canal, resetear estado de pausa y menu de pistas.
+  useEffect(() => { setPaused(false); setTracksOpen(false); }, [channel?.id]);
+  const togglePause = () => { const v = videoElRef.current; if (!v) return; if (v.paused) { v.play().catch(() => undefined); setPaused(false); } else { v.pause(); setPaused(true); } };
+  const poke = () => { setFsOverlay(true); if (fsTimer.current) window.clearTimeout(fsTimer.current); fsTimer.current = window.setTimeout(() => { if (!tracksRef.current) setFsOverlay(false); }, 5000); };
+
   useEffect(() => {
-    setPaused(false);
-    setTracksOpen(false);
-  }, [channel?.id]);
-
-  const togglePause = () => {
-    const v = videoElRef.current;
-    if (!v) return;
-    if (v.paused) {
-      v.play().catch(() => undefined);
-      setPaused(false);
-    } else {
-      v.pause();
-      setPaused(true);
-    }
-  };
-
-  const pokeOverlay = () => {
-    setFsOverlay(true);
-    if (fsTimer.current !== null) window.clearTimeout(fsTimer.current);
-    fsTimer.current = window.setTimeout(() => {
-      // No esconder los controles mientras el menu de pistas este abierto.
-      if (!tracksOpenRef.current) setFsOverlay(false);
-    }, 5000);
-  };
-
-  // Manejo de teclas en fullscreen: back sale (el video sigue en el preview),
-  // flechas verticales no escapan a la lista de atras, cualquier tecla
-  // re-muestra el overlay de controles.
-  useEffect(() => {
-    if (!fullscreen) {
-      // Al salir de fullscreen, volver el foco al canal en la lista.
-      if (prevFs.current) setFocus(channel ? `CH_${channel.id}` : "PV_PAUSE");
-      prevFs.current = false;
-      return;
-    }
-    prevFs.current = true;
-    pokeOverlay();
-    setFocus("FS_PAUSE");
+    if (!fullscreen) { if (prevFs.current) setFocus(channel ? `CH_${channel.id}` : "PV_PAUSE"); prevFs.current = false; return; }
+    prevFs.current = true; poke(); setFocus("FS_PAUSE");
     const onKey = (e: KeyboardEvent) => {
-      if (isBackKey(e)) {
-        e.preventDefault();
-        e.stopPropagation();
-        if (tracksOpenRef.current) {
-          setTracksOpen(false);
-          setFocus("FS_TRACKS");
-        } else {
-          onExitFullscreen();
-        }
-        return;
-      }
-      if (!tracksOpenRef.current && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
-        // Evitar que el foco se escape a la lista que quedo detras.
-        // (Con el menu de pistas abierto, las flechas navegan el menu.)
-        e.stopPropagation();
-      }
-      pokeOverlay();
+      if (isBackKey(e)) { e.preventDefault(); e.stopPropagation(); if (tracksRef.current) { setTracksOpen(false); setFocus("FS_TRACKS"); } else onExitFullscreen(); return; }
+      if (!tracksRef.current && (e.key === "ArrowUp" || e.key === "ArrowDown")) e.stopPropagation();
+      poke();
     };
     window.addEventListener("keydown", onKey, true);
-    return () => {
-      window.removeEventListener("keydown", onKey, true);
-      if (fsTimer.current !== null) window.clearTimeout(fsTimer.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fullscreen]);
+    return () => { window.removeEventListener("keydown", onKey, true); if (fsTimer.current) window.clearTimeout(fsTimer.current); };
+  }, [fullscreen]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const progPct = now && now.stopMs > now.startMs ? Math.max(0, Math.min(100, ((Date.now() - now.startMs) / (now.stopMs - now.startMs)) * 100)) : 0;
 
   return (
-    <aside className="hot-preview">
-      <div
-        className={`hot-preview-video ${fullscreen ? "fs" : ""}`}
-        onClick={() => {
-          // Click/tap sobre la vista previa = pantalla completa.
-          if (!fullscreen && channel) onEnterFullscreen();
-        }}
-      >
-        <VideoPreview
-          url={channel?.streamUrl ?? null}
-          muted={false}
-          onVideoEl={(el) => { videoElRef.current = el; }}
-          onHls={setHls}
-          onResolution={(w, h) => setRes(w > 0 ? { w, h } : null)}
-        />
-        {channel && !fullscreen ? (
-          <div className="live-pill"><span className="dot" /> EN VIVO</div>
-        ) : null}
-        {fullscreen ? (
-          <div className={`fs-overlay ${fsOverlay ? "visible" : ""}`}>
-            <div className="fs-top">
-              <div className="fs-name">{channel?.name}</div>
-              <div className="fs-meta">
-                {channelNumber !== null ? <span className="chip blue">Nº {channelNumber}</span> : null}
-                {quality ? <span className="chip yellow">{quality}</span> : null}
-                {res ? <span className="chip dark">REPRODUCIENDO {res.w} x {res.h}</span> : null}
-              </div>
-              {now ? <div className="fs-now">AHORA · {now.title}</div> : null}
-            </div>
-            <div className="fs-bottom">
-              <FocusableButton
-                focusKey="FS_PAUSE"
-                className="btn hot-ctrl"
-                onEnterPress={togglePause}
-              >
-                <Icon name={paused ? "play_arrow" : "pause"} /> {paused ? "Reproducir" : "Pausa"}
-              </FocusableButton>
-              <FocusableButton
-                focusKey="FS_TRACKS"
-                className="btn hot-ctrl"
-                onEnterPress={() => {
-                  setTracksOpen((v) => !v);
-                  pokeOverlay();
-                  window.setTimeout(() => setFocus("TRK_FIRST"), 60);
-                }}
-              >
-                <Icon name="tune" /> Pistas
-              </FocusableButton>
-              <FocusableButton className="btn hot-ctrl" onEnterPress={onExitFullscreen}>
-                <Icon name="arrow_back" /> Volver
-              </FocusableButton>
-            </div>
-            {tracksOpen ? (
-              <TrackMenu
-                hls={hls}
-                onClose={() => {
-                  setTracksOpen(false);
-                  setFocus("FS_TRACKS");
-                }}
-              />
-            ) : null}
-          </div>
-        ) : null}
-      </div>
-      {channel ? (
-        <>
-          <div className="hot-preview-controls">
-            <FocusableButton focusKey="PV_PAUSE" className="btn hot-ctrl" onEnterPress={togglePause}>
-              <Icon name={paused ? "play_arrow" : "pause"} /> {paused ? "Reproducir" : "Pausa"}
-            </FocusableButton>
-            <FocusableButton
-              className="btn hot-ctrl primary"
-              onEnterPress={onEnterFullscreen}
-            >
-              <Icon name="fullscreen" /> Pantalla completa
-            </FocusableButton>
-          </div>
-          <div className="hot-preview-info">
-            {channel.logoUrl ? (
-              <img className="hot-preview-logo" src={channel.logoUrl} alt="" />
-            ) : null}
-            <div className="hot-preview-name">{channel.name}</div>
-            <div className="hot-preview-meta">
-              {channelNumber !== null ? <span className="chip blue">Nº {channelNumber}</span> : null}
-              {quality ? <span className="chip yellow">{quality}</span> : null}
-              {res ? <span className="chip dark">{res.w} x {res.h}</span> : null}
-            </div>
-            {now ? (
-              <>
-                <div className="hot-preview-now-label">AHORA</div>
-                <div className="hot-preview-now">{now.title}</div>
-                {now.description ? (
-                  <div className="hot-preview-desc">{now.description}</div>
-                ) : null}
-              </>
-            ) : null}
-            {next ? (
-              <>
-                <div className="hot-preview-now-label next">DESPUÉS · {
-                  new Date(next.startMs).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-                }</div>
-                <div className="hot-preview-next">{next.title}</div>
-              </>
-            ) : null}
-          </div>
-        </>
+    <aside className="a-prev">
+      {!channel ? (
+        <div className="a-prev-empty"><Icon name="live_tv" size={64} /><div>Apretá OK en un canal para verlo acá con sonido. OK de nuevo: pantalla completa.</div></div>
       ) : (
-        <div className="hot-preview-info muted">
-          Apretá OK en un canal para verlo acá con sonido. OK de nuevo: pantalla completa.
-        </div>
+        <>
+          <div className={fullscreen ? "a-fs" : "a-video"} style={fullscreen ? { position: "fixed", inset: 0, zIndex: 60, borderRadius: 0 } : undefined}
+            onClick={() => { if (!fullscreen) onEnterFullscreen(); }}>
+            <VideoPreview url={channel.streamUrl} muted={false}
+              onVideoEl={(el) => { videoElRef.current = el; }} onHls={setHls}
+              onResolution={(w, h) => setRes(w > 0 ? { w, h } : null)} />
+            {!fullscreen ? (
+              <>
+                <div className="a-vid-grad" />
+                <div className="a-vid-top">
+                  <span className="a-vid-live"><span className="a-livedot" /> EN VIVO</span>
+                  {res ? <span className="a-vid-feed">{res.h}p</span> : null}
+                </div>
+                <div className="a-vid-name">{channel.name}</div>
+                <div className="a-vid-chips">
+                  {channelNumber !== null ? <span className="a-chip" style={{ background: "var(--surface2)" }}>Nº {channelNumber}</span> : null}
+                  {ql ? <span className="a-chip" style={{ background: "var(--accent)", color: "#1a1500" }}>{ql}</span> : null}
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="a-fs-grad" style={{ opacity: fsOverlay ? 1 : 0, transition: "opacity .25s" }} />
+                <div style={{ opacity: fsOverlay ? 1 : 0, transition: "opacity .25s", pointerEvents: fsOverlay ? "auto" : "none" }}>
+                  <div className="a-fs-top">
+                    <div className="a-fs-name">{channel.name}</div>
+                    <div className="a-fs-meta">
+                      {channelNumber !== null ? <span className="a-chip" style={{ background: "var(--surface2)" }}>Nº {channelNumber}</span> : null}
+                      {ql ? <span className="a-chip" style={{ background: "var(--accent)", color: "#1a1500" }}>{ql}</span> : null}
+                      {res ? <span className="a-chip" style={{ background: "var(--surface2)" }}>{res.w}×{res.h}</span> : null}
+                    </div>
+                    {now ? <div className="a-fs-now">AHORA · {now.title}</div> : null}
+                  </div>
+                  <div className="a-fs-bottom">
+                    <div className="a-fs-ctrls">
+                      <FocusableButton focusKey="FS_PAUSE" className="a-fs-btn" onEnterPress={togglePause}><Icon name={paused ? "play_arrow" : "pause"} /> {paused ? "Reproducir" : "Pausa"}</FocusableButton>
+                      <FocusableButton focusKey="FS_TRACKS" className="a-fs-btn" onEnterPress={() => { setTracksOpen((v) => !v); poke(); window.setTimeout(() => setFocus("TRK_FIRST"), 60); }}><Icon name="tune" /> Pistas</FocusableButton>
+                      <FocusableButton className="a-fs-btn" onEnterPress={onExitFullscreen}><Icon name="arrow_back" /> Volver</FocusableButton>
+                    </div>
+                  </div>
+                  {tracksOpen ? <TrackMenu hls={hls} onClose={() => { setTracksOpen(false); setFocus("FS_TRACKS"); }} /> : null}
+                </div>
+              </>
+            )}
+          </div>
+
+          {!fullscreen ? (
+            <>
+              <div className="a-pmeta">
+                {now ? (
+                  <>
+                    <div className="a-plabel">Ahora</div>
+                    <div className="a-ptitle">{now.title}</div>
+                    <div className="a-pbar">
+                      <span className="a-pbar-track"><i style={{ display: "block", height: "100%", width: `${progPct}%`, background: "var(--accent)", borderRadius: 4 }} /></span>
+                      <span className="a-pbar-time">{fmtClock(now.stopMs)}</span>
+                    </div>
+                    {now.description ? <div className="a-pdesc">{now.description}</div> : null}
+                  </>
+                ) : <div className="a-pdesc">Sin guía para este canal.</div>}
+                {next ? (
+                  <div className="a-pnext"><span className="a-pnext-t">{fmtClock(next.startMs)} · DESPUÉS</span><span className="a-pnext-n">{next.title}</span></div>
+                ) : null}
+              </div>
+              <div className="a-ctrls">
+                <FocusableButton focusKey="PV_PAUSE" className="a-btn" onEnterPress={togglePause}><Icon name={paused ? "play_arrow" : "pause"} /> {paused ? "Reproducir" : "Pausa"}</FocusableButton>
+                <FocusableButton className="a-btn primary" onEnterPress={onEnterFullscreen}><Icon name="fullscreen" /> Pantalla completa</FocusableButton>
+              </div>
+            </>
+          ) : null}
+        </>
       )}
     </aside>
   );
 }
 
-// ===== Sub-componentes =====
-
-interface LiveListProps {
-  channels: Array<{
-    id: string; name: string; streamUrl: string; logoUrl?: string;
-    groupTitle?: string; tvgId?: string; kind: "live" | "movie" | "series-episode";
-  }>;
-  totalFiltered: number;
-  cap: number;
-  selectedChannelId: string | null;
-  channelNumbers: Map<string, number>;
-  onChannelEnter: (c: { id: string; name: string; streamUrl: string; logoUrl?: string; kind: "live" | "movie" | "series-episode" }) => void;
-  epgByChannel: Map<string, ReturnType<typeof findNowPlaying> extends { title?: string } | undefined ? unknown : never> | Map<string, unknown>;
-  isFavorite: (id: string) => boolean;
-  onToggleFavorite: (c: { id: string; name: string; streamUrl: string; logoUrl?: string; kind: "live" | "movie" | "series-episode" }) => void;
-}
-
-function LiveChannelList({
-  channels, totalFiltered, cap, selectedChannelId, channelNumbers, onChannelEnter, epgByChannel,
-  isFavorite, onToggleFavorite,
-}: LiveListProps) {
-  if (channels.length === 0) return <div className="hot-status">No hay canales</div>;
+function TrackMenu({ hls, onClose }: { hls: Hls | null; onClose: () => void }) {
+  const [, setTick] = useState(0);
+  const refresh = () => setTick((t) => t + 1);
+  if (!hls) {
+    return (
+      <div className="a-trk">
+        <div className="a-trk-h"><Icon name="tune" /> Pistas</div>
+        <div className="a-trk-scroll"><div className="a-pdesc">Este stream no permite cambiar calidad, audio ni subtítulos.</div></div>
+        <FocusableButton focusKey="TRK_FIRST" className="a-trk-close" onEnterPress={onClose}>Cerrar</FocusableButton>
+      </div>
+    );
+  }
+  const levels = hls.levels ?? [];
+  const audio = hls.audioTracks ?? [];
+  const subs = hls.subtitleTracks ?? [];
   return (
-    <div className="hot-channels-scroll">
-      {channels.map((c) => {
-        const now = findNowPlaying(epgByChannel as never, c.tvgId);
-        const isSel = c.id === selectedChannelId;
-        const prog = now && now.stopMs > now.startMs
-          ? Math.max(0, Math.min(1, (Date.now() - now.startMs) / (now.stopMs - now.startMs)))
-          : null;
-        return (
-          <FocusableButton
-            key={c.id}
-            focusKey={`CH_${c.id}`}
-            className={`hot-channel ${isSel ? "selected" : ""}`}
-            onEnterPress={() => onChannelEnter(c)}
-          >
-            <div className="hot-channel-num">{channelNumbers.get(c.id) ?? "—"}</div>
-            <div className="hot-channel-logo">
-              {c.logoUrl ? (
-                <img src={c.logoUrl} alt="" />
-              ) : (
-                <div className="hot-channel-logo-placeholder"><Icon name="live_tv" /></div>
-              )}
-            </div>
-            <div className="hot-channel-info">
-              <div className="hot-channel-name">{c.name}</div>
-              {now ? <div className="hot-channel-now">{now.title}</div> : null}
-              {prog !== null ? (
-                <div className="hot-channel-prog"><i style={{ width: `${prog * 100}%` }} /></div>
-              ) : null}
-            </div>
-            {isFavorite(c.id) ? <span className="hot-channel-fav" onClick={(e) => { e.stopPropagation(); onToggleFavorite(c); }}><Icon name="star" /></span> : null}
+    <div className="a-trk">
+      <div className="a-trk-h"><Icon name="tune" /> Pistas</div>
+      <div className="a-trk-scroll scroll">
+        <div className="a-trk-sec">Calidad</div>
+        <FocusableButton focusKey="TRK_FIRST" className="a-trk-item" onEnterPress={() => { hls.currentLevel = -1; refresh(); }}>Auto {hls.autoLevelEnabled ? <Icon name="check" /> : null}</FocusableButton>
+        {levels.map((l, i) => (
+          <FocusableButton key={i} className="a-trk-item" onEnterPress={() => { hls.currentLevel = i; refresh(); }}>
+            {l.height ? `${l.height}p` : `${Math.round((l.bitrate ?? 0) / 1000)}k`} {!hls.autoLevelEnabled && hls.currentLevel === i ? <Icon name="check" /> : null}
           </FocusableButton>
-        );
-      })}
-      {totalFiltered > cap ? (
-        <div className="hot-status" style={{ padding: 16 }}>
-          Mostrando {cap} de {totalFiltered}. Elegí una categoría o buscá.
-        </div>
-      ) : null}
+        ))}
+        {audio.length ? <div className="a-trk-sec">Audio</div> : null}
+        {audio.map((t, i) => (
+          <FocusableButton key={i} className="a-trk-item" onEnterPress={() => { hls.audioTrack = i; refresh(); }}>{t.name || t.lang || `Pista ${i + 1}`} {hls.audioTrack === i ? <Icon name="check" /> : null}</FocusableButton>
+        ))}
+        <div className="a-trk-sec">Subtítulos</div>
+        <FocusableButton className="a-trk-item" onEnterPress={() => { hls.subtitleTrack = -1; refresh(); }}>Desactivados {hls.subtitleTrack === -1 ? <Icon name="check" /> : null}</FocusableButton>
+        {subs.map((t, i) => (
+          <FocusableButton key={i} className="a-trk-item" onEnterPress={() => { hls.subtitleTrack = i; refresh(); }}>{t.name || t.lang || `Sub ${i + 1}`} {hls.subtitleTrack === i ? <Icon name="check" /> : null}</FocusableButton>
+        ))}
+      </div>
+      <FocusableButton className="a-trk-close" onEnterPress={onClose}>Cerrar</FocusableButton>
     </div>
   );
 }
 
-function PosterGrid({ items, total, cap }: {
-  items: Array<{ id: string; title: string; posterUrl?: string; onSelect: () => void }>;
-  total: number; cap: number;
+// ===================== GRID (películas / series) =====================
+function GridScreen({
+  title, count, categories, category, onCategory, query, onQuery, items, total,
+}: {
+  title: string;
+  count: number;
+  categories: { id: string; name: string }[];
+  category: string | null;
+  onCategory: (c: string | null) => void;
+  query: string;
+  onQuery: (q: string) => void;
+  items: { id: string; name: string; posterUrl?: string; year?: string; rating?: string; onSelect: () => void }[];
+  total: number;
 }) {
-  if (items.length === 0) return <div className="hot-status">Sin contenido</div>;
   return (
-    <div className="poster-grid hot-poster-grid">
-      {items.map((it) => (
-        <PosterCard key={it.id} title={it.title} posterUrl={it.posterUrl} onSelect={it.onSelect} />
-      ))}
-      {total > cap ? (
-        <div className="hot-status" style={{ gridColumn: "1 / -1" }}>
-          Mostrando {cap} de {total}. Elegí una categoría o buscá.
+    <div className="grd">
+      <div className="grd-h">
+        <div className="grd-htitle"><span className="grd-title">{title}</span><span className="grd-count">{count.toLocaleString()} títulos</span></div>
+        <div className="grd-search">
+          <Icon name="search" />
+          <FocusableInput focusKey="SEARCH_IN" value={query} onChange={onQuery} placeholder={`Buscar ${title.toLowerCase()}…`} />
         </div>
-      ) : null}
+      </div>
+      <div className="grd-chips">
+        <FocusableButton focusKey="CAT_0" className={`chip ${category === null ? "on" : ""}`} onEnterPress={() => onCategory(null)}>Todas</FocusableButton>
+        {categories.slice(0, 30).map((c) => (
+          <FocusableButton key={c.id} className={`chip ${category === c.name ? "on" : ""}`} onEnterPress={() => onCategory(c.name)}>{c.name}</FocusableButton>
+        ))}
+      </div>
+      <div className="grd-scroll scroll">
+        {items.length === 0 ? (
+          <div className="grd-empty">Sin resultados{query ? ` para «${query}»` : ""}</div>
+        ) : (
+          <div className="grd-grid">
+            {items.map((it) => (
+              <FocusableButton key={it.id} className="poster" onEnterPress={it.onSelect}>
+                <div className="poster-img">
+                  {it.posterUrl ? <img src={it.posterUrl} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} /> : <div className="poster-ph">{initials(it.name)}</div>}
+                  {it.rating ? <div className="poster-rate"><Icon name="star" size={15} /> {it.rating}</div> : null}
+                  <div className="poster-meta">
+                    <div className="poster-name">{it.name}</div>
+                    {it.year ? <div className="poster-year">{it.year}</div> : null}
+                  </div>
+                </div>
+              </FocusableButton>
+            ))}
+          </div>
+        )}
+        {total > items.length ? <div className="grd-empty" style={{ paddingTop: 24 }}>Mostrando {items.length} de {total}. Filtrá por categoría o buscá.</div> : null}
+      </div>
     </div>
   );
 }
 
+// ===================== FAVORITOS =====================
 const FAV_FILTERS: { id: string; label: string; kind: string | null }[] = [
   { id: "all", label: "Todos", kind: null },
   { id: "live", label: "En vivo", kind: "live" },
   { id: "movie", label: "Películas", kind: "movie" },
   { id: "series", label: "Series", kind: "series-episode" },
 ];
+function favBadge(kind: string) { return kind === "live" ? "live" : kind === "movie" ? "movie" : "series"; }
+function favBadgeLabel(kind: string) { return kind === "live" ? "EN VIVO" : kind === "movie" ? "PELÍCULA" : "SERIE"; }
 
-function favBadge(kind: string): string {
-  if (kind === "live") return "TV";
-  if (kind === "movie") return "PELÍCULA";
-  return "SERIE";
-}
-
-function FavoritesList({ favorites, onPlay }: {
-  favorites: Array<{ id: string; name: string; streamUrl: string; logoUrl?: string; kind: string }>;
+function FavScreen({ favorites, onPlay, onToggle }: {
+  favorites: { id: string; name: string; streamUrl: string; logoUrl?: string; kind: string }[];
   onPlay: (url: string, title: string) => void;
+  onToggle: (i: { id: string; name: string; streamUrl: string; logoUrl?: string; kind: "live" | "movie" | "series-episode" }) => void;
 }) {
-  const [filter, setFilter] = useState<string>("all");
+  const [filter, setFilter] = useState("all");
   const kind = FAV_FILTERS.find((f) => f.id === filter)?.kind ?? null;
   const shown = kind ? favorites.filter((f) => f.kind === kind) : favorites;
-
   return (
-    <div style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
-      <div className="fav-chips">
-        {FAV_FILTERS.map((f) => (
-          <FocusableButton
-            key={f.id}
-            className={`chip ${filter === f.id ? "active" : ""}`}
-            onEnterPress={() => setFilter(f.id)}
-          >
-            {f.label}
+    <div className="grd">
+      <div className="grd-h"><div className="grd-htitle"><span className="grd-title">Favoritos</span><span className="grd-count">{favorites.length} guardados</span></div></div>
+      <div className="grd-chips">
+        {FAV_FILTERS.map((f, i) => (
+          <FocusableButton key={f.id} focusKey={i === 0 ? "CAT_0" : undefined} className={`chip ${filter === f.id ? "on" : ""}`} onEnterPress={() => setFilter(f.id)}>{f.label}</FocusableButton>
+        ))}
+      </div>
+      <div className="fav-list scroll">
+        {shown.length === 0 ? <div className="grd-empty">Sin favoritos</div> : shown.map((f) => (
+          <FocusableButton key={f.id} className="fav-row" onEnterPress={() => onPlay(f.streamUrl, f.name)}>
+            <span className={`fav-badge ${favBadge(f.kind)}`}>{favBadgeLabel(f.kind)}</span>
+            <span className="fav-thumb">{f.logoUrl ? <img src={f.logoUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "contain", borderRadius: 10 }} /> : initials(f.name)}</span>
+            <span className="fav-mid"><div className="fav-name">{f.name}</div></span>
+            <span className="fav-star" onClick={(e) => { e.stopPropagation(); onToggle({ id: f.id, name: f.name, streamUrl: f.streamUrl, logoUrl: f.logoUrl, kind: f.kind as "live" | "movie" | "series-episode" }); }}><Icon name="star" /></span>
+            <Icon name="play_circle" className="fav-go" />
           </FocusableButton>
         ))}
       </div>
-      {shown.length === 0 ? (
-        <div className="hot-status">Sin favoritos</div>
-      ) : (
-        <div className="hot-channels-scroll">
-          {shown.map((f) => (
-            <FocusableButton
-              key={f.id}
-              className="hot-channel"
-              onEnterPress={() => onPlay(f.streamUrl, f.name)}
-            >
-              <div className="hot-channel-num"><Icon name="star" /></div>
-              <div className="hot-channel-logo">
-                {f.logoUrl ? <img src={f.logoUrl} alt="" /> : <div className="hot-channel-logo-placeholder"><Icon name="star" /></div>}
-              </div>
-              <div className="hot-channel-info">
-                <div className="hot-channel-name">{f.name}</div>
-              </div>
-              <span className="fav-badge">{favBadge(f.kind)}</span>
-            </FocusableButton>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/** Menu de pistas: calidad (niveles HLS), audio y subtitulos. */
-function TrackMenu({ hls, onClose }: { hls: Hls | null; onClose: () => void }) {
-  const [, setTick] = useState(0);
-  const refresh = () => setTick((t) => t + 1);
-
-  if (!hls) {
-    return (
-      <div className="trk-menu">
-        <div className="trk-title">Pistas</div>
-        <div className="trk-empty">
-          Este stream no permite cambiar calidad, audio ni subtítulos
-          (reproducción directa sin variantes).
-        </div>
-        <FocusableButton focusKey="TRK_FIRST" className="btn hot-ctrl" onEnterPress={onClose}>
-          Cerrar
-        </FocusableButton>
-      </div>
-    );
-  }
-
-  const levels = hls.levels ?? [];
-  const audioTracks = hls.audioTracks ?? [];
-  const subTracks = hls.subtitleTracks ?? [];
-
-  const levelLabel = (l: { height?: number; bitrate?: number }) =>
-    l.height ? `${l.height}p` : `${Math.round((l.bitrate ?? 0) / 1000)} kbps`;
-
-  return (
-    <div className="trk-menu">
-      <div className="trk-title">Pistas</div>
-      <div className="trk-scroll">
-        <div className="trk-section">CALIDAD</div>
-        <FocusableButton
-          focusKey="TRK_FIRST"
-          className={`trk-item ${hls.autoLevelEnabled ? "on" : ""}`}
-          onEnterPress={() => { hls.currentLevel = -1; refresh(); }}
-        >
-          Auto {hls.autoLevelEnabled ? "✓" : ""}
-        </FocusableButton>
-        {levels.map((l, i) => (
-          <FocusableButton
-            key={`lv-${i}`}
-            className={`trk-item ${!hls.autoLevelEnabled && hls.currentLevel === i ? "on" : ""}`}
-            onEnterPress={() => { hls.currentLevel = i; refresh(); }}
-          >
-            {levelLabel(l)} {!hls.autoLevelEnabled && hls.currentLevel === i ? "✓" : ""}
-          </FocusableButton>
-        ))}
-
-        {audioTracks.length > 0 ? (
-          <>
-            <div className="trk-section">AUDIO</div>
-            {audioTracks.map((t, i) => (
-              <FocusableButton
-                key={`au-${i}`}
-                className={`trk-item ${hls.audioTrack === i ? "on" : ""}`}
-                onEnterPress={() => { hls.audioTrack = i; refresh(); }}
-              >
-                {t.name || t.lang || `Pista ${i + 1}`} {hls.audioTrack === i ? "✓" : ""}
-              </FocusableButton>
-            ))}
-          </>
-        ) : null}
-
-        <div className="trk-section">SUBTÍTULOS</div>
-        <FocusableButton
-          className={`trk-item ${hls.subtitleTrack === -1 ? "on" : ""}`}
-          onEnterPress={() => { hls.subtitleTrack = -1; refresh(); }}
-        >
-          Desactivados {hls.subtitleTrack === -1 ? "✓" : ""}
-        </FocusableButton>
-        {subTracks.map((t, i) => (
-          <FocusableButton
-            key={`su-${i}`}
-            className={`trk-item ${hls.subtitleTrack === i ? "on" : ""}`}
-            onEnterPress={() => { hls.subtitleTrack = i; refresh(); }}
-          >
-            {t.name || t.lang || `Sub ${i + 1}`} {hls.subtitleTrack === i ? "✓" : ""}
-          </FocusableButton>
-        ))}
-        {subTracks.length === 0 ? (
-          <div className="trk-empty small">Este canal no trae subtítulos.</div>
-        ) : null}
-      </div>
-      <FocusableButton className="btn hot-ctrl" onEnterPress={onClose}>
-        Cerrar
-      </FocusableButton>
     </div>
   );
 }

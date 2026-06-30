@@ -4,6 +4,7 @@ import { HashRouter } from "react-router-dom";
 import { init as initSpatial } from "@noriginmedia/norigin-spatial-navigation";
 import App from "./App";
 import "./styles/global.css";
+import "./styles/aurora.css";
 
 initSpatial({
   debug: false,

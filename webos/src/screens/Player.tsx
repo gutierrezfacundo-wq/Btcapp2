@@ -20,6 +20,7 @@ export function Player() {
   const [params] = useSearchParams();
   const url = params.get("url") ?? "";
   const title = params.get("title") ?? "";
+  const meta = params.get("meta") ?? "";
   const navigate = useNavigate();
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -42,8 +43,7 @@ export function Player() {
     const video = videoRef.current;
     if (!video || !url) return;
     let hls: Hls | null = null;
-    const looksLikeHls = /\.m3u8(\?|$)/i.test(url);
-    if (looksLikeHls && Hls.isSupported()) {
+    if (/\.m3u8(\?|$)/i.test(url) && Hls.isSupported()) {
       hls = new Hls({ enableWorker: true, lowLatencyMode: true });
       hls.loadSource(url);
       hls.attachMedia(video);
@@ -54,16 +54,11 @@ export function Player() {
     video.play().catch(() => undefined);
     showOverlay();
     setFocus("PL_PLAY");
-    return () => {
-      if (hls) hls.destroy();
-      video.removeAttribute("src");
-      video.load();
-    };
+    return () => { if (hls) hls.destroy(); video.removeAttribute("src"); video.load(); };
   }, [url]);
 
   useEffect(() => {
-    const v = videoRef.current;
-    if (!v) return;
+    const v = videoRef.current; if (!v) return;
     const onTime = () => { setCur(v.currentTime); setDur(v.duration || 0); };
     const onPlay = () => setPaused(false);
     const onPause = () => setPaused(true);
@@ -84,9 +79,9 @@ export function Player() {
     if (v.paused) v.play().catch(() => undefined); else v.pause();
     showOverlay();
   };
-  const seek = (delta: number) => {
+  const seek = (d: number) => {
     const v = videoRef.current; if (!v) return;
-    v.currentTime = Math.max(0, Math.min((v.duration || 0), v.currentTime + delta));
+    v.currentTime = Math.max(0, Math.min((v.duration || 0), v.currentTime + d));
     showOverlay();
   };
 
@@ -107,42 +102,42 @@ export function Player() {
 
   return (
     <FocusContext.Provider value={focusKey}>
-      <div className="player-aurora" ref={ref} onMouseMove={showOverlay}>
-        <video ref={videoRef} autoPlay playsInline controls={false} className="player-video" />
-        <div className={`pl-overlay ${overlayVisible ? "" : "hidden"}`}>
-          <div className="pl-top">
-            <FocusableButton className="a-railbtn" onEnterPress={() => navigate(-1)}>
-              <Icon name="arrow_back" />
+      <div className="ply" ref={ref} onMouseMove={showOverlay} style={{ position: "fixed" }}>
+        <video ref={videoRef} autoPlay playsInline controls={false}
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain", background: "#000" }} />
+        <div className="ply-grad" style={{ opacity: overlayVisible ? 1 : 0, transition: "opacity .25s" }} />
+        <div style={{ opacity: overlayVisible ? 1 : 0, transition: "opacity .25s", pointerEvents: overlayVisible ? "auto" : "none" }}>
+          <div className="ply-top">
+            <FocusableButton className="ply-back" onEnterPress={() => navigate(-1)}>
+              <Icon name="arrow_back" /> Volver
             </FocusableButton>
-            <div className="pl-title">{title}</div>
-          </div>
-
-          <div className="pl-center">
-            <FocusableButton focusKey="PL_PLAY" className="pl-bigplay" onEnterPress={togglePlay}>
-              <Icon name={paused ? "play_arrow" : "pause"} />
-            </FocusableButton>
-          </div>
-
-          <div className="pl-bottom">
-            <div className="pl-times">
-              <span>{fmt(cur)}</span>
-              <span className="pl-bar"><i style={{ width: `${pct}%` }} /></span>
-              <span>{fmt(dur)}</span>
+            <div className="ply-titwrap">
+              <div className="ply-tit">{title}</div>
+              {meta ? <div className="ply-sub">{meta}</div> : null}
             </div>
-            <div className="pl-ctrls">
-              <FocusableButton className="btn hot-ctrl" onEnterPress={() => seek(-10)}>
-                <Icon name="replay_10" /> -10s
-              </FocusableButton>
-              <FocusableButton className="btn hot-ctrl primary" onEnterPress={togglePlay}>
+          </div>
+
+          <div className="ply-center">
+            <FocusableButton focusKey="PL_PLAY" className="ply-play" onEnterPress={togglePlay}>
+              <Icon name={paused ? "play_arrow" : "pause"} size={64} />
+            </FocusableButton>
+          </div>
+
+          <div className="ply-bottom">
+            <div className="ply-seek">
+              <span className="ply-time">{fmt(cur)}</span>
+              <span className="ply-track"><i style={{ width: `${pct}%` }} /><span className="knob" style={{ left: `${pct}%` }} /></span>
+              <span className="ply-time" style={{ textAlign: "right" }}>{fmt(dur)}</span>
+            </div>
+            <div className="ply-ctrls">
+              <FocusableButton className="ply-btn" onEnterPress={() => seek(-10)}><Icon name="replay_10" /> 10s</FocusableButton>
+              <FocusableButton className="ply-btn playing" onEnterPress={togglePlay}>
                 <Icon name={paused ? "play_arrow" : "pause"} /> {paused ? "Reproducir" : "Pausa"}
               </FocusableButton>
-              <FocusableButton className="btn hot-ctrl" onEnterPress={() => seek(10)}>
-                <Icon name="forward_10" /> +10s
-              </FocusableButton>
+              <FocusableButton className="ply-btn" onEnterPress={() => seek(10)}><Icon name="forward_10" /> 10s</FocusableButton>
             </div>
           </div>
-
-          {error ? <div className="pl-error"><Icon name="wifi_off" /> {error}</div> : null}
+          {error ? <div className="eo-r" style={{ position: "absolute", bottom: 180, left: 0, right: 0, textAlign: "center", color: "var(--err)" }}>{error}</div> : null}
         </div>
       </div>
     </FocusContext.Provider>
