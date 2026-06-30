@@ -427,6 +427,14 @@
 .a-ch{transition:transform .09s !important}
 .a-cat{transition:none !important}
 
+/* Preview de video: overlays (carga / error con Reintentar) centrados */
+.video-preview{position:relative;width:100%;height:100%}
+.video-preview-overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;background:rgba(0,0,0,.6);text-align:center;padding:24px;color:var(--text)}
+.video-preview-overlay.error{color:var(--err)}
+.video-preview-overlay .ms{color:var(--err)}
+.video-preview-overlay .btn{color:#1a1500}
+.video-preview-placeholder{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--muted);text-align:center;padding:24px;font-size:22px}
+
 /* Lista en vivo / categorias mas compactas: entran mas elementos */
 .a-ch{height:74px;margin-bottom:7px}
 .a-ch-num{font-size:19px;width:48px}

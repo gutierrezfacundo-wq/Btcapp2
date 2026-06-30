@@ -37,6 +37,7 @@ export function Player() {
   const [cur, setCur] = useState(0);
   const [dur, setDur] = useState(0);
   const [hls, setHls] = useState<Hls | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const [tracksOpen, setTracksOpen] = useState(false);
   const tracksRef = useRef(false); tracksRef.current = tracksOpen;
   const overlayTimer = useRef<number | null>(null);
@@ -113,7 +114,8 @@ export function Player() {
     showOverlay();
     setFocus("PL_PLAY");
     return () => { if (hlsInst) hlsInst.destroy(); setHls(null); video.removeAttribute("src"); video.load(); };
-  }, [url]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [url, reloadKey]);
 
   useEffect(() => {
     const v = videoRef.current; if (!v) return;
@@ -131,6 +133,11 @@ export function Player() {
       v.removeEventListener("pause", onPause);
     };
   }, []);
+
+  useEffect(() => {
+    if (error) { showOverlay(); window.setTimeout(() => setFocus("PL_RETRY"), 60); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [error]);
 
   const togglePlay = () => {
     const v = videoRef.current; if (!v) return;
@@ -237,7 +244,14 @@ export function Player() {
               <FocusableButton focusKey={!subtitlesApiKey || subError || !subResults?.length ? "SUB_FIRST" : undefined} className="a-trk-close" onEnterPress={() => { setSubsOpen(false); setFocus("PL_SUBS"); }}>Cerrar</FocusableButton>
             </div>
           ) : null}
-          {error ? <div className="eo-r" style={{ position: "absolute", bottom: 180, left: 0, right: 0, textAlign: "center", color: "var(--err)" }}>{error}</div> : null}
+          {error ? (
+            <div style={{ position: "absolute", bottom: 170, left: 0, right: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
+              <div className="eo-r" style={{ textAlign: "center", color: "var(--err)" }}>{error}</div>
+              <FocusableButton focusKey="PL_RETRY" className="btn primary" onEnterPress={() => { setError(null); setReloadKey((k) => k + 1); window.setTimeout(() => setFocus("PL_PLAY"), 80); }}>
+                <Icon name="refresh" /> Reintentar
+              </FocusableButton>
+            </div>
+          ) : null}
         </div>
       </div>
     </FocusContext.Provider>

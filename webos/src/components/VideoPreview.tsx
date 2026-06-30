@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import Hls from "hls.js";
+import { setFocus } from "@noriginmedia/norigin-spatial-navigation";
+import { FocusableButton } from "./FocusableButton";
+import { Icon } from "./Icon";
 
 interface Props {
   url: string | null;
@@ -20,6 +23,13 @@ export function VideoPreview({ url, muted = true, onVideoEl, onHls, onResolution
   const [status, setStatus] = useState<"idle" | "loading" | "playing" | "error">(
     "idle",
   );
+  const [reloadKey, setReloadKey] = useState(0);
+  const retry = () => { setStatus("loading"); setReloadKey((k) => k + 1); };
+
+  // Al fallar, llevamos el foco al botón Reintentar para que se pueda usar con el control.
+  useEffect(() => {
+    if (status === "error") window.setTimeout(() => setFocus("PV_RETRY"), 60);
+  }, [status]);
 
   useEffect(() => {
     onVideoEl?.(videoRef.current);
@@ -94,8 +104,15 @@ export function VideoPreview({ url, muted = true, onVideoEl, onHls, onResolution
         const dur = d.frag?.duration;
         if (bytes && dur) onBitrate?.(Math.round((bytes * 8) / dur));
       });
+      let recover = 0;
       hls.on(Hls.Events.ERROR, (_evt, data) => {
         if (!data.fatal) return;
+        // Recuperacion automatica (corte de red / glitch de media) antes de rendirse.
+        if (recover < 3) {
+          recover += 1;
+          if (data.type === Hls.ErrorTypes.NETWORK_ERROR) { try { hls.startLoad(); return; } catch { /* sigue */ } }
+          else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) { try { hls.recoverMediaError(); return; } catch { /* sigue */ } }
+        }
         if (isTs) {
           // La variante m3u8 no anduvo: caemos al .ts nativo.
           hls.destroy();
@@ -123,7 +140,7 @@ export function VideoPreview({ url, muted = true, onVideoEl, onHls, onResolution
       video.load();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [url]);
+  }, [url, reloadKey]);
 
   return (
     <div className="video-preview">
@@ -145,7 +162,13 @@ export function VideoPreview({ url, muted = true, onVideoEl, onHls, onResolution
         </div>
       ) : null}
       {status === "error" ? (
-        <div className="video-preview-overlay error">No se pudo cargar el stream</div>
+        <div className="video-preview-overlay error">
+          <Icon name="error_outline" size={44} />
+          <div>No se pudo cargar el stream</div>
+          <FocusableButton focusKey="PV_RETRY" className="btn primary" onEnterPress={retry}>
+            <Icon name="refresh" /> Reintentar
+          </FocusableButton>
+        </div>
       ) : null}
     </div>
   );

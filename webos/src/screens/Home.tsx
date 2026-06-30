@@ -12,12 +12,12 @@ import { Rail, type RailId } from "../components/Rail";
 import { TopBar } from "../components/TopBar";
 import { Hints } from "../components/Hints";
 import { VideoPreview } from "../components/VideoPreview";
+import { VirtualList } from "../components/VirtualList";
 import { TrackMenu } from "../components/TrackMenu";
 import { isBackKey } from "../webos/remote-keys";
 
 type Tab = "live" | "movies" | "series" | "favorites";
-// Tope de filas en vivo: menos elementos enfocables = D-pad mas rapido en la TV.
-const RENDER_CAP = 120;
+// La lista en vivo se virtualiza (VirtualList): se renderiza completa sin tope.
 // Las grillas VOD traen imagen por item: un tope mas bajo mantiene la navegacion fluida en la TV.
 const GRID_CAP = 120;
 
@@ -184,7 +184,7 @@ export function Home() {
     if (restored.current || tab !== "live" || !selectedChannelId) { restored.current = true; return; }
     const idx = liveFiltered.findIndex((c) => c.id === selectedChannelId);
     restored.current = true;
-    if (idx >= 0 && idx < RENDER_CAP) window.setTimeout(() => setFocus(`CH_${selectedChannelId}`), 60);
+    if (idx >= 0) window.setTimeout(() => setFocus(`CH_${selectedChannelId}`), 140);
   }, [tab, selectedChannelId, liveFiltered]);
 
   const pushHistory = useAppStore((s) => s.pushHistory);
@@ -217,6 +217,10 @@ export function Home() {
     return false;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  const liveSelIdx = useMemo(
+    () => (selectedChannelId ? liveFiltered.findIndex((c) => c.id === selectedChannelId) : -1),
+    [liveFiltered, selectedChannelId],
+  );
   const onRowEnter = useCallback((id: string) => {
     if (selRef.current === id) setFullscreen(true);
     else setSelectedChannelId(id);
@@ -279,10 +283,15 @@ export function Home() {
 
                 <div className="a-list">
                   <div className="a-list-h">Canales · {category ?? "Todas"} · {liveFiltered.length}</div>
-                  <div className="a-list-vp scroll">
-                    {liveFiltered.slice(0, RENDER_CAP).map((c) => (
+                  <VirtualList
+                    className="a-list-vp scroll"
+                    items={liveFiltered}
+                    estRowHeight={83}
+                    overscan={10}
+                    scrollToIndex={liveSelIdx}
+                    getKey={(c) => c.id}
+                    renderRow={(c) => (
                       <ChannelRow
-                        key={c.id}
                         channel={c}
                         num={channelNumbers.get(c.id) ?? "—"}
                         sel={c.id === selectedChannelId}
@@ -292,11 +301,8 @@ export function Home() {
                         onFav={onRowFav}
                         onArrow={onChannelLeft}
                       />
-                    ))}
-                    {liveFiltered.length > RENDER_CAP ? (
-                      <div className="grd-empty" style={{ padding: 20 }}>Mostrando {RENDER_CAP} de {liveFiltered.length}. Elegí categoría o buscá.</div>
-                    ) : null}
-                  </div>
+                    )}
+                  />
                 </div>
 
                 <PreviewPanel
