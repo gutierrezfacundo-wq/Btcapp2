@@ -494,6 +494,9 @@ function PreviewPanel({
           onHls={setHls}
           onResolution={(w, h) => setRes(w > 0 ? { w, h } : null)}
         />
+        {channel && !fullscreen ? (
+          <div className="live-pill"><span className="dot" /> EN VIVO</div>
+        ) : null}
         {fullscreen ? (
           <div className={`fs-overlay ${fsOverlay ? "visible" : ""}`}>
             <div className="fs-top">
@@ -618,6 +621,9 @@ function LiveChannelList({
       {channels.map((c) => {
         const now = findNowPlaying(epgByChannel as never, c.tvgId);
         const isSel = c.id === selectedChannelId;
+        const prog = now && now.stopMs > now.startMs
+          ? Math.max(0, Math.min(1, (Date.now() - now.startMs) / (now.stopMs - now.startMs)))
+          : null;
         return (
           <FocusableButton
             key={c.id}
@@ -636,6 +642,9 @@ function LiveChannelList({
             <div className="hot-channel-info">
               <div className="hot-channel-name">{c.name}</div>
               {now ? <div className="hot-channel-now">{now.title}</div> : null}
+              {prog !== null ? (
+                <div className="hot-channel-prog"><i style={{ width: `${prog * 100}%` }} /></div>
+              ) : null}
             </div>
             {isFavorite(c.id) ? <span className="hot-channel-fav" onClick={(e) => { e.stopPropagation(); onToggleFavorite(c); }}><Icon name="star" /></span> : null}
           </FocusableButton>
@@ -669,28 +678,62 @@ function PosterGrid({ items, total, cap }: {
   );
 }
 
+const FAV_FILTERS: { id: string; label: string; kind: string | null }[] = [
+  { id: "all", label: "Todos", kind: null },
+  { id: "live", label: "En vivo", kind: "live" },
+  { id: "movie", label: "Películas", kind: "movie" },
+  { id: "series", label: "Series", kind: "series-episode" },
+];
+
+function favBadge(kind: string): string {
+  if (kind === "live") return "TV";
+  if (kind === "movie") return "PELÍCULA";
+  return "SERIE";
+}
+
 function FavoritesList({ favorites, onPlay }: {
   favorites: Array<{ id: string; name: string; streamUrl: string; logoUrl?: string; kind: string }>;
   onPlay: (url: string, title: string) => void;
 }) {
-  if (favorites.length === 0) return <div className="hot-status">Sin favoritos</div>;
+  const [filter, setFilter] = useState<string>("all");
+  const kind = FAV_FILTERS.find((f) => f.id === filter)?.kind ?? null;
+  const shown = kind ? favorites.filter((f) => f.kind === kind) : favorites;
+
   return (
-    <div className="hot-channels-scroll">
-      {favorites.map((f) => (
-        <FocusableButton
-          key={f.id}
-          className="hot-channel"
-          onEnterPress={() => onPlay(f.streamUrl, f.name)}
-        >
-          <div className="hot-channel-num"><Icon name="star" /></div>
-          <div className="hot-channel-logo">
-            {f.logoUrl ? <img src={f.logoUrl} alt="" /> : <div className="hot-channel-logo-placeholder"><Icon name="star" /></div>}
-          </div>
-          <div className="hot-channel-info">
-            <div className="hot-channel-name">{f.name}</div>
-          </div>
-        </FocusableButton>
-      ))}
+    <div style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
+      <div className="fav-chips">
+        {FAV_FILTERS.map((f) => (
+          <FocusableButton
+            key={f.id}
+            className={`chip ${filter === f.id ? "active" : ""}`}
+            onEnterPress={() => setFilter(f.id)}
+          >
+            {f.label}
+          </FocusableButton>
+        ))}
+      </div>
+      {shown.length === 0 ? (
+        <div className="hot-status">Sin favoritos</div>
+      ) : (
+        <div className="hot-channels-scroll">
+          {shown.map((f) => (
+            <FocusableButton
+              key={f.id}
+              className="hot-channel"
+              onEnterPress={() => onPlay(f.streamUrl, f.name)}
+            >
+              <div className="hot-channel-num"><Icon name="star" /></div>
+              <div className="hot-channel-logo">
+                {f.logoUrl ? <img src={f.logoUrl} alt="" /> : <div className="hot-channel-logo-placeholder"><Icon name="star" /></div>}
+              </div>
+              <div className="hot-channel-info">
+                <div className="hot-channel-name">{f.name}</div>
+              </div>
+              <span className="fav-badge">{favBadge(f.kind)}</span>
+            </FocusableButton>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

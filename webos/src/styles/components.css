@@ -840,3 +840,91 @@
 
 /* Inputs Aurora */
 .input:focus, .input.focused { border-color: var(--accent); box-shadow: 0 0 0 3px var(--ring); }
+
+/* ===== Player VOD Aurora ===== */
+.player-aurora { position: fixed; inset: 0; background: #000; }
+.player-video { width: 100%; height: 100%; object-fit: contain; background: #000; }
+.pl-overlay {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  justify-content: space-between; opacity: 1; transition: opacity .25s;
+  background: linear-gradient(rgba(0,0,0,.55), transparent 22%, transparent 60%, rgba(0,0,0,.8));
+}
+.pl-overlay.hidden { opacity: 0; pointer-events: none; }
+.pl-top { display: flex; align-items: center; gap: 20px; padding: 32px 40px; }
+.pl-title { font-family: "Schibsted Grotesk", sans-serif; font-size: 30px; font-weight: 700; }
+.pl-center { flex: 1; display: flex; align-items: center; justify-content: center; }
+.pl-bigplay {
+  width: 130px; height: 130px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #1a1408;
+  display: flex; align-items: center; justify-content: center;
+  transition: transform .14s, box-shadow .14s;
+}
+.pl-bigplay .ms { font-size: 68px; }
+.pl-bigplay.focused, .pl-bigplay:focus { transform: scale(1.08); box-shadow: 0 0 0 5px var(--ring); }
+.pl-bottom { padding: 0 56px 44px; display: flex; flex-direction: column; gap: 18px; }
+.pl-times {
+  display: flex; align-items: center; gap: 18px;
+  font-family: "Space Grotesk", monospace; font-size: 20px; color: var(--text);
+}
+.pl-bar { flex: 1; height: 6px; border-radius: 3px; background: rgba(255,255,255,.18); overflow: hidden; }
+.pl-bar i { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+.pl-ctrls { display: flex; gap: 16px; justify-content: center; }
+.pl-error {
+  position: absolute; bottom: 140px; left: 0; right: 0; text-align: center;
+  color: var(--err); font-size: 22px; display: flex; gap: 10px; align-items: center; justify-content: center;
+}
+
+/* ===== Detalle de serie Aurora ===== */
+.page.series-aurora { display: flex; flex-direction: column; }
+.ser-body { flex: 1; display: flex; flex-direction: column; min-height: 0; padding: 24px 56px 0; }
+.ser-hero { display: flex; gap: 36px; margin-bottom: 26px; }
+.ser-cover {
+  width: 230px; height: 345px; flex-shrink: 0; border-radius: 16px; overflow: hidden;
+  background: var(--surface-2); display: flex; align-items: center; justify-content: center;
+}
+.ser-cover img { width: 100%; height: 100%; object-fit: cover; }
+.ser-cover .ms { font-size: 90px; color: var(--muted); }
+.ser-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+.ser-title { font-family: "Schibsted Grotesk", sans-serif; font-size: 50px; font-weight: 800; }
+.ser-tags { color: var(--accent); font-size: 20px; }
+.ser-plot {
+  color: var(--muted); font-size: 21px; line-height: 1.5; max-width: 1000px;
+  display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden;
+}
+.ser-playbtn { align-self: flex-start; display: flex; align-items: center; gap: 10px; margin-top: auto; }
+.ser-seasons { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
+.ser-eps { flex: 1; overflow-y: auto; padding-bottom: 24px; }
+.ser-ep {
+  display: flex; align-items: center; gap: 22px; width: 100%; text-align: left;
+  padding: 16px 22px; margin-bottom: 10px; border-radius: 14px;
+  background: var(--surface); border: 1px solid var(--line);
+}
+.ser-ep.focused, .ser-ep:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--ring); }
+.ser-ep-n { font-family: "Space Grotesk", monospace; font-size: 22px; color: var(--accent); font-weight: 700; flex-shrink: 0; width: 64px; }
+.ser-ep-title { flex: 1; font-size: 23px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ser-ep-play { color: var(--muted); font-size: 30px; }
+
+/* Chips de filtro de Favoritos */
+.fav-chips { display: flex; gap: 12px; padding: 14px 20px; }
+.fav-chips .chip.active { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #1a1408; }
+.fav-badge {
+  font-family: "Space Grotesk", monospace; font-size: 12px; font-weight: 700; letter-spacing: .5px;
+  padding: 3px 8px; border-radius: 5px; background: var(--surface-2); color: var(--muted); flex-shrink: 0;
+}
+
+/* Barra de progreso del programa actual en cada fila (En Vivo) */
+.hot-channel-prog {
+  height: 4px; border-radius: 2px; background: rgba(255,255,255,.1);
+  margin-top: 8px; overflow: hidden; max-width: 420px;
+}
+.hot-channel-prog i { display: block; height: 100%; background: var(--accent); border-radius: 2px; }
+
+/* Pill LIVE sobre el preview */
+.hot-preview-video { position: relative; }
+.live-pill {
+  position: absolute; top: 14px; left: 14px; z-index: 2;
+  display: flex; align-items: center; gap: 8px;
+  background: rgba(0,0,0,.55); border: 1px solid var(--line);
+  padding: 6px 12px; border-radius: 999px; font-size: 15px; font-weight: 700; letter-spacing: 1px;
+}
+.live-pill .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--live); box-shadow: 0 0 10px var(--live); }
