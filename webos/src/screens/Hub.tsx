@@ -49,9 +49,10 @@ export function Hub() {
     { id: "favorites", title: "Favoritos", sub: `${favorites.length} guardados`, icon: "star" },
   ];
 
-  const onTile = async (id: SectionId) => {
-    if (id === "movies" && !loadedSections.movies) await ensureMovies();
-    if (id === "series" && !loadedSections.series) await ensureSeries();
+  const onTile = (id: SectionId) => {
+    // Navegamos al instante; la sección muestra su propio spinner mientras carga.
+    if (id === "movies" && !loadedSections.movies) ensureMovies();
+    else if (id === "series" && !loadedSections.series) ensureSeries();
     navigate(`/home?tab=${id}`);
   };
 

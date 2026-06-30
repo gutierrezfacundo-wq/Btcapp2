@@ -46,7 +46,6 @@ export function VideoPreview({ url, muted = true, onVideoEl, onHls, onResolution
     setStatus("loading");
     onResolution?.(0, 0);
     onBitrate?.(0);
-    const looksLikeHls = /\.m3u8(\?|$)/i.test(url);
 
     const reportRes = () => {
       if (video.videoWidth > 0) onResolution?.(video.videoWidth, video.videoHeight);
@@ -54,7 +53,22 @@ export function VideoPreview({ url, muted = true, onVideoEl, onHls, onResolution
     video.addEventListener("loadedmetadata", reportRes);
     video.addEventListener("resize", reportRes);
 
-    if (looksLikeHls && Hls.isSupported()) {
+    // El live de Xtream viene como .ts (MPEG-TS): Chrome no lo reproduce y no expone
+    // bitrate. Probamos la variante .m3u8 con hls.js (anda en PC y TV, y da bitrate);
+    // si falla, volvemos al .ts nativo (lo reproduce el player de webOS).
+    const isTs = /\.ts(\?|$)/i.test(url);
+    const hlsUrl = isTs ? url.replace(/\.ts(\?|$)/i, ".m3u8$1") : url;
+    const canHls = /\.m3u8(\?|$)/i.test(hlsUrl) && Hls.isSupported();
+
+    const playNative = (src: string) => {
+      video.src = src;
+      video.oncanplay = () => setStatus("playing");
+      video.onerror = () => setStatus("error");
+      onHls?.(null);
+      video.play().catch(() => { /* autoplay blocked */ });
+    };
+
+    if (canHls) {
       const hls = new Hls({
         enableWorker: true,
         lowLatencyMode: true,
@@ -63,31 +77,39 @@ export function VideoPreview({ url, muted = true, onVideoEl, onHls, onResolution
         maxMaxBufferLength: 12,
       });
       hlsRef.current = hls;
-      hls.loadSource(url);
+      hls.loadSource(hlsUrl);
       hls.attachMedia(video);
-      const reportBitrate = (level: number) => {
+      const reportLevel = (level: number) => {
         const lv = hls.levels?.[level];
         if (lv?.bitrate) onBitrate?.(lv.bitrate);
       };
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         setStatus("playing");
-        reportBitrate(hls.currentLevel >= 0 ? hls.currentLevel : hls.firstLevel);
+        reportLevel(hls.currentLevel >= 0 ? hls.currentLevel : hls.firstLevel);
       });
-      hls.on(Hls.Events.LEVEL_SWITCHED, (_e, d) => reportBitrate(d.level));
+      hls.on(Hls.Events.LEVEL_SWITCHED, (_e, d) => reportLevel(d.level));
+      // Bitrate real medido por fragmento (sirve para live sin BANDWIDTH declarado).
+      hls.on(Hls.Events.FRAG_BUFFERED, (_e, d) => {
+        const bytes = d.frag?.stats?.total;
+        const dur = d.frag?.duration;
+        if (bytes && dur) onBitrate?.(Math.round((bytes * 8) / dur));
+      });
       hls.on(Hls.Events.ERROR, (_evt, data) => {
-        if (data.fatal) setStatus("error");
+        if (!data.fatal) return;
+        if (isTs) {
+          // La variante m3u8 no anduvo: caemos al .ts nativo.
+          hls.destroy();
+          if (hlsRef.current === hls) hlsRef.current = null;
+          playNative(url);
+          return;
+        }
+        setStatus("error");
       });
       onHls?.(hls);
+      video.play().catch(() => { /* autoplay blocked */ });
     } else {
-      video.src = url;
-      video.oncanplay = () => setStatus("playing");
-      video.onerror = () => setStatus("error");
-      onHls?.(null);
+      playNative(url);
     }
-
-    video.play().catch(() => {
-      /* autoplay blocked */
-    });
 
     return () => {
       video.removeEventListener("loadedmetadata", reportRes);

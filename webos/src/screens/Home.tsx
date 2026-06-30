@@ -1,4 +1,5 @@
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import type { Channel, EpgProgram } from "../data/types";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { FocusContext, useFocusable, setFocus } from "@noriginmedia/norigin-spatial-navigation";
 import type Hls from "hls.js";
@@ -15,7 +16,8 @@ import { TrackMenu } from "../components/TrackMenu";
 import { isBackKey } from "../webos/remote-keys";
 
 type Tab = "live" | "movies" | "series" | "favorites";
-const RENDER_CAP = 500;
+// Tope de filas en vivo: menos elementos enfocables = D-pad mas rapido en la TV.
+const RENDER_CAP = 250;
 // Las grillas VOD traen imagen por item: un tope mas bajo mantiene la navegacion fluida en la TV.
 const GRID_CAP = 120;
 
@@ -33,6 +35,44 @@ function fmtClock(ms: number) {
   return new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
+/**
+ * Fila de canal memoizada: al seleccionar/mover el foco solo se re-renderizan las
+ * filas cuyo `sel`/`fav` cambió, no las 250. Los callbacks deben ser estables.
+ */
+const ChannelRow = memo(function ChannelRow({
+  channel, num, sel, fav, epg, onEnter, onFav,
+}: {
+  channel: Channel;
+  num: number | string;
+  sel: boolean;
+  fav: boolean;
+  epg: Map<string, EpgProgram[]>;
+  onEnter: (id: string) => void;
+  onFav: (c: Channel) => void;
+}) {
+  const now = findNowPlaying(epg, channel.tvgId);
+  const ql = quality(channel.name);
+  return (
+    <FocusableButton
+      focusKey={`CH_${channel.id}`}
+      className={`a-ch ${sel ? "playing" : ""}`}
+      onEnterPress={() => onEnter(channel.id)}
+    >
+      <span className="a-ch-num">{num}</span>
+      <span className="a-ch-logo">{channel.logoUrl ? <img src={channel.logoUrl} alt="" loading="lazy" decoding="async" style={{ width: "100%", height: "100%", objectFit: "contain", borderRadius: 11 }} /> : initials(channel.name)}</span>
+      <span className="a-ch-info">
+        <div className="a-ch-name">{channel.name}</div>
+        {now ? <div className="a-ch-now">{now.title}</div> : null}
+        {now && now.stopMs > now.startMs ? (
+          <div className="a-ch-prog"><i style={{ width: `${Math.max(0, Math.min(100, ((Date.now() - now.startMs) / (now.stopMs - now.startMs)) * 100))}%` }} /></div>
+        ) : null}
+      </span>
+      {ql ? <span className="a-ch-q">{ql}</span> : null}
+      {fav ? <span className="a-ch-fav" onClick={(e) => { e.stopPropagation(); onFav(channel); }}><Icon name="star" /></span> : null}
+    </FocusableButton>
+  );
+});
+
 export function Home() {
   const navigate = useNavigate();
   const [search] = useSearchParams();
@@ -49,7 +89,6 @@ export function Home() {
   const ensureSeries = useAppStore((s) => s.ensureSeries);
   const loadedSections = useAppStore((s) => s.loadedSections);
   const toggleFavorite = useAppStore((s) => s.toggleFavorite);
-  const isFavorite = useAppStore((s) => s.isFavorite);
   const epgByChannel = useAppStore((s) => s.epgByChannel);
   const ui = useAppStore((s) => s.ui);
   const setUi = useAppStore((s) => s.setUi);
@@ -161,6 +200,19 @@ export function Home() {
   const selectedChannel = selectedChannelId
     ? catalog.liveChannels.find((c) => c.id === selectedChannelId) ?? null : null;
 
+  // Set de favoritos (lookup O(1)) y callbacks estables para que ChannelRow memoice.
+  const favIds = useMemo(() => new Set(favorites.map((f) => f.id)), [favorites]);
+  const selRef = useRef(selectedChannelId);
+  selRef.current = selectedChannelId;
+  const onRowEnter = useCallback((id: string) => {
+    if (selRef.current === id) setFullscreen(true);
+    else setSelectedChannelId(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const onRowFav = useCallback((c: Channel) => {
+    toggleFavorite({ id: c.id, name: c.name, streamUrl: c.streamUrl, logoUrl: c.logoUrl, kind: c.kind });
+  }, [toggleFavorite]);
+
   const title = tab === "live" ? "En vivo" : tab === "movies" ? "Películas" : tab === "series" ? "Series" : "Favoritos";
 
   // Películas/Series se bajan a demanda: mostramos spinner mientras la sección carga.
@@ -215,30 +267,18 @@ export function Home() {
                 <div className="a-list">
                   <div className="a-list-h">Canales · {category ?? "Todas"} · {liveFiltered.length}</div>
                   <div className="a-list-vp scroll">
-                    {liveFiltered.slice(0, RENDER_CAP).map((c) => {
-                      const now = findNowPlaying(epgByChannel, c.tvgId);
-                      const ql = quality(c.name);
-                      const sel = c.id === selectedChannelId;
-                      return (
-                        <FocusableButton
-                          key={c.id} focusKey={`CH_${c.id}`}
-                          className={`a-ch ${sel ? "playing" : ""}`}
-                          onEnterPress={() => { if (sel) setFullscreen(true); else setSelectedChannelId(c.id); }}
-                        >
-                          <span className="a-ch-num">{channelNumbers.get(c.id) ?? "—"}</span>
-                          <span className="a-ch-logo">{c.logoUrl ? <img src={c.logoUrl} alt="" loading="lazy" decoding="async" style={{ width: "100%", height: "100%", objectFit: "contain", borderRadius: 11 }} /> : initials(c.name)}</span>
-                          <span className="a-ch-info">
-                            <div className="a-ch-name">{c.name}</div>
-                            {now ? <div className="a-ch-now">{now.title}</div> : null}
-                            {now && now.stopMs > now.startMs ? (
-                              <div className="a-ch-prog"><i style={{ width: `${Math.max(0, Math.min(100, ((Date.now() - now.startMs) / (now.stopMs - now.startMs)) * 100))}%` }} /></div>
-                            ) : null}
-                          </span>
-                          {ql ? <span className="a-ch-q">{ql}</span> : null}
-                          {isFavorite(c.id) ? <span className="a-ch-fav" onClick={(e) => { e.stopPropagation(); toggleFavorite({ id: c.id, name: c.name, streamUrl: c.streamUrl, logoUrl: c.logoUrl, kind: c.kind }); }}><Icon name="star" /></span> : null}
-                        </FocusableButton>
-                      );
-                    })}
+                    {liveFiltered.slice(0, RENDER_CAP).map((c) => (
+                      <ChannelRow
+                        key={c.id}
+                        channel={c}
+                        num={channelNumbers.get(c.id) ?? "—"}
+                        sel={c.id === selectedChannelId}
+                        fav={favIds.has(c.id)}
+                        epg={epgByChannel}
+                        onEnter={onRowEnter}
+                        onFav={onRowFav}
+                      />
+                    ))}
                     {liveFiltered.length > RENDER_CAP ? (
                       <div className="grd-empty" style={{ padding: 20 }}>Mostrando {RENDER_CAP} de {liveFiltered.length}. Elegí categoría o buscá.</div>
                     ) : null}
