@@ -15,7 +15,9 @@ function nativeAudio(video: HTMLVideoElement | null): NativeAudioTrack[] {
 function nativeSubs(video: HTMLVideoElement | null): TextTrack[] {
   const list = video?.textTracks;
   if (!list || !list.length) return [];
-  return Array.from(list).filter((t) => t.kind === "subtitles" || t.kind === "captions");
+  // webOS suele exponer subtitulos embebidos con kind vacio o no estandar:
+  // incluimos todo lo que no sea metadata/chapters (que no son subtitulos).
+  return Array.from(list).filter((t) => t.kind !== "metadata" && t.kind !== "chapters");
 }
 
 function trackLabel(t: { label?: string; language?: string }, i: number, kind: string) {
