@@ -117,7 +117,7 @@ export function SeriesDetail() {
                       <FocusableButton key={ep.id} className="ep-row" onEnterPress={() => play(ep)}>
                         <span className="ep-num">E{String(ep.episodeNumber).padStart(2, "0")}</span>
                         <span className="ep-thumb">
-                          {ep.thumbUrl ? <img src={ep.thumbUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 10 }} /> : <Icon name="play_arrow" />}
+                          {ep.thumbUrl ? <img src={ep.thumbUrl} alt="" loading="lazy" decoding="async" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 10 }} /> : <Icon name="play_arrow" />}
                         </span>
                         <span className="ep-mid">
                           <div className="ep-title">{ep.title}</div>

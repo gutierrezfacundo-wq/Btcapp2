@@ -80,13 +80,13 @@
   .chip.focused{box-shadow:0 0 0 3px var(--ring)}
   .chip.on{background:var(--accent);color:#1a1500;border-color:var(--accent);font-weight:600}
   .grd-scroll{flex:1;overflow:hidden;padding:0 56px 40px}
-  .grd-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:26px}
-  .poster{cursor:pointer;transition:transform .14s}
-  .poster-img{width:100%;aspect-ratio:2/3;border-radius:16px;background:repeating-linear-gradient(125deg,#16161c 0 24px,#101016 24px 48px);border:1px solid var(--line);position:relative;overflow:hidden;display:flex;align-items:flex-end;padding:16px}
+  .grd-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:26px}
+  .poster{cursor:pointer;transition:transform .14s;min-width:0}
+  .poster-img{width:100%;aspect-ratio:2/3;border-radius:16px;background:repeating-linear-gradient(125deg,#16161c 0 24px,#101016 24px 48px);border:1px solid var(--line);position:relative;overflow:hidden;display:flex;align-items:flex-end;padding:16px;min-width:0}
   .poster-img::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.1) 40%,rgba(0,0,0,.78))}
   .poster-rate{position:absolute;top:14px;right:14px;z-index:2;font-family:'Space Grotesk',monospace;font-size:15px;font-weight:700;background:rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.18);color:var(--accent);padding:5px 10px;border-radius:8px;display:flex;align-items:center;gap:5px}
   .poster-rate .ms{font-size:16px}
-  .poster-meta{position:relative;z-index:1}
+  .poster-meta{position:relative;z-index:1;width:100%;min-width:0;max-width:100%}
   .poster-ph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'Schibsted Grotesk',sans-serif;font-size:60px;font-weight:800;color:rgba(255,255,255,.07)}
   .poster-name{font-size:21px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:0 2px 10px rgba(0,0,0,.8)}
   .poster-year{font-family:'Space Grotesk',monospace;font-size:15px;color:rgba(255,255,255,.7);margin-top:2px}

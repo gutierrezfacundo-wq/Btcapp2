@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { FocusContext, useFocusable, setFocus } from "@noriginmedia/norigin-spatial-navigation";
 import type Hls from "hls.js";
@@ -16,6 +16,8 @@ import { isBackKey } from "../webos/remote-keys";
 
 type Tab = "live" | "movies" | "series" | "favorites";
 const RENDER_CAP = 500;
+// Las grillas VOD traen imagen por item: un tope mas bajo mantiene la navegacion fluida en la TV.
+const GRID_CAP = 120;
 
 function initials(s: string) {
   return s.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
@@ -65,6 +67,19 @@ export function Home() {
 
   useEffect(() => { if (!source) navigate("/setup"); }, [source, navigate]);
 
+  // Back del control: si hay buscador abierto lo cierra; si no, vuelve al Inicio.
+  // (En pantalla completa, PreviewPanel intercepta el back antes con captura.)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!isBackKey(e) || fullscreen) return;
+      e.preventDefault();
+      if (searchOpen) { setSearchOpen(false); return; }
+      navigate("/hub");
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [fullscreen, searchOpen, navigate]);
+
   useEffect(() => {
     if (tab === "movies" && !loadedSections.movies) ensureMovies();
     if (tab === "series" && !loadedSections.series) ensureSeries();
@@ -105,7 +120,9 @@ export function Home() {
     return m;
   }, [tab, catalog]);
 
-  const q = query.trim().toLowerCase();
+  // El input se actualiza al instante; el filtrado (caro) se difiere para no trabar el tipeo.
+  const deferredQuery = useDeferredValue(query);
+  const q = deferredQuery.trim().toLowerCase();
   const liveFiltered = useMemo(() => {
     if (tab !== "live") return [];
     const byCat = category ? catalog.liveChannels.filter((c) => c.groupTitle === category) : catalog.liveChannels;
@@ -204,7 +221,7 @@ export function Home() {
                           onEnterPress={() => { if (sel) setFullscreen(true); else setSelectedChannelId(c.id); }}
                         >
                           <span className="a-ch-num">{channelNumbers.get(c.id) ?? "—"}</span>
-                          <span className="a-ch-logo">{c.logoUrl ? <img src={c.logoUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "contain", borderRadius: 11 }} /> : initials(c.name)}</span>
+                          <span className="a-ch-logo">{c.logoUrl ? <img src={c.logoUrl} alt="" loading="lazy" decoding="async" style={{ width: "100%", height: "100%", objectFit: "contain", borderRadius: 11 }} /> : initials(c.name)}</span>
                           <span className="a-ch-info">
                             <div className="a-ch-name">{c.name}</div>
                             {now ? <div className="a-ch-now">{now.title}</div> : null}
@@ -245,11 +262,11 @@ export function Home() {
                 onQuery={setQuery}
                 items={
                   tab === "movies"
-                    ? moviesFiltered.slice(0, RENDER_CAP).map((m) => ({
+                    ? moviesFiltered.slice(0, GRID_CAP).map((m) => ({
                         id: m.id, name: m.name, posterUrl: m.posterUrl, year: m.year, rating: m.rating,
                         onSelect: () => play(m.streamUrl, m.name, { id: m.id, posterUrl: m.posterUrl, sub: [m.year, m.category].filter(Boolean).join(" · ") || undefined, kind: "movie" }),
                       }))
-                    : seriesFiltered.slice(0, RENDER_CAP).map((s) => ({
+                    : seriesFiltered.slice(0, GRID_CAP).map((s) => ({
                         id: s.id, name: s.name, posterUrl: s.posterUrl,
                         onSelect: () => openSeries(s.id, s.name, s.posterUrl),
                       }))
@@ -442,7 +459,7 @@ function GridScreen({
             {items.map((it) => (
               <FocusableButton key={it.id} className="poster" onEnterPress={it.onSelect}>
                 <div className="poster-img">
-                  {it.posterUrl ? <img src={it.posterUrl} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} /> : <div className="poster-ph">{initials(it.name)}</div>}
+                  {it.posterUrl ? <img src={it.posterUrl} alt="" loading="lazy" decoding="async" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} /> : <div className="poster-ph">{initials(it.name)}</div>}
                   {it.rating ? <div className="poster-rate"><Icon name="star" size={15} /> {it.rating}</div> : null}
                   <div className="poster-meta">
                     <div className="poster-name">{it.name}</div>
@@ -489,7 +506,7 @@ function FavScreen({ favorites, onPlay, onToggle }: {
         {shown.length === 0 ? <div className="grd-empty">Sin favoritos</div> : shown.map((f) => (
           <FocusableButton key={f.id} className="fav-row" onEnterPress={() => onPlay(f.streamUrl, f.name, { id: f.id, posterUrl: f.logoUrl, sub: favBadgeLabel(f.kind), kind: f.kind as "live" | "movie" | "series-episode" })}>
             <span className={`fav-badge ${favBadge(f.kind)}`}>{favBadgeLabel(f.kind)}</span>
-            <span className="fav-thumb">{f.logoUrl ? <img src={f.logoUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "contain", borderRadius: 10 }} /> : initials(f.name)}</span>
+            <span className="fav-thumb">{f.logoUrl ? <img src={f.logoUrl} alt="" loading="lazy" decoding="async" style={{ width: "100%", height: "100%", objectFit: "contain", borderRadius: 10 }} /> : initials(f.name)}</span>
             <span className="fav-mid"><div className="fav-name">{f.name}</div><div className="fav-meta">{favBadgeLabel(f.kind)}</div></span>
             <span className="fav-star" onClick={(e) => { e.stopPropagation(); onToggle({ id: f.id, name: f.name, streamUrl: f.streamUrl, logoUrl: f.logoUrl, kind: f.kind as "live" | "movie" | "series-episode" }); }}><Icon name="star" /></span>
             <Icon name="play_circle" className="fav-go" />

@@ -9,7 +9,8 @@ import "./styles/aurora.css";
 initSpatial({
   debug: false,
   visualDebug: false,
-  throttle: 80,
+  // Menos throttle = el foco responde mas rapido al D-pad.
+  throttle: 40,
   throttleKeypresses: true,
 });
 
