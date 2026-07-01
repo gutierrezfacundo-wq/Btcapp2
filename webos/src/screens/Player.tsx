@@ -156,13 +156,21 @@ export function Player() {
     });
   };
 
+  const applySubUrl = (u: string) => {
+    setSubUrl((prev) => { if (prev && prev.startsWith("blob:")) URL.revokeObjectURL(prev); return u; });
+    setSubsOpen(false); setFocus("PL_SUBS");
+  };
+
   const pickSub = async (fileId: number) => {
+    // Preferido (webOS): URL http real para el <track> nativo (no blob:).
+    const directUrl = getSubtitleService().getSubtitleUrl(fileId);
+    if (directUrl) { applySubUrl(directUrl); return; }
+    // Fallback (dev/PC sin relay): descargar el contenido y crear un blob.
     setSubLoading(true); setSubError(null);
     try {
       const file = await getSubtitleService().downloadSubtitle(fileId);
       const blob = new Blob([file.content], { type: "text/vtt" });
-      setSubUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return URL.createObjectURL(blob); });
-      setSubsOpen(false); setFocus("PL_SUBS");
+      applySubUrl(URL.createObjectURL(blob));
     } catch (e) {
       setSubError(subErrorMessage(e));
     } finally {
@@ -179,7 +187,7 @@ export function Player() {
     }, 120);
     return () => window.clearTimeout(t);
   }, [subUrl]);
-  useEffect(() => () => { if (subUrl) URL.revokeObjectURL(subUrl); }, [subUrl]);
+  useEffect(() => () => { if (subUrl && subUrl.startsWith("blob:")) URL.revokeObjectURL(subUrl); }, [subUrl]);
 
   const { ref, focusKey } = useFocusable({ trackChildren: true, focusKey: "PLAYER" });
 
@@ -289,7 +297,7 @@ export function Player() {
       <div className="ply" ref={ref} onMouseMove={showOverlay} style={{ position: "fixed" }}>
         <video ref={videoRef} autoPlay playsInline controls={false}
           style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain", background: "#000" }}>
-          {subUrl ? <track kind="subtitles" src={subUrl} default /> : null}
+          {subUrl ? <track key={subUrl} kind="subtitles" src={subUrl} srcLang="es" label="Subtítulos" default /> : null}
         </video>
         <div className="ply-grad" style={{ opacity: overlayVisible ? 1 : 0, transition: "opacity .25s" }} />
         <div style={{ opacity: overlayVisible ? 1 : 0, transition: "opacity .25s", pointerEvents: overlayVisible ? "auto" : "none" }}>
@@ -366,7 +374,7 @@ export function Player() {
                       <div className="a-pdesc" style={{ color: "var(--err)" }}>{subError}</div>
                     ) : subResults && subResults.length ? (
                       <>
-                        {subUrl ? <FocusableButton className="a-trk-item" onEnterPress={() => { setSubUrl((p) => { if (p) URL.revokeObjectURL(p); return null; }); setSubsOpen(false); setFocus("PL_SUBS"); }}>Desactivar subtítulos</FocusableButton> : null}
+                        {subUrl ? <FocusableButton className="a-trk-item" onEnterPress={() => { setSubUrl((p) => { if (p && p.startsWith("blob:")) URL.revokeObjectURL(p); return null; }); setSubsOpen(false); setFocus("PL_SUBS"); }}>Desactivar subtítulos</FocusableButton> : null}
                         {subResults.map((r) => (
                           <FocusableButton key={r.fileId} className="a-trk-item" onEnterPress={() => pickSub(r.fileId)}>
                             <span className="a-trk-lang">{r.language}</span>

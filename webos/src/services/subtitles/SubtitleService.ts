@@ -8,8 +8,14 @@ import type { Language, SubtitleFile, SubtitleResult, SubtitleSearchRequest } fr
 export interface SubtitleService {
   /** Busca subtítulos ordenados por relevancia. Devuelve [] si no hay resultados. */
   searchSubtitles(request: SubtitleSearchRequest): Promise<SubtitleResult[]>;
-  /** Descarga y devuelve el archivo del subtítulo elegido. */
+  /** Descarga y devuelve el archivo del subtítulo elegido (contenido en memoria). */
   downloadSubtitle(fileId: number): Promise<SubtitleFile>;
+  /**
+   * URL http directa y reproducible del subtítulo (VTT) para pasar a un <track>.
+   * En webOS el reproductor nativo necesita una URL real (no blob:). Devuelve ""
+   * si el proveedor no puede exponer una URL (ej. sin relay) → usar downloadSubtitle.
+   */
+  getSubtitleUrl(fileId: number): string;
   /** Lista de idiomas soportados (cacheada). */
   getSupportedLanguages(): Promise<Language[]>;
 }

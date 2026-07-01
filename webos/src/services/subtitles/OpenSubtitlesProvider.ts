@@ -184,6 +184,11 @@ export class OpenSubtitlesProvider implements SubtitleService {
     }
   }
 
+  getSubtitleUrl(fileId: number): string {
+    if (!this.config.relayBase || !this.config.apiKey) return "";
+    return `${this.config.relayBase}/api/os/file?file_id=${fileId}&key=${encodeURIComponent(this.config.apiKey)}`;
+  }
+
   async getSupportedLanguages(): Promise<Language[]> {
     const cached = this.cache.get<Language[]>("languages");
     if (cached) return cached;
