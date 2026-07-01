@@ -37,6 +37,8 @@ export function Setup() {
   const setSubtitlesApiKey = useAppStore((s) => s.setSubtitlesApiKey);
   const companionUrl = useAppStore((s) => s.companionUrl);
   const setCompanionUrl = useAppStore((s) => s.setCompanionUrl);
+  const nativeSubs = useAppStore((s) => s.nativeSubs);
+  const setNativeSubs = useAppStore((s) => s.setNativeSubs);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isNew, setIsNew] = useState(sources.length === 0);
@@ -257,6 +259,14 @@ export function Setup() {
                       <FocusableInput value={subtitlesApiKey} onChange={setSubtitlesApiKey} placeholder="Pegá tu API key (opensubtitles.com)" />
                     </div>
                     <div className="a-pdesc" style={{ marginTop: 6 }}>Necesaria para buscar y descargar subtítulos desde el reproductor. Se genera gratis en opensubtitles.com → API Consumer.</div>
+                  </div>
+
+                  <div className="fld" style={{ marginTop: 18 }}>
+                    <label className="fld-l"><Icon name="closed_caption" /> Subtítulos embebidos (reproductor nativo webOS)</label>
+                    <FocusableButton className={`btn ${nativeSubs ? "primary" : ""}`} onEnterPress={() => setNativeSubs(!nativeSubs)}>
+                      <Icon name={nativeSubs ? "toggle_on" : "toggle_off"} /> {nativeSubs ? "Activado" : "Desactivado"}
+                    </FocusableButton>
+                    <div className="a-pdesc" style={{ marginTop: 6 }}>Usa el pipeline nativo de webOS para exponer/renderizar subtítulos embebidos de las pelis/series. Si algún video no reproduce en la TV, desactivalo (cae al modo estándar).</div>
                   </div>
 
                   <div className="fld" style={{ marginTop: 18 }}>

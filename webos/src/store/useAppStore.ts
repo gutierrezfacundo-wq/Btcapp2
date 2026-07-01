@@ -15,6 +15,7 @@ const HISTORY_KEY = "iptv.history.v1";
 const SUBS_KEY = "iptv.subtitlesApiKey.v1";   // API key de OpenSubtitles (la ingresa el usuario)
 const PROGRESS_KEY = "iptv.progress.v1";      // posición de reproducción por contenido (continuar viendo)
 const COMPANION_KEY = "iptv.companionUrl.v1"; // URL del companion (web app + relay) para vincular con el celular
+const NATIVESUBS_KEY = "iptv.nativeSubs.v1";  // usar pipeline nativo de webOS para exponer subtítulos embebidos
 
 function genId(): string {
   return `src-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`;
@@ -163,6 +164,8 @@ interface AppState {
   progress: Record<string, { pos: number; dur: number }>;
   /** URL base del companion (web app + relay) para vincular con el celular vía QR. */
   companionUrl: string;
+  /** Pipeline nativo de webOS (source+MIME) para exponer subtítulos embebidos. */
+  nativeSubs: boolean;
   epgByChannel: Map<string, EpgProgram[]>;
 
   /** Indica si una seccion VOD ya se cargo a demanda. */
@@ -193,6 +196,7 @@ interface AppState {
   saveProgress: (id: string, pos: number, dur: number) => void;
   clearProgress: (id: string) => void;
   setCompanionUrl: (url: string) => void;
+  setNativeSubs: (on: boolean) => void;
 }
 
 const emptyCatalog: Catalog = {
@@ -220,6 +224,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   subtitlesApiKey: (() => { try { return localStorage.getItem(SUBS_KEY) ?? ""; } catch { return ""; } })(),
   progress: (() => { try { return JSON.parse(localStorage.getItem(PROGRESS_KEY) ?? "{}"); } catch { return {}; } })(),
   companionUrl: (() => { try { return localStorage.getItem(COMPANION_KEY) ?? ""; } catch { return ""; } })(),
+  nativeSubs: (() => { try { return localStorage.getItem(NATIVESUBS_KEY) !== "0"; } catch { return true; } })(),
   epgByChannel: new Map(),
   loadedSections: { movies: false, series: false },
   ui: { tab: "live", category: null, selectedChannelId: null },
@@ -440,6 +445,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     const u = url.trim().replace(/\/+$/, "");
     try { localStorage.setItem(COMPANION_KEY, u); } catch { /* ignore */ }
     set({ companionUrl: u });
+  },
+
+  setNativeSubs: (on) => {
+    try { localStorage.setItem(NATIVESUBS_KEY, on ? "1" : "0"); } catch { /* ignore */ }
+    set({ nativeSubs: on });
   },
 }));
 

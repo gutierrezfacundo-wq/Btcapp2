@@ -44,6 +44,22 @@ function cleanTitle(raw: string): string {
     .trim();
 }
 
+const IS_WEBOS = typeof navigator !== "undefined"
+  && (/web0s|webos/i.test(navigator.userAgent) || typeof (window as unknown as { webOS?: unknown }).webOS !== "undefined");
+
+/** MIME por extensión: le da a webOS la pista del formato para demuxear bien. */
+function mimeForUrl(u: string): string {
+  const ext = (u.split("?")[0].match(/\.([a-z0-9]+)$/i)?.[1] || "").toLowerCase();
+  switch (ext) {
+    case "mkv": return "video/x-matroska";
+    case "ts": return "video/mp2t";
+    case "avi": return "video/x-msvideo";
+    case "mov": return "video/quicktime";
+    case "webm": return "video/webm";
+    default: return "video/mp4";
+  }
+}
+
 function fmt(t: number): string {
   if (!isFinite(t) || t < 0) return "0:00";
   const h = Math.floor(t / 3600);
@@ -87,6 +103,12 @@ export function Player() {
   // ===== Subtítulos (vía SubtitleService, agnóstico del proveedor) =====
   const subtitlesApiKey = useAppStore((s) => s.subtitlesApiKey);
   const companionUrl = useAppStore((s) => s.companionUrl);
+  const nativeSubs = useAppStore((s) => s.nativeSubs);
+  const isHls = /\.m3u8(\?|$)/i.test(url);
+  const [nativeSrcFailed, setNativeSrcFailed] = useState(false);
+  // En webOS, un <source> con MIME correcto usa el pipeline nativo y ayuda a que
+  // exponga/renderice los subtítulos embebidos. Fallback a video.src si falla.
+  const useNativeSource = IS_WEBOS && nativeSubs && !isHls && !nativeSrcFailed;
   const [subsOpen, setSubsOpen] = useState(false);
   const subsRef = useRef(false); subsRef.current = subsOpen;
   const [subResults, setSubResults] = useState<SubtitleResult[] | null>(null);
@@ -201,12 +223,16 @@ export function Player() {
     const video = videoRef.current;
     if (!video || !url) return;
     let hlsInst: Hls | null = null;
-    if (/\.m3u8(\?|$)/i.test(url) && Hls.isSupported()) {
+    if (isHls && Hls.isSupported()) {
       hlsInst = new Hls({ enableWorker: true, lowLatencyMode: true });
       hlsInst.loadSource(url);
       hlsInst.attachMedia(video);
       hlsInst.on(Hls.Events.ERROR, (_e, d) => { if (d.fatal) setError(`Error de reproducción (${d.type})`); });
       setHls(hlsInst);
+    } else if (useNativeSource) {
+      // El <source> declarativo (con MIME) maneja la fuente; solo cargamos.
+      setHls(null);
+      video.load();
     } else {
       video.src = url;
       setHls(null);
@@ -227,6 +253,17 @@ export function Player() {
     return () => { if (hlsInst) hlsInst.destroy(); setHls(null); video.removeAttribute("src"); video.load(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url, reloadKey]);
+
+  // Reintentar el modo nativo cuando cambia el contenido.
+  useEffect(() => { setNativeSrcFailed(false); }, [url]);
+
+  // Si el <source> nativo falló, caemos a video.src (reproducción segura).
+  useEffect(() => {
+    if (!nativeSrcFailed) return;
+    const v = videoRef.current; if (!v) return;
+    v.src = url; v.load(); v.play().catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nativeSrcFailed]);
 
   useEffect(() => {
     const v = videoRef.current; if (!v) return;
@@ -296,7 +333,9 @@ export function Player() {
     <FocusContext.Provider value={focusKey}>
       <div className="ply" ref={ref} onMouseMove={showOverlay} style={{ position: "fixed" }}>
         <video ref={videoRef} autoPlay playsInline controls={false}
+          onError={() => { if (useNativeSource && (videoRef.current?.readyState ?? 0) === 0) setNativeSrcFailed(true); }}
           style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain", background: "#000" }}>
+          {useNativeSource ? <source src={url} type={mimeForUrl(url)} /> : null}
           {subUrl ? <track key={subUrl} kind="subtitles" src={subUrl} srcLang="es" label="Subtítulos" default /> : null}
         </video>
         <div className="ply-grad" style={{ opacity: overlayVisible ? 1 : 0, transition: "opacity .25s" }} />
