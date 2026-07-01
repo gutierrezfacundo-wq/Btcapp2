@@ -6,7 +6,7 @@ import { FocusableButton } from "../components/FocusableButton";
 import { Icon } from "../components/Icon";
 import { TrackMenu } from "../components/TrackMenu";
 import { useAppStore, type FavoriteItem } from "../store/useAppStore";
-import { searchSubtitles, downloadSubtitleVtt, type SubtitleResult } from "../data/opensubtitles";
+import { searchSubtitles, downloadSubtitleVtt, type SubtitleResult, type SearchOpts } from "../data/opensubtitles";
 import { isBackKey, isPlayPauseKey } from "../webos/remote-keys";
 
 /** Limpia el título para buscar subtítulos: saca prefijos de proveedor/calidad,
@@ -72,9 +72,16 @@ export function Player() {
   const [subLoading, setSubLoading] = useState(false);
   const [subError, setSubError] = useState<string | null>(null);
   const [subUrl, setSubUrl] = useState<string | null>(null);
+  // Parámetros de búsqueda según la guía de OpenSubtitles: título solo + year/type/season/episode.
+  const baseTitle = cleanTitle(title) || title.split(" · ")[0].trim();
   const subYear = (title.match(/\b(?:19|20)\d{2}\b/) || (meta.match(/\b(?:19|20)\d{2}\b/) ?? []))[0];
-  // Término de búsqueda: "título año" (ej. "Michael 2026") — más certero.
-  const subQuery = [cleanTitle(title) || title.split(" · ")[0].trim(), subYear].filter(Boolean).join(" ");
+  const seMatch = `${title} ${meta}`.match(/\bT\s?(\d{1,3})\D+?E\s?(\d{1,3})\b/i) || `${title} ${meta}`.match(/\bS(\d{1,3})\s?E(\d{1,3})\b/i);
+  const favKind = (location.state as { fav?: { kind?: string } } | null)?.fav?.kind;
+  const isEpisode = favKind === "series-episode" || !!seMatch;
+  const subOpts: SearchOpts = isEpisode
+    ? { query: baseTitle, type: "episode", season: seMatch ? Number(seMatch[1]) : undefined, episode: seMatch ? Number(seMatch[2]) : undefined }
+    : { query: baseTitle, type: "movie", year: subYear };
+  const subLabel = isEpisode && seMatch ? `${baseTitle} · T${seMatch[1]} E${seMatch[2]}` : [baseTitle, subYear].filter(Boolean).join(" ");
 
   // ===== Favoritos / Continuar viendo =====
   const cid = (location.state as { cid?: string } | null)?.cid;
@@ -98,7 +105,7 @@ export function Player() {
     window.setTimeout(() => setFocus("SUB_FIRST"), 60);
     if (subResults || subLoading || !subtitlesApiKey || !companionUrl) return;
     setSubLoading(true); setSubError(null);
-    searchSubtitles(companionUrl, subtitlesApiKey, subQuery)
+    searchSubtitles(companionUrl, subtitlesApiKey, subOpts)
       .then((r) => setSubResults(r))
       .catch((e) => setSubError(e instanceof Error ? e.message : "Error de búsqueda"))
       .finally(() => setSubLoading(false));
@@ -291,7 +298,7 @@ export function Player() {
           {tracksOpen ? <TrackMenu hls={hls} video={videoRef.current} onClose={() => { setTracksOpen(false); setFocus("PL_TRACKS"); }} /> : null}
           {subsOpen ? (
             <div className="a-trk">
-              <div className="a-trk-h"><Icon name="subtitles" /> Subtítulos · «{subQuery}»</div>
+              <div className="a-trk-h"><Icon name="subtitles" /> Subtítulos · «{subLabel}»</div>
               <div className="a-trk-scroll scroll">
                 {!subtitlesApiKey ? (
                   <div className="a-pdesc">Configurá tu API key de OpenSubtitles en Mis Listas para buscar subtítulos.</div>
@@ -311,7 +318,7 @@ export function Player() {
                     ))}
                   </>
                 ) : (
-                  <div className="a-pdesc">Sin resultados para «{subQuery}».</div>
+                  <div className="a-pdesc">Sin resultados para «{subLabel}».</div>
                 )}
               </div>
               <FocusableButton focusKey={!subtitlesApiKey || subError || !subResults?.length ? "SUB_FIRST" : undefined} className="a-trk-close" onEnterPress={() => { setSubsOpen(false); setFocus("PL_SUBS"); }}>Cerrar</FocusableButton>

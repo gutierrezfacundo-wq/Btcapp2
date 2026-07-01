@@ -12,18 +12,22 @@ export async function onRequestOptions() {
   return new Response(null, { headers: CORS });
 }
 
+// Parámetros seguros de /subtitles que reenviamos tal cual a OpenSubtitles.
+const PASS = ["query", "languages", "year", "type", "season_number", "episode_number", "order_by", "imdb_id", "tmdb_id", "page"];
+
 export async function onRequestGet(context) {
   const { request } = context;
   const url = new URL(request.url);
-  const query = url.searchParams.get("query") || "";
-  const languages = url.searchParams.get("languages") || "es,en";
-  const year = url.searchParams.get("year") || "";
   const apiKey = request.headers.get("api-key") || "";
   if (!apiKey) return new Response(JSON.stringify({ error: "falta api key" }), { status: 400, headers: CORS });
-  if (!query) return new Response(JSON.stringify({ error: "falta query" }), { status: 400, headers: CORS });
+  if (!url.searchParams.get("query")) return new Response(JSON.stringify({ error: "falta query" }), { status: 400, headers: CORS });
 
-  const yq = year ? `&year=${encodeURIComponent(year)}` : "";
-  const osUrl = `https://api.opensubtitles.com/api/v1/subtitles?query=${encodeURIComponent(query)}&languages=${encodeURIComponent(languages)}${yq}&order_by=download_count`;
+  const out = new URLSearchParams();
+  for (const k of PASS) {
+    const v = url.searchParams.get(k);
+    if (v) out.set(k, v);
+  }
+  const osUrl = `https://api.opensubtitles.com/api/v1/subtitles?${out.toString()}`;
   const r = await fetch(osUrl, {
     headers: { "Api-Key": apiKey, "User-Agent": "POTRI v1.0", Accept: "application/json" },
   });

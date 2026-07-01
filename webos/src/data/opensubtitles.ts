@@ -35,23 +35,38 @@ function headers(apiKey: string): Record<string, string> {
   return { "Api-Key": apiKey, "Content-Type": "application/json", Accept: "application/json" };
 }
 
+export interface SearchOpts {
+  /** Solo el título (sin año); se envía en minúsculas como recomienda la API. */
+  query: string;
+  year?: string;
+  type?: "movie" | "episode";
+  season?: number;
+  episode?: number;
+  /** ej "en,es"; se ordena y baja a minúsculas (la API lo exige). */
+  languages?: string;
+}
+
 /**
- * Busca subtitulos por nombre. `languages` ej: "es,en".
- * OpenSubtitles bloquea CORS y exige User-Agent, así que si hay un `relayBase`
- * (companion desplegado) vamos por el proxy; si no, intento directo (suele fallar
- * por CORS en la TV, pero puede andar en algunos entornos).
+ * Busca subtitulos siguiendo la guía oficial: query = título en minúsculas,
+ * year/type/season/episode como parámetros aparte, languages ordenados.
+ * Con `relayBase` (companion) va por el proxy (evita CORS); si no, directo.
  */
 export async function searchSubtitles(
   relayBase: string,
   apiKey: string,
-  query: string,
-  languages = "es,en",
-  year?: string,
+  opts: SearchOpts,
 ): Promise<SubtitleResult[]> {
-  const yq = year ? `&year=${encodeURIComponent(year)}` : "";
-  const url = relayBase
-    ? `${relayBase}/api/os/search?query=${encodeURIComponent(query)}&languages=${encodeURIComponent(languages)}${yq}`
-    : `${BASE}/subtitles?query=${encodeURIComponent(query)}&languages=${encodeURIComponent(languages)}${yq}&order_by=download_count`;
+  const langs = (opts.languages ?? "en,es")
+    .split(",").map((s) => s.trim().toLowerCase()).filter(Boolean).sort().join(",");
+  const p = new URLSearchParams();
+  p.set("query", opts.query.trim().toLowerCase());
+  p.set("languages", langs);
+  p.set("order_by", "download_count");
+  if (opts.year) p.set("year", opts.year);
+  if (opts.type) p.set("type", opts.type);
+  if (opts.season != null) p.set("season_number", String(opts.season));
+  if (opts.episode != null) p.set("episode_number", String(opts.episode));
+  const url = relayBase ? `${relayBase}/api/os/search?${p.toString()}` : `${BASE}/subtitles?${p.toString()}`;
   const res = await fetch(url, { headers: headers(apiKey) });
   if (!res.ok) throw new Error(res.status === 401 ? "API key inválida" : `Error de búsqueda (${res.status})`);
   const dto = (await res.json()) as SearchDto;
