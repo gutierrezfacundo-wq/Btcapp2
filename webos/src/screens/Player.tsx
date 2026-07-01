@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useLocation, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import Hls from "hls.js";
 import { FocusContext, useFocusable, setFocus } from "@noriginmedia/norigin-spatial-navigation";
 import { FocusableButton } from "../components/FocusableButton";
@@ -38,13 +38,17 @@ export function Player() {
   const url = params.get("url") ?? "";
   const title = params.get("title") ?? "";
   const meta = params.get("meta") ?? "";
+  const navigate = useNavigate();
   const location = useLocation();
-  // navigate(-1) y navigate() con query son poco confiables en el HashRouter de
-  // webOS. Setear el hash directo dispara el hashchange y siempre navega.
   const from = (location.state as { from?: string } | null)?.from;
+  // navegación normal (el mismo patrón que sí anda en el resto) + fallback por hash
+  // para el HashRouter de webOS si por algo no cambia la ruta.
   const goBack = () => {
     const dest = from && from.startsWith("/") ? from : "/hub";
-    window.location.hash = `#${dest}`;
+    navigate(dest);
+    window.setTimeout(() => {
+      if (window.location.hash.replace(/^#/, "").startsWith("/player")) window.location.hash = `#${dest}`;
+    }, 60);
   };
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -69,6 +73,7 @@ export function Player() {
   const [subError, setSubError] = useState<string | null>(null);
   const [subUrl, setSubUrl] = useState<string | null>(null);
   const subQuery = cleanTitle(title) || title.split(" · ")[0].trim();
+  const subYear = (title.match(/\b(?:19|20)\d{2}\b/) || (meta.match(/\b(?:19|20)\d{2}\b/) ?? []))[0];
 
   // ===== Favoritos / Continuar viendo =====
   const cid = (location.state as { cid?: string } | null)?.cid;
@@ -92,7 +97,7 @@ export function Player() {
     window.setTimeout(() => setFocus("SUB_FIRST"), 60);
     if (subResults || subLoading || !subtitlesApiKey || !companionUrl) return;
     setSubLoading(true); setSubError(null);
-    searchSubtitles(companionUrl, subtitlesApiKey, subQuery)
+    searchSubtitles(companionUrl, subtitlesApiKey, subQuery, "es,en", subYear)
       .then((r) => setSubResults(r))
       .catch((e) => setSubError(e instanceof Error ? e.message : "Error de búsqueda"))
       .finally(() => setSubLoading(false));

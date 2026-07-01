@@ -46,8 +46,12 @@ export function SeriesDetail() {
 
   useEffect(() => { setFocus("SER_PLAY"); }, [episodes]);
 
-  // Hash directo: navigate() con query es poco confiable en el HashRouter de webOS.
-  const goBack = () => { window.location.hash = "#/home?tab=series"; };
+  const goBack = () => {
+    navigate("/home?tab=series");
+    window.setTimeout(() => {
+      if (window.location.hash.replace(/^#/, "").startsWith("/series")) window.location.hash = "#/home?tab=series";
+    }, 60);
+  };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (isBackKey(e)) { e.preventDefault(); goBack(); } };
     window.addEventListener("keydown", onKey);

@@ -46,10 +46,12 @@ export async function searchSubtitles(
   apiKey: string,
   query: string,
   languages = "es,en",
+  year?: string,
 ): Promise<SubtitleResult[]> {
+  const yq = year ? `&year=${encodeURIComponent(year)}` : "";
   const url = relayBase
-    ? `${relayBase}/api/os/search?query=${encodeURIComponent(query)}&languages=${encodeURIComponent(languages)}`
-    : `${BASE}/subtitles?query=${encodeURIComponent(query)}&languages=${encodeURIComponent(languages)}&order_by=download_count`;
+    ? `${relayBase}/api/os/search?query=${encodeURIComponent(query)}&languages=${encodeURIComponent(languages)}${yq}`
+    : `${BASE}/subtitles?query=${encodeURIComponent(query)}&languages=${encodeURIComponent(languages)}${yq}&order_by=download_count`;
   const res = await fetch(url, { headers: headers(apiKey) });
   if (!res.ok) throw new Error(res.status === 401 ? "API key inválida" : `Error de búsqueda (${res.status})`);
   const dto = (await res.json()) as SearchDto;
