@@ -3,11 +3,32 @@ import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import Hls from "hls.js";
 import { FocusContext, useFocusable, setFocus } from "@noriginmedia/norigin-spatial-navigation";
 import { FocusableButton } from "../components/FocusableButton";
+import { FocusableInput } from "../components/FocusableInput";
 import { Icon } from "../components/Icon";
 import { TrackMenu } from "../components/TrackMenu";
 import { useAppStore, type FavoriteItem } from "../store/useAppStore";
-import { searchSubtitles, downloadSubtitleVtt, type SubtitleResult, type SearchOpts } from "../data/opensubtitles";
+import { getSubtitleService, SubtitleError, type SubtitleResult, type SubtitleSearchRequest } from "../services/subtitles";
 import { isBackKey, isPlayPauseKey } from "../webos/remote-keys";
+
+const SUB_LANGS = [
+  { code: "es", name: "ES" },
+  { code: "en", name: "EN" },
+  { code: "pt-br", name: "PT" },
+];
+function subErrorMessage(e: unknown): string {
+  if (e instanceof SubtitleError) {
+    switch (e.code) {
+      case "no_api_key": return "Configurá tu API key de OpenSubtitles en Mis Listas.";
+      case "no_relay": return "Configurá la URL del companion en Mis Listas.";
+      case "auth": return "API key inválida.";
+      case "rate_limit": return "Límite de descargas/consultas alcanzado (probá más tarde).";
+      case "timeout": return "La búsqueda tardó demasiado.";
+      case "network": return "Error de red.";
+      default: return e.message;
+    }
+  }
+  return "Error inesperado.";
+}
 
 /** Limpia el título para buscar subtítulos: saca prefijos de proveedor/calidad,
  * año, tags entre corchetes y palabras de calidad/idioma. */
@@ -63,7 +84,7 @@ export function Player() {
   const tracksRef = useRef(false); tracksRef.current = tracksOpen;
   const overlayTimer = useRef<number | null>(null);
 
-  // ===== Subtítulos online (OpenSubtitles) =====
+  // ===== Subtítulos (vía SubtitleService, agnóstico del proveedor) =====
   const subtitlesApiKey = useAppStore((s) => s.subtitlesApiKey);
   const companionUrl = useAppStore((s) => s.companionUrl);
   const [subsOpen, setSubsOpen] = useState(false);
@@ -72,16 +93,27 @@ export function Player() {
   const [subLoading, setSubLoading] = useState(false);
   const [subError, setSubError] = useState<string | null>(null);
   const [subUrl, setSubUrl] = useState<string | null>(null);
-  // Parámetros de búsqueda según la guía de OpenSubtitles: título solo + year/type/season/episode.
-  const baseTitle = cleanTitle(title) || title.split(" · ")[0].trim();
-  const subYear = (title.match(/\b(?:19|20)\d{2}\b/) || (meta.match(/\b(?:19|20)\d{2}\b/) ?? []))[0];
+  const [subLangs, setSubLangs] = useState<string[]>(["es", "en"]);
+  // Identidad del contenido: la pasa la pantalla de origen (con tmdb/imdb si los tiene);
+  // si no, se deriva del título/meta.
+  const stateSub = (location.state as { sub?: Partial<SubtitleSearchRequest> } | null)?.sub;
+  const derivedTitle = cleanTitle(title) || title.split(" · ")[0].trim();
+  const derivedYear = (title.match(/\b(?:19|20)\d{2}\b/) || (meta.match(/\b(?:19|20)\d{2}\b/) ?? []))[0];
   const seMatch = `${title} ${meta}`.match(/\bT\s?(\d{1,3})\D+?E\s?(\d{1,3})\b/i) || `${title} ${meta}`.match(/\bS(\d{1,3})\s?E(\d{1,3})\b/i);
   const favKind = (location.state as { fav?: { kind?: string } } | null)?.fav?.kind;
-  const isEpisode = favKind === "series-episode" || !!seMatch;
-  const subOpts: SearchOpts = isEpisode
-    ? { query: baseTitle, type: "episode", season: seMatch ? Number(seMatch[1]) : undefined, episode: seMatch ? Number(seMatch[2]) : undefined }
-    : { query: baseTitle, type: "movie", year: subYear };
-  const subLabel = isEpisode && seMatch ? `${baseTitle} · T${seMatch[1]} E${seMatch[2]}` : [baseTitle, subYear].filter(Boolean).join(" ");
+  const isEpisode = stateSub?.type === "episode" || favKind === "series-episode" || !!seMatch;
+  const baseReq: SubtitleSearchRequest = {
+    type: isEpisode ? "episode" : "movie",
+    title: stateSub?.title ? (cleanTitle(stateSub.title) || stateSub.title) : derivedTitle,
+    year: stateSub?.year ?? (isEpisode ? undefined : derivedYear),
+    tmdbId: stateSub?.tmdbId,
+    imdbId: stateSub?.imdbId,
+    parentTmdbId: stateSub?.parentTmdbId,
+    parentImdbId: stateSub?.parentImdbId,
+    season: stateSub?.season ?? (seMatch ? Number(seMatch[1]) : undefined),
+    episode: stateSub?.episode ?? (seMatch ? Number(seMatch[2]) : undefined),
+  };
+  const [subQuery, setSubQuery] = useState(baseReq.title ?? "");
 
   // ===== Favoritos / Continuar viendo =====
   const cid = (location.state as { cid?: string } | null)?.cid;
@@ -100,26 +132,39 @@ export function Player() {
     v.currentTime = 0; if (cid) clearProgress(cid); resumeAt.current = 0; setResumed(false); showOverlay();
   };
 
+  const runSearch = () => {
+    if (!subtitlesApiKey || !companionUrl) return;
+    const req: SubtitleSearchRequest = { ...baseReq, title: subQuery.trim() || baseReq.title, languages: subLangs };
+    setSubLoading(true); setSubError(null); setSubResults(null);
+    getSubtitleService().searchSubtitles(req)
+      .then(setSubResults)
+      .catch((e) => setSubError(subErrorMessage(e)))
+      .finally(() => setSubLoading(false));
+  };
+
   const openSubs = () => {
     setSubsOpen(true); showOverlay();
-    window.setTimeout(() => setFocus("SUB_FIRST"), 60);
+    window.setTimeout(() => setFocus("SUB_SEARCH"), 60);
     if (subResults || subLoading || !subtitlesApiKey || !companionUrl) return;
-    setSubLoading(true); setSubError(null);
-    searchSubtitles(companionUrl, subtitlesApiKey, subOpts)
-      .then((r) => setSubResults(r))
-      .catch((e) => setSubError(e instanceof Error ? e.message : "Error de búsqueda"))
-      .finally(() => setSubLoading(false));
+    runSearch();
+  };
+
+  const toggleLang = (code: string) => {
+    setSubLangs((prev) => {
+      const next = prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code];
+      return next.length ? next : prev; // no permitir cero idiomas
+    });
   };
 
   const pickSub = async (fileId: number) => {
     setSubLoading(true); setSubError(null);
     try {
-      const vtt = await downloadSubtitleVtt(companionUrl, subtitlesApiKey, fileId);
-      const blob = new Blob([vtt], { type: "text/vtt" });
+      const file = await getSubtitleService().downloadSubtitle(fileId);
+      const blob = new Blob([file.content], { type: "text/vtt" });
       setSubUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return URL.createObjectURL(blob); });
       setSubsOpen(false); setFocus("PL_SUBS");
     } catch (e) {
-      setSubError(e instanceof Error ? e.message : "No se pudo descargar");
+      setSubError(subErrorMessage(e));
     } finally {
       setSubLoading(false);
     }
@@ -298,30 +343,44 @@ export function Player() {
           {tracksOpen ? <TrackMenu hls={hls} video={videoRef.current} onClose={() => { setTracksOpen(false); setFocus("PL_TRACKS"); }} /> : null}
           {subsOpen ? (
             <div className="a-trk">
-              <div className="a-trk-h"><Icon name="subtitles" /> Subtítulos · «{subLabel}»</div>
-              <div className="a-trk-scroll scroll">
-                {!subtitlesApiKey ? (
-                  <div className="a-pdesc">Configurá tu API key de OpenSubtitles en Mis Listas para buscar subtítulos.</div>
-                ) : !companionUrl ? (
-                  <div className="a-pdesc">Para buscar subtítulos online necesitás la URL del companion en Mis Listas (OpenSubtitles bloquea el acceso directo desde la TV).</div>
-                ) : subLoading ? (
-                  <div className="a-pdesc"><span className="spinner" style={{ width: 22, height: 22, display: "inline-block", verticalAlign: "middle", marginRight: 8 }} /> Buscando…</div>
-                ) : subError ? (
-                  <div className="a-pdesc" style={{ color: "var(--err)" }}>{subError}</div>
-                ) : subResults && subResults.length ? (
-                  <>
-                    {subUrl ? <FocusableButton focusKey="SUB_FIRST" className="a-trk-item" onEnterPress={() => { setSubUrl((p) => { if (p) URL.revokeObjectURL(p); return null; }); setSubsOpen(false); setFocus("PL_SUBS"); }}>Desactivar subtítulos</FocusableButton> : null}
-                    {subResults.map((r, i) => (
-                      <FocusableButton key={r.fileId} focusKey={!subUrl && i === 0 ? "SUB_FIRST" : undefined} className="a-trk-item" onEnterPress={() => pickSub(r.fileId)}>
-                        <span className="a-trk-lang">{r.language}</span><span className="a-trk-rel">{r.release}</span>
-                      </FocusableButton>
+              <div className="a-trk-h"><Icon name="subtitles" /> Subtítulos</div>
+              {!subtitlesApiKey ? (
+                <div className="a-trk-scroll"><div className="a-pdesc">Configurá tu API key de OpenSubtitles en Mis Listas para buscar subtítulos.</div></div>
+              ) : !companionUrl ? (
+                <div className="a-trk-scroll"><div className="a-pdesc">Para buscar subtítulos online necesitás la URL del companion en Mis Listas (OpenSubtitles bloquea el acceso directo desde la TV).</div></div>
+              ) : (
+                <>
+                  <div className="a-sub-search">
+                    <FocusableInput focusKey="SUB_SEARCH" value={subQuery} onChange={setSubQuery} placeholder="Título…" />
+                    <FocusableButton className="a-trk-item" onEnterPress={runSearch}><Icon name="search" /> Buscar</FocusableButton>
+                  </div>
+                  <div className="a-sub-langs">
+                    {SUB_LANGS.map((l) => (
+                      <FocusableButton key={l.code} className={`chip ${subLangs.includes(l.code) ? "on" : ""}`} onEnterPress={() => toggleLang(l.code)}>{l.name}</FocusableButton>
                     ))}
-                  </>
-                ) : (
-                  <div className="a-pdesc">Sin resultados para «{subLabel}».</div>
-                )}
-              </div>
-              <FocusableButton focusKey={!subtitlesApiKey || subError || !subResults?.length ? "SUB_FIRST" : undefined} className="a-trk-close" onEnterPress={() => { setSubsOpen(false); setFocus("PL_SUBS"); }}>Cerrar</FocusableButton>
+                  </div>
+                  <div className="a-trk-scroll scroll">
+                    {subLoading ? (
+                      <div className="a-pdesc"><span className="spinner" style={{ width: 22, height: 22, display: "inline-block", verticalAlign: "middle", marginRight: 8 }} /> Buscando…</div>
+                    ) : subError ? (
+                      <div className="a-pdesc" style={{ color: "var(--err)" }}>{subError}</div>
+                    ) : subResults && subResults.length ? (
+                      <>
+                        {subUrl ? <FocusableButton className="a-trk-item" onEnterPress={() => { setSubUrl((p) => { if (p) URL.revokeObjectURL(p); return null; }); setSubsOpen(false); setFocus("PL_SUBS"); }}>Desactivar subtítulos</FocusableButton> : null}
+                        {subResults.map((r) => (
+                          <FocusableButton key={r.fileId} className="a-trk-item" onEnterPress={() => pickSub(r.fileId)}>
+                            <span className="a-trk-lang">{r.language}</span>
+                            <span className="a-trk-rel">{r.release}{r.hearingImpaired ? " · HI" : ""}<span className="a-sub-dl"> · ⬇ {r.downloads}</span></span>
+                          </FocusableButton>
+                        ))}
+                      </>
+                    ) : subResults ? (
+                      <div className="a-pdesc">Sin resultados. Probá editar el título o cambiar el idioma.</div>
+                    ) : null}
+                  </div>
+                </>
+              )}
+              <FocusableButton className="a-trk-close" onEnterPress={() => { setSubsOpen(false); setFocus("PL_SUBS"); }}>Cerrar</FocusableButton>
             </div>
           ) : null}
           {error ? (

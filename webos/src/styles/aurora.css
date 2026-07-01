@@ -469,3 +469,9 @@
 /* Panel de subtitulos online: idioma + release */
 .a-trk-lang{font-family:'Space Grotesk',monospace;font-size:15px;font-weight:700;color:var(--accent);background:var(--soft);padding:2px 9px;border-radius:6px;flex-shrink:0}
 .a-trk-rel{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left;margin-left:10px;font-size:19px}
+.a-sub-dl{color:var(--muted);font-size:15px}
+/* Buscador de subtitulos: campo editable + selector de idioma */
+.a-sub-search{display:flex;gap:10px;align-items:stretch;margin:6px 0 10px}
+.a-sub-search .bare{flex:1;background:var(--surface2);border:1px solid var(--line);border-radius:10px;padding:0 12px}
+.a-sub-search .a-trk-item{flex-shrink:0;justify-content:center;gap:8px;background:var(--surface2)}
+.a-sub-langs{display:flex;gap:8px;margin-bottom:10px}

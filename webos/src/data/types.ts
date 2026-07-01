@@ -36,6 +36,7 @@ export interface SeriesMeta {
   genre?: string;
   plot?: string;
   posterUrl?: string;
+  tmdbId?: string;
 }
 
 export interface Episode {

@@ -76,11 +76,12 @@ export function SeriesDetail() {
   const toggleFav = () => toggleFavorite({ id: favId, name: title, streamUrl: seasonEpisodes[0]?.streamUrl ?? episodes?.[0]?.streamUrl ?? "", logoUrl: info?.posterUrl ?? meta?.posterUrl, kind: "series-episode", meta: favMeta });
   const play = (ep: Episode) => {
     const ft = `${title} · T${ep.seasonNumber} · E${ep.episodeNumber}`;
-    const meta = `T${ep.seasonNumber} · E${ep.episodeNumber}${ep.duration ? ` · ${ep.duration}` : ""}`;
-    const route = `/player?url=${encodeURIComponent(ep.streamUrl)}&title=${encodeURIComponent(ft)}&meta=${encodeURIComponent(meta)}`;
-    pushHistory({ id: `series:${id}`, name: title, route, posterUrl: info?.posterUrl, sub: meta, kind: "series-episode" });
+    const epMeta = `T${ep.seasonNumber} · E${ep.episodeNumber}${ep.duration ? ` · ${ep.duration}` : ""}`;
+    const route = `/player?url=${encodeURIComponent(ep.streamUrl)}&title=${encodeURIComponent(ft)}&meta=${encodeURIComponent(epMeta)}`;
+    pushHistory({ id: `series:${id}`, name: title, route, posterUrl: info?.posterUrl, sub: epMeta, kind: "series-episode" });
     const fav = { id: `series:${id}`, name: title, streamUrl: ep.streamUrl, logoUrl: info?.posterUrl, kind: "series-episode" as const };
-    navigate(route, { state: { from: `/series/${id}?name=${encodeURIComponent(title)}`, fav, cid: ep.id } });
+    const sub = { type: "episode" as const, title, parentTmdbId: meta?.tmdbId, season: ep.seasonNumber, episode: ep.episodeNumber };
+    navigate(route, { state: { from: `/series/${id}?name=${encodeURIComponent(title)}`, fav, cid: ep.id, sub } });
   };
 
   return (

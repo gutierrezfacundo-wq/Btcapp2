@@ -13,7 +13,7 @@ export async function onRequestOptions() {
 }
 
 // Parámetros seguros de /subtitles que reenviamos tal cual a OpenSubtitles.
-const PASS = ["query", "languages", "year", "type", "season_number", "episode_number", "order_by", "imdb_id", "tmdb_id", "page"];
+const PASS = ["query", "languages", "year", "type", "season_number", "episode_number", "order_by", "imdb_id", "tmdb_id", "parent_imdb_id", "parent_tmdb_id", "page"];
 
 export async function onRequestGet(context) {
   const { request } = context;

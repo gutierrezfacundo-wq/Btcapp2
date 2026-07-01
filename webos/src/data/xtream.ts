@@ -57,6 +57,8 @@ interface XtSeriesInfoDto {
     genre?: string;
     plot?: string;
     cover?: string;
+    tmdb?: string | number;
+    tmdb_id?: string | number;
   };
   episodes?: Record<string, Array<{
     id: string;
@@ -192,12 +194,14 @@ export async function loadSeriesEpisodes(
   const info = await getJson<XtSeriesInfoDto>(url);
   const yearRaw = info.info?.releaseDate || info.info?.release_date || "";
   const ratingNum = info.info?.rating != null ? String(info.info.rating).trim() : "";
+  const tmdbRaw = info.info?.tmdb_id ?? info.info?.tmdb;
   const meta: SeriesMeta = {
     rating: ratingNum && ratingNum !== "0" ? ratingNum : undefined,
     year: yearRaw ? yearRaw.slice(0, 4) : undefined,
     genre: info.info?.genre || undefined,
     plot: info.info?.plot || undefined,
     posterUrl: info.info?.cover || undefined,
+    tmdbId: tmdbRaw != null && String(tmdbRaw).trim() ? String(tmdbRaw).trim() : undefined,
   };
   const episodes: Episode[] = [];
   for (const [seasonKey, list] of Object.entries(info.episodes ?? {})) {
