@@ -72,8 +72,9 @@ export function Player() {
   const [subLoading, setSubLoading] = useState(false);
   const [subError, setSubError] = useState<string | null>(null);
   const [subUrl, setSubUrl] = useState<string | null>(null);
-  const subQuery = cleanTitle(title) || title.split(" · ")[0].trim();
   const subYear = (title.match(/\b(?:19|20)\d{2}\b/) || (meta.match(/\b(?:19|20)\d{2}\b/) ?? []))[0];
+  // Término de búsqueda: "título año" (ej. "Michael 2026") — más certero.
+  const subQuery = [cleanTitle(title) || title.split(" · ")[0].trim(), subYear].filter(Boolean).join(" ");
 
   // ===== Favoritos / Continuar viendo =====
   const cid = (location.state as { cid?: string } | null)?.cid;
@@ -97,7 +98,7 @@ export function Player() {
     window.setTimeout(() => setFocus("SUB_FIRST"), 60);
     if (subResults || subLoading || !subtitlesApiKey || !companionUrl) return;
     setSubLoading(true); setSubError(null);
-    searchSubtitles(companionUrl, subtitlesApiKey, subQuery, "es,en", subYear)
+    searchSubtitles(companionUrl, subtitlesApiKey, subQuery)
       .then((r) => setSubResults(r))
       .catch((e) => setSubError(e instanceof Error ? e.message : "Error de búsqueda"))
       .finally(() => setSubLoading(false));
