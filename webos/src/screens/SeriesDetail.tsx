@@ -46,7 +46,8 @@ export function SeriesDetail() {
 
   useEffect(() => { setFocus("SER_PLAY"); }, [episodes]);
 
-  const goBack = () => navigate("/home?tab=series");
+  // Hash directo: navigate() con query es poco confiable en el HashRouter de webOS.
+  const goBack = () => { window.location.hash = "#/home?tab=series"; };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (isBackKey(e)) { e.preventDefault(); goBack(); } };
     window.addEventListener("keydown", onKey);

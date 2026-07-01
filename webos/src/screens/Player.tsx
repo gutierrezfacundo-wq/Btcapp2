@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useSearchParams } from "react-router-dom";
 import Hls from "hls.js";
 import { FocusContext, useFocusable, setFocus } from "@noriginmedia/norigin-spatial-navigation";
 import { FocusableButton } from "../components/FocusableButton";
@@ -24,11 +24,14 @@ export function Player() {
   const url = params.get("url") ?? "";
   const title = params.get("title") ?? "";
   const meta = params.get("meta") ?? "";
-  const navigate = useNavigate();
   const location = useLocation();
-  // navigate(-1) es poco confiable en webOS (HashRouter); volvemos a un destino explícito.
+  // navigate(-1) y navigate() con query son poco confiables en el HashRouter de
+  // webOS. Setear el hash directo dispara el hashchange y siempre navega.
   const from = (location.state as { from?: string } | null)?.from;
-  const goBack = () => navigate(from ?? "/hub", { replace: true });
+  const goBack = () => {
+    const dest = from && from.startsWith("/") ? from : "/hub";
+    window.location.hash = `#${dest}`;
+  };
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [overlayVisible, setOverlayVisible] = useState(true);
@@ -205,7 +208,7 @@ export function Player() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [navigate]);
+  }, []);
 
   const pct = dur > 0 ? (cur / dur) * 100 : 0;
 
