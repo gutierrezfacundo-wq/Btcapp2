@@ -9,6 +9,20 @@ import { useAppStore, type FavoriteItem } from "../store/useAppStore";
 import { searchSubtitles, downloadSubtitleVtt, type SubtitleResult } from "../data/opensubtitles";
 import { isBackKey, isPlayPauseKey } from "../webos/remote-keys";
 
+/** Limpia el título para buscar subtítulos: saca prefijos de proveedor/calidad,
+ * año, tags entre corchetes y palabras de calidad/idioma. */
+function cleanTitle(raw: string): string {
+  return raw
+    .split(" · ")[0]
+    .replace(/^\s*[^\s|]{1,12}\s*-\s*/, "")            // "4K-TOP - " / "VIP - "
+    .replace(/\[[^\]]*\]/g, "")                          // [tags]
+    .replace(/\(?\b(?:19|20)\d{2}\b\)?/g, "")           // año (2026)
+    .replace(/\b(4k|uhd|fhd|full\s*hd|hd|sd|hevc|x265|x264|dual|latino|castellano|español|espanol|subtitulad[oa]|vose?)\b/gi, "")
+    .replace(/[._]+/g, " ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
 function fmt(t: number): string {
   if (!isFinite(t) || t < 0) return "0:00";
   const h = Math.floor(t / 3600);
@@ -54,7 +68,7 @@ export function Player() {
   const [subLoading, setSubLoading] = useState(false);
   const [subError, setSubError] = useState<string | null>(null);
   const [subUrl, setSubUrl] = useState<string | null>(null);
-  const subQuery = title.split(" · ")[0].trim();
+  const subQuery = cleanTitle(title) || title.split(" · ")[0].trim();
 
   // ===== Favoritos / Continuar viendo =====
   const cid = (location.state as { cid?: string } | null)?.cid;

@@ -48,12 +48,24 @@
   box-sizing: border-box;
 }
 
-html, body, #root {
-  width: 1920px;
-  height: 1080px;
+html, body {
+  width: 100%;
+  height: 100%;
   margin: 0;
   padding: 0;
   color: var(--text);
+  overflow: hidden;
+}
+
+/* La app se diseña a 1920x1080 y se escala para llenar la pantalla real
+   (main.tsx calcula el transform). Así se adapta a 4K, ventanas de PC, etc. */
+#root {
+  width: 1920px;
+  height: 1080px;
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
   overflow: hidden;
 }
 
