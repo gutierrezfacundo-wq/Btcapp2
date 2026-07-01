@@ -35,13 +35,21 @@ function headers(apiKey: string): Record<string, string> {
   return { "Api-Key": apiKey, "Content-Type": "application/json", Accept: "application/json" };
 }
 
-/** Busca subtitulos por nombre. `languages` ej: "es,en". */
+/**
+ * Busca subtitulos por nombre. `languages` ej: "es,en".
+ * OpenSubtitles bloquea CORS y exige User-Agent, así que si hay un `relayBase`
+ * (companion desplegado) vamos por el proxy; si no, intento directo (suele fallar
+ * por CORS en la TV, pero puede andar en algunos entornos).
+ */
 export async function searchSubtitles(
+  relayBase: string,
   apiKey: string,
   query: string,
   languages = "es,en",
 ): Promise<SubtitleResult[]> {
-  const url = `${BASE}/subtitles?query=${encodeURIComponent(query)}&languages=${encodeURIComponent(languages)}&order_by=download_count`;
+  const url = relayBase
+    ? `${relayBase}/api/os/search?query=${encodeURIComponent(query)}&languages=${encodeURIComponent(languages)}`
+    : `${BASE}/subtitles?query=${encodeURIComponent(query)}&languages=${encodeURIComponent(languages)}&order_by=download_count`;
   const res = await fetch(url, { headers: headers(apiKey) });
   if (!res.ok) throw new Error(res.status === 401 ? "API key inválida" : `Error de búsqueda (${res.status})`);
   const dto = (await res.json()) as SearchDto;
@@ -62,7 +70,21 @@ export async function searchSubtitles(
 }
 
 /** Pide el link de descarga y devuelve el subtitulo ya convertido a WebVTT. */
-export async function downloadSubtitleVtt(apiKey: string, fileId: number): Promise<string> {
+export async function downloadSubtitleVtt(relayBase: string, apiKey: string, fileId: number): Promise<string> {
+  // Vía relay: el proxy devuelve directamente el SRT (evita CORS de API y CDN).
+  if (relayBase) {
+    const res = await fetch(`${relayBase}/api/os/download`, {
+      method: "POST",
+      headers: headers(apiKey),
+      body: JSON.stringify({ file_id: fileId }),
+    });
+    if (!res.ok) {
+      if (res.status === 406 || res.status === 429) throw new Error("Límite de descargas diario alcanzado");
+      throw new Error(res.status === 401 ? "API key inválida" : `No se pudo descargar (${res.status})`);
+    }
+    return srtToVtt(await res.text());
+  }
+  // Directo (sin relay): dos saltos, suele fallar por CORS en la TV.
   const res = await fetch(`${BASE}/download`, {
     method: "POST",
     headers: headers(apiKey),
@@ -76,8 +98,7 @@ export async function downloadSubtitleVtt(apiKey: string, fileId: number): Promi
   if (!dto.link) throw new Error(dto.message || "Sin enlace de descarga");
   const srtRes = await fetch(dto.link);
   if (!srtRes.ok) throw new Error("No se pudo bajar el archivo");
-  const srt = await srtRes.text();
-  return srtToVtt(srt);
+  return srtToVtt(await srtRes.text());
 }
 
 /** Convierte SRT a WebVTT (los navegadores no cargan .srt en <track>). */

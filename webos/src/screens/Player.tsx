@@ -44,6 +44,7 @@ export function Player() {
 
   // ===== Subtítulos online (OpenSubtitles) =====
   const subtitlesApiKey = useAppStore((s) => s.subtitlesApiKey);
+  const companionUrl = useAppStore((s) => s.companionUrl);
   const [subsOpen, setSubsOpen] = useState(false);
   const subsRef = useRef(false); subsRef.current = subsOpen;
   const [subResults, setSubResults] = useState<SubtitleResult[] | null>(null);
@@ -72,9 +73,9 @@ export function Player() {
   const openSubs = () => {
     setSubsOpen(true); showOverlay();
     window.setTimeout(() => setFocus("SUB_FIRST"), 60);
-    if (subResults || subLoading) return;
+    if (subResults || subLoading || !subtitlesApiKey || !companionUrl) return;
     setSubLoading(true); setSubError(null);
-    searchSubtitles(subtitlesApiKey, subQuery)
+    searchSubtitles(companionUrl, subtitlesApiKey, subQuery)
       .then((r) => setSubResults(r))
       .catch((e) => setSubError(e instanceof Error ? e.message : "Error de búsqueda"))
       .finally(() => setSubLoading(false));
@@ -83,7 +84,7 @@ export function Player() {
   const pickSub = async (fileId: number) => {
     setSubLoading(true); setSubError(null);
     try {
-      const vtt = await downloadSubtitleVtt(subtitlesApiKey, fileId);
+      const vtt = await downloadSubtitleVtt(companionUrl, subtitlesApiKey, fileId);
       const blob = new Blob([vtt], { type: "text/vtt" });
       setSubUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return URL.createObjectURL(blob); });
       setSubsOpen(false); setFocus("PL_SUBS");
@@ -271,6 +272,8 @@ export function Player() {
               <div className="a-trk-scroll scroll">
                 {!subtitlesApiKey ? (
                   <div className="a-pdesc">Configurá tu API key de OpenSubtitles en Mis Listas para buscar subtítulos.</div>
+                ) : !companionUrl ? (
+                  <div className="a-pdesc">Para buscar subtítulos online necesitás la URL del companion en Mis Listas (OpenSubtitles bloquea el acceso directo desde la TV).</div>
                 ) : subLoading ? (
                   <div className="a-pdesc"><span className="spinner" style={{ width: 22, height: 22, display: "inline-block", verticalAlign: "middle", marginRight: 8 }} /> Buscando…</div>
                 ) : subError ? (
