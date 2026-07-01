@@ -24,6 +24,7 @@ export function SeriesDetail() {
   const railNav = useRailNav();
   const source = useAppStore((s) => s.source);
   const series = useAppStore((s) => s.catalog.series);
+  const progress = useAppStore((s) => s.progress);
   const info = useMemo(() => series.find((s) => s.id === id), [series, id]);
 
   const [episodes, setEpisodes] = useState<Episode[] | null>(null);
@@ -66,7 +67,8 @@ export function SeriesDetail() {
   const favorites = useAppStore((s) => s.favorites);
   const favId = `series:${id}`;
   const isFav = favorites.some((f) => f.id === favId);
-  const toggleFav = () => toggleFavorite({ id: favId, name: title, streamUrl: seasonEpisodes[0]?.streamUrl ?? episodes?.[0]?.streamUrl ?? "", logoUrl: info?.posterUrl ?? meta?.posterUrl, kind: "series-episode" });
+  const favMeta = [meta?.year, meta?.genre, meta?.rating ? `${meta.rating} ★` : null].filter(Boolean).join(" · ") || undefined;
+  const toggleFav = () => toggleFavorite({ id: favId, name: title, streamUrl: seasonEpisodes[0]?.streamUrl ?? episodes?.[0]?.streamUrl ?? "", logoUrl: info?.posterUrl ?? meta?.posterUrl, kind: "series-episode", meta: favMeta });
   const play = (ep: Episode) => {
     const ft = `${title} · T${ep.seasonNumber} · E${ep.episodeNumber}`;
     const meta = `T${ep.seasonNumber} · E${ep.episodeNumber}${ep.duration ? ` · ${ep.duration}` : ""}`;
@@ -132,19 +134,26 @@ export function SeriesDetail() {
                   {seasonEpisodes.length === 0 ? (
                     <div className="grd-empty">Sin episodios</div>
                   ) : (
-                    seasonEpisodes.map((ep) => (
-                      <FocusableButton key={ep.id} className="ep-row" onEnterPress={() => play(ep)}>
-                        <span className="ep-num">E{String(ep.episodeNumber).padStart(2, "0")}</span>
-                        <span className="ep-thumb">
-                          {ep.thumbUrl ? <img src={ep.thumbUrl} alt="" loading="lazy" decoding="async" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 10 }} /> : <Icon name="play_arrow" />}
-                        </span>
-                        <span className="ep-mid">
-                          <div className="ep-title">{ep.title}</div>
-                          <div className="ep-sub">{ep.plot ? ep.plot : `T${ep.seasonNumber} · E${ep.episodeNumber}`}</div>
-                        </span>
-                        {ep.duration ? <span className="ep-dur">{ep.duration}</span> : null}
-                      </FocusableButton>
-                    ))
+                    seasonEpisodes.map((ep) => {
+                      const p = progress[ep.id];
+                      const watched = p && p.dur > 0 && p.pos > p.dur - 60;
+                      const continuing = p && p.dur > 0 && p.pos > 30 && p.pos <= p.dur - 60;
+                      return (
+                        <FocusableButton key={ep.id} className="ep-row" onEnterPress={() => play(ep)}>
+                          <span className="ep-num">E{String(ep.episodeNumber).padStart(2, "0")}</span>
+                          <span className="ep-thumb">
+                            {ep.thumbUrl ? <img src={ep.thumbUrl} alt="" loading="lazy" decoding="async" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 10 }} /> : <Icon name="play_arrow" />}
+                          </span>
+                          <span className="ep-mid">
+                            <div className="ep-title">{ep.title}</div>
+                            <div className="ep-sub">{ep.plot ? ep.plot : `T${ep.seasonNumber} · E${ep.episodeNumber}`}</div>
+                          </span>
+                          {watched ? <span className="ep-flag"><Icon name="check_circle" /> Visto</span>
+                            : continuing ? <span className="ep-flag"><Icon name="play_circle" /> Continuar</span> : null}
+                          {ep.duration ? <span className="ep-dur">{ep.duration}</span> : null}
+                        </FocusableButton>
+                      );
+                    })
                   )}
                 </div>
               </div>

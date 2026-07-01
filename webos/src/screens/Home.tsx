@@ -189,7 +189,7 @@ export function Home() {
   const play = (url: string, title: string, hist?: { id: string; posterUrl?: string; sub?: string; kind: "live" | "movie" | "series-episode" }) => {
     const route = `/player?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}${hist?.sub ? `&meta=${encodeURIComponent(hist.sub)}` : ""}`;
     if (hist) pushHistory({ id: hist.id, name: title, route, posterUrl: hist.posterUrl, sub: hist.sub, kind: hist.kind });
-    const fav = hist ? { id: hist.id, name: title, streamUrl: url, logoUrl: hist.posterUrl, kind: hist.kind } : undefined;
+    const fav = hist ? { id: hist.id, name: title, streamUrl: url, logoUrl: hist.posterUrl, kind: hist.kind, meta: hist.sub } : undefined;
     navigate(route, { state: { from: `/home?tab=${tab}`, fav, cid: hist?.id } });
   };
   const openSeries = (id: string, name: string, posterUrl?: string) => {
@@ -226,8 +226,8 @@ export function Home() {
 
   // Datos livianos para la grilla virtualizada (sin closures por item).
   const gridItems = useMemo(() => {
-    if (tab === "movies") return moviesFiltered.map((m) => ({ id: m.id, name: m.name, posterUrl: m.posterUrl, year: m.year, rating: m.rating }));
-    if (tab === "series") return seriesFiltered.map((s) => ({ id: s.id, name: s.name, posterUrl: s.posterUrl, year: undefined as string | undefined, rating: undefined as string | undefined }));
+    if (tab === "movies") return moviesFiltered.map((m) => ({ id: m.id, name: m.name, posterUrl: m.posterUrl, year: m.year, rating: m.rating, genre: m.category }));
+    if (tab === "series") return seriesFiltered.map((s) => ({ id: s.id, name: s.name, posterUrl: s.posterUrl, year: undefined as string | undefined, rating: undefined as string | undefined, genre: s.category }));
     return [];
   }, [tab, moviesFiltered, seriesFiltered]);
   const onPickGrid = (index: number) => {
@@ -245,8 +245,10 @@ export function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const onRowFav = useCallback((c: Channel) => {
-    toggleFavorite({ id: c.id, name: c.name, streamUrl: c.streamUrl, logoUrl: c.logoUrl, kind: c.kind });
-  }, [toggleFavorite]);
+    const n = channelNumbers.get(c.id);
+    const meta = [n ? `Nº ${n}` : null, quality(c.name)].filter(Boolean).join(" · ") || undefined;
+    toggleFavorite({ id: c.id, name: c.name, streamUrl: c.streamUrl, logoUrl: c.logoUrl, kind: c.kind, meta });
+  }, [toggleFavorite, channelNumbers]);
 
   const title = tab === "live" ? "En vivo" : tab === "movies" ? "Películas" : tab === "series" ? "Series" : "Favoritos";
 
@@ -409,7 +411,7 @@ function PreviewPanel({
   const toggleFavorite = useAppStore((s) => s.toggleFavorite);
   const favorites = useAppStore((s) => s.favorites);
   const isFav = !!channel && favorites.some((f) => f.id === channel.id);
-  const toggleFav = () => { if (channel) toggleFavorite({ id: channel.id, name: channel.name, streamUrl: channel.streamUrl, logoUrl: channel.logoUrl, kind: "live" }); };
+  const toggleFav = () => { if (channel) toggleFavorite({ id: channel.id, name: channel.name, streamUrl: channel.streamUrl, logoUrl: channel.logoUrl, kind: "live", meta: [channelNumber ? `Nº ${channelNumber}` : null, ql].filter(Boolean).join(" · ") || undefined }); };
 
   useEffect(() => { setPaused(false); setTracksOpen(false); setBitrate(0); setRes(null); }, [channel?.id]);
   const togglePause = () => { const v = videoElRef.current; if (!v) return; if (v.paused) { v.play().catch(() => undefined); setPaused(false); } else { v.pause(); setPaused(true); } };
@@ -524,7 +526,7 @@ function PreviewPanel({
 
 
 // ===================== GRID (películas / series) =====================
-interface GridData { id: string; name: string; posterUrl?: string; year?: string; rating?: string }
+interface GridData { id: string; name: string; posterUrl?: string; year?: string; rating?: string; genre?: string }
 
 function GridScreen({
   title, count, categories, category, onCategory, query, onQuery, items, onPick,
@@ -578,7 +580,7 @@ function GridScreen({
                     {it.rating ? <div className="poster-rate"><Icon name="star" size={15} /> {it.rating}</div> : null}
                     <div className="poster-meta">
                       <div className="poster-name">{it.name}</div>
-                      {it.year ? <div className="poster-year">{it.year}</div> : null}
+                      {it.year || it.genre ? <div className="poster-year">{[it.year, it.genre].filter(Boolean).join(" · ")}</div> : null}
                     </div>
                   </div>
                 </FocusableButton>
@@ -602,7 +604,7 @@ function favBadge(kind: string) { return kind === "live" ? "live" : kind === "mo
 function favBadgeLabel(kind: string) { return kind === "live" ? "EN VIVO" : kind === "movie" ? "PELÍCULA" : "SERIE"; }
 
 function FavScreen({ favorites, onPlay, onToggle }: {
-  favorites: { id: string; name: string; streamUrl: string; logoUrl?: string; kind: string }[];
+  favorites: { id: string; name: string; streamUrl: string; logoUrl?: string; kind: string; meta?: string }[];
   onPlay: (url: string, title: string, h?: { id: string; posterUrl?: string; sub?: string; kind: "live" | "movie" | "series-episode" }) => void;
   onToggle: (i: { id: string; name: string; streamUrl: string; logoUrl?: string; kind: "live" | "movie" | "series-episode" }) => void;
 }) {
@@ -622,7 +624,7 @@ function FavScreen({ favorites, onPlay, onToggle }: {
           <FocusableButton key={f.id} className="fav-row" onEnterPress={() => onPlay(f.streamUrl, f.name, { id: f.id, posterUrl: f.logoUrl, sub: favBadgeLabel(f.kind), kind: f.kind as "live" | "movie" | "series-episode" })}>
             <span className={`fav-badge ${favBadge(f.kind)}`}>{favBadgeLabel(f.kind)}</span>
             <span className="fav-thumb">{f.logoUrl ? <img src={f.logoUrl} alt="" loading="lazy" decoding="async" style={{ width: "100%", height: "100%", objectFit: "contain", borderRadius: 10 }} /> : initials(f.name)}</span>
-            <span className="fav-mid"><div className="fav-name">{f.name}</div><div className="fav-meta">{favBadgeLabel(f.kind)}</div></span>
+            <span className="fav-mid"><div className="fav-name">{f.name}</div><div className="fav-meta">{f.meta || favBadgeLabel(f.kind)}</div></span>
             <span className="fav-star" onClick={(e) => { e.stopPropagation(); onToggle({ id: f.id, name: f.name, streamUrl: f.streamUrl, logoUrl: f.logoUrl, kind: f.kind as "live" | "movie" | "series-episode" }); }}><Icon name="star" /></span>
             <Icon name="play_circle" className="fav-go" />
           </FocusableButton>

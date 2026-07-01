@@ -33,7 +33,7 @@ export function TopBar({
           className="a-listpill"
           onEnterPress={() => navigate("/setup")}
         >
-          <Icon name="playlist_play" />
+          <Icon name="dns" />
           <div>
             <div className="lp-l">Lista activa</div>
             <div className="lp-n">{activeName}</div>

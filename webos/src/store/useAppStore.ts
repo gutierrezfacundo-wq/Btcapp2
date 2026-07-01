@@ -107,6 +107,8 @@ export interface FavoriteItem {
   streamUrl: string;
   logoUrl?: string;
   kind: MediaKind;
+  /** Subtítulo enriquecido para la fila de Favoritos (ej. "Nº 415 · 4K", "2024 · Acción"). */
+  meta?: string;
 }
 
 function loadFavorites(): FavoriteItem[] {

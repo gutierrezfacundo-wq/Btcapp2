@@ -148,7 +148,7 @@ export function Setup() {
                         <div className="src-card-top">
                           <span className={`src-badge ${s.config.kind}`}>{s.config.kind === "xtream" ? "XTREAM" : "M3U"}</span>
                           <span className="src-name">{s.name}</span>
-                          {active ? <span className="src-activeflag"><Icon name="bolt" /> Activa</span> : null}
+                          {active ? <span className="src-activeflag"><Icon name="check_circle" /> Activa</span> : null}
                         </div>
                         <div className="src-meta">
                           {s.config.kind === "xtream" ? `${s.config.server} · ${s.config.username}` : s.config.playlistUrl}
@@ -240,7 +240,7 @@ export function Setup() {
                     </FocusableButton>
                     {editingId && editingId !== activeSourceId ? (
                       <FocusableButton className="btn" onEnterPress={async () => { await setActiveSource(editingId); navigate("/hub"); }}>
-                        <Icon name="bolt" /> Activar
+                        <Icon name="power_settings_new" /> Activar
                       </FocusableButton>
                     ) : null}
                     {editingId ? (
