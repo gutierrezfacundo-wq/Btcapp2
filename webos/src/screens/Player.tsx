@@ -249,7 +249,7 @@ export function Player() {
         <div className="ply-grad" style={{ opacity: overlayVisible ? 1 : 0, transition: "opacity .25s" }} />
         <div style={{ opacity: overlayVisible ? 1 : 0, transition: "opacity .25s", pointerEvents: overlayVisible ? "auto" : "none" }}>
           <div className="ply-top">
-            <FocusableButton className="ply-back" onEnterPress={goBack}>
+            <FocusableButton focusKey="PL_BACK" className="ply-back" onEnterPress={goBack}>
               <Icon name="arrow_back" /> Volver
             </FocusableButton>
             <div className="ply-titwrap">

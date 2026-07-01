@@ -26,7 +26,10 @@ export function isBackKey(e: KeyboardEvent): boolean {
   return e.keyCode === RemoteKey.Back ||
     e.keyCode === RemoteKey.BackBackspace ||
     e.key === "Backspace" ||
-    e.key === "GoBack";
+    e.key === "GoBack" ||
+    e.key === "XF86Back" ||
+    e.key === "BrowserBack" ||
+    e.key === "Back";
 }
 
 export function isPlayPauseKey(e: KeyboardEvent): boolean {
