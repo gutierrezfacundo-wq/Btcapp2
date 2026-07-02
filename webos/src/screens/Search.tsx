@@ -13,7 +13,16 @@ import { Hints } from "../components/Hints";
 import { useRailNav } from "../hooks/useRailNav";
 import { useBack } from "../navigation/backStack";
 
-const MAX_PER_GROUP = 10;
+const MAX_PER_GROUP = 10;   // vista "Todo": pocos por sección
+const MAX_FILTERED = 60;    // ficha específica: lista larga
+
+const KINDS = [
+  { id: "all", label: "Todo" },
+  { id: "live", label: "En vivo" },
+  { id: "movie", label: "Películas" },
+  { id: "series", label: "Series" },
+] as const;
+type Kind = (typeof KINDS)[number]["id"];
 
 function initials(s: string) {
   return s.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
@@ -30,6 +39,7 @@ export function Search() {
   const setUi = useAppStore((s) => s.setUi);
 
   const [query, setQuery] = useState("");
+  const [kind, setKind] = useState<Kind>("all");
   const deferred = useDeferredValue(query);
   const q = deferred.trim().toLowerCase();
 
@@ -45,9 +55,10 @@ export function Search() {
 
   useBack(() => { navigate("/hub"); });
 
-  const channels = useMemo(() => (q.length < 2 ? [] : catalog.liveChannels.filter((c) => c.name.toLowerCase().includes(q)).slice(0, MAX_PER_GROUP)), [catalog.liveChannels, q]);
-  const movies = useMemo(() => (q.length < 2 ? [] : catalog.movies.filter((m) => m.name.toLowerCase().includes(q)).slice(0, MAX_PER_GROUP)), [catalog.movies, q]);
-  const series = useMemo(() => (q.length < 2 ? [] : catalog.series.filter((s) => s.name.toLowerCase().includes(q)).slice(0, MAX_PER_GROUP)), [catalog.series, q]);
+  const cap = kind === "all" ? MAX_PER_GROUP : MAX_FILTERED;
+  const channels = useMemo(() => (q.length < 2 || (kind !== "all" && kind !== "live") ? [] : catalog.liveChannels.filter((c) => c.name.toLowerCase().includes(q)).slice(0, cap)), [catalog.liveChannels, q, kind, cap]);
+  const movies = useMemo(() => (q.length < 2 || (kind !== "all" && kind !== "movie") ? [] : catalog.movies.filter((m) => m.name.toLowerCase().includes(q)).slice(0, cap)), [catalog.movies, q, kind, cap]);
+  const series = useMemo(() => (q.length < 2 || (kind !== "all" && kind !== "series") ? [] : catalog.series.filter((s) => s.name.toLowerCase().includes(q)).slice(0, cap)), [catalog.series, q, kind, cap]);
   const empty = q.length >= 2 && !channels.length && !movies.length && !series.length;
 
   const openChannel = (id: string) => {
@@ -68,6 +79,11 @@ export function Search() {
                 <Icon name="search" />
                 <FocusableInput focusKey="SEARCH_IN" value={query} onChange={setQuery} placeholder="Buscar canales, películas y series…" />
               </div>
+              <FocusZone zone="search:kinds" className="gsr-kinds">
+                {KINDS.map((k) => (
+                  <FocusableButton key={k.id} className={`chip ${kind === k.id ? "on" : ""}`} onEnterPress={() => setKind(k.id)}>{k.label}</FocusableButton>
+                ))}
+              </FocusZone>
               {!loadedSections.movies || !loadedSections.series ? (
                 <div className="a-pdesc" style={{ padding: "6px 0 0" }}><span className="spinner" style={{ width: 18, height: 18, display: "inline-block", verticalAlign: "middle", marginRight: 8 }} /> Cargando catálogo para buscar en todo…</div>
               ) : null}
@@ -78,7 +94,7 @@ export function Search() {
                   <div className="grd-empty">Sin resultados para «{deferred.trim()}»</div>
                 ) : (
                   <>
-                    {channels.length ? <div className="gsr-h">Canales</div> : null}
+                    {kind === "all" && channels.length ? <div className="gsr-h">Canales</div> : null}
                     {channels.map((c) => (
                       <FocusableButton key={c.id} className="fav-row" onEnterPress={() => openChannel(c.id)}>
                         <span className="fav-badge live">EN VIVO</span>
@@ -87,7 +103,7 @@ export function Search() {
                         <Icon name="play_circle" className="fav-go" />
                       </FocusableButton>
                     ))}
-                    {movies.length ? <div className="gsr-h">Películas</div> : null}
+                    {kind === "all" && movies.length ? <div className="gsr-h">Películas</div> : null}
                     {movies.map((m) => (
                       <FocusableButton key={m.id} className="fav-row" onEnterPress={() => openMovie(m.id)}>
                         <span className="fav-badge movie">PELÍCULA</span>
@@ -96,7 +112,7 @@ export function Search() {
                         <Icon name="play_circle" className="fav-go" />
                       </FocusableButton>
                     ))}
-                    {series.length ? <div className="gsr-h">Series</div> : null}
+                    {kind === "all" && series.length ? <div className="gsr-h">Series</div> : null}
                     {series.map((s) => (
                       <FocusableButton key={s.id} className="fav-row" onEnterPress={() => navigate(`/series/${s.id}?name=${encodeURIComponent(s.name)}`)}>
                         <span className="fav-badge series">SERIE</span>
