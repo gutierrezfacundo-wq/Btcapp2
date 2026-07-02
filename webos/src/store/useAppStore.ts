@@ -16,6 +16,7 @@ const PROGRESS_KEY = "iptv.progress.v1";      // posición de reproducción por 
 const COMPANION_KEY = "iptv.companionUrl.v1"; // URL del companion (web app + relay) para vincular con el celular
 const NATIVESUBS_KEY = "iptv.nativeSubs.v1";  // usar pipeline nativo de webOS para exponer subtítulos embebidos
 const SUBSCALE_KEY = "iptv.subtitleScale.v1"; // tamaño de subtítulos (s/m/l)
+const UI_KEY = "iptv.ui.v1";                  // navegación del Home (canal/categoría/tab): sobrevive al reinicio
 
 function genId(): string {
   return `src-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`;
@@ -231,8 +232,15 @@ export const useAppStore = create<AppState>((set, get) => ({
   playQueue: [],
   epgByChannel: new Map(),
   loadedSections: { movies: false, series: false },
-  ui: { tab: "live", category: null, selectedChannelId: null },
-  setUi: (patch) => set({ ui: { ...get().ui, ...patch } }),
+  ui: (() => {
+    const base = { tab: "live" as const, category: null, selectedChannelId: null };
+    try { return { ...base, ...JSON.parse(localStorage.getItem(UI_KEY) ?? "{}") }; } catch { return base; }
+  })(),
+  setUi: (patch) => {
+    const ui = { ...get().ui, ...patch };
+    try { localStorage.setItem(UI_KEY, JSON.stringify(ui)); } catch { /* ignore */ }
+    set({ ui });
+  },
 
   addSource: (name, config) => {
     const entry: SavedSource = { id: genId(), name: name.trim() || "Lista", config };
@@ -279,6 +287,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       loadedSections: { movies: false, series: false },
       ui: { tab: "live", category: null, selectedChannelId: null },
     });
+    try { localStorage.setItem(UI_KEY, JSON.stringify({ tab: "live", category: null, selectedChannelId: null })); } catch { /* ignore */ }
     await get().reload();
   },
 

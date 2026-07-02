@@ -120,16 +120,19 @@ export function Home() {
   }, [tab, loadedSections, ensureMovies, ensureSeries]);
 
   const { ref, focusKey } = useFocusable({ trackChildren: true, focusKey: "HOME" });
-  const restored = useRef(false);
   // Enfocar recién cuando el contenido del tab existe (si no, el intento vence
-  // durante el spinner de carga y el D-pad queda sin foco inicial).
+  // durante el spinner de carga y el D-pad queda sin foco inicial). En Vivo con
+  // canal seleccionado: SIEMPRE volver a ese canal (la lista lo centra sola).
   const liveReady = catalog.liveChannels.length > 0;
   useEffect(() => {
     const ready = tab === "live" ? liveReady
       : tab === "favorites" ? true
       : tab === "movies" ? loadedSections.movies : loadedSections.series;
     if (!ready) return;
-    if (tab === "live" && ui.selectedChannelId && !restored.current) return;
+    if (tab === "live" && selectedChannelId) {
+      focusWhenReady(`CH_${selectedChannelId}`, 40);
+      return;
+    }
     restoreFocus(`home:${tab}`, "CAT_0");
   }, [tab, liveReady, loadedSections.movies, loadedSections.series]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -192,13 +195,6 @@ export function Home() {
     const byCat = category ? catalog.series.filter((s) => s.category === category) : catalog.series;
     return applySort(q ? byCat.filter((s) => s.name.toLowerCase().includes(q)) : byCat);
   }, [tab, catalog.series, category, q, applySort]);
-
-  useEffect(() => {
-    if (restored.current || tab !== "live" || !selectedChannelId) { restored.current = true; return; }
-    const idx = liveFiltered.findIndex((c) => c.id === selectedChannelId);
-    restored.current = true;
-    if (idx >= 0) focusWhenReady(`CH_${selectedChannelId}`);
-  }, [tab, selectedChannelId, liveFiltered]);
 
   const openSeries = (id: string, name: string) => {
     navigate(`/series/${id}?name=${encodeURIComponent(name)}`);
