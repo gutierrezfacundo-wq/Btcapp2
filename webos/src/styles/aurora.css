@@ -501,3 +501,16 @@ video::cue{background:rgba(0,0,0,.65);color:#fff}
 .a-cat-t{font-size:15px}
 
 /* Panel de subtitulos online: idioma + release */
+
+/* ===== Gestor de categorias (ocultar / reordenar) ===== */
+.cm-wrap{display:flex;flex-direction:column;flex:1;min-height:0;padding:28px 44px 14px}
+.cm-list{flex:1;min-height:0;display:flex;flex-direction:column;max-width:1020px;margin-top:18px}
+.cm-vp{flex:1;min-height:0;overflow-y:auto;padding-right:12px}
+.cm-row{display:flex;align-items:center;gap:16px;padding:13px 20px;margin-bottom:4px;border-radius:12px;border:1px solid transparent;cursor:pointer;transition:background .12s,box-shadow .12s}
+.cm-row.focused{background:var(--soft);box-shadow:inset 0 0 0 2px var(--ring)}
+.cm-grip{display:flex;align-items:center;color:var(--muted)}
+.cm-name{flex:1;font-size:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cm-count{font-family:'Space Grotesk',monospace;font-size:16px;color:var(--muted);flex-shrink:0}
+.cm-eye{display:flex;align-items:center;color:var(--muted);flex-shrink:0}
+.cm-row.off .cm-name{color:var(--muted);opacity:.55;text-decoration:line-through}
+.cm-row.off .cm-grip,.cm-row.off .cm-count{opacity:.4}

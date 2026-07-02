@@ -13,6 +13,7 @@ import { Player } from "./screens/Player";
 import { Pair } from "./screens/Pair";
 import { Search } from "./screens/Search";
 import { Catchup } from "./screens/Catchup";
+import { Categories } from "./screens/Categories";
 import { useAppStore } from "./store/useAppStore";
 import { installBackHandler } from "./navigation/backStack";
 
@@ -75,6 +76,7 @@ export default function App() {
       <Route path="/player" element={<KeyedPlayer />} />
       <Route path="/search" element={<Search />} />
       <Route path="/catchup/:id" element={<Catchup />} />
+      <Route path="/categories" element={<Categories />} />
       <Route path="/pair" element={<Pair />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

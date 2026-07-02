@@ -286,6 +286,14 @@ export function Setup() {
                     <div className="a-pdesc" style={{ marginTop: 6 }}>Si los programas de la guía aparecen corridos (empiezan antes/después de lo real), ajustá acá las horas de diferencia.</div>
                   </div>
 
+                  <div className="fld" style={{ marginTop: 18 }}>
+                    <label className="fld-l"><Icon name="category" /> Categorías</label>
+                    <FocusableButton className="btn" onEnterPress={() => navigate("/categories")}>
+                      <Icon name="tune" /> Gestionar categorías
+                    </FocusableButton>
+                    <div className="a-pdesc" style={{ marginTop: 6 }}>Ocultá las categorías que no usás y cambiales el orden. Se guarda por lista y afecta En vivo, Películas y Series.</div>
+                  </div>
+
                   {acct ? (
                     <div className="fld" style={{ marginTop: 18 }}>
                       <label className="fld-l"><Icon name="badge" /> Cuenta</label>

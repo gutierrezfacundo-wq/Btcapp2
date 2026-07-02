@@ -3,7 +3,7 @@ import type { Channel, EpgProgram } from "../data/types";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { FocusContext, useFocusable } from "@noriginmedia/norigin-spatial-navigation";
 import type Hls from "hls.js";
-import { useAppStore } from "../store/useAppStore";
+import { useAppStore, applyCatPrefs } from "../store/useAppStore";
 import { findNextProgram, findNowPlaying } from "../data/xmltv";
 import { FocusableButton } from "../components/FocusableButton";
 import { FocusableInput } from "../components/FocusableInput";
@@ -153,9 +153,19 @@ export function Home() {
     return m;
   }, [catalog.liveChannels]);
 
-  const categories = tab === "live" ? catalog.liveCategories
+  // Preferencias del usuario: categorías ocultas y orden propio (por lista).
+  const catPrefs = useAppStore((s) => s.catPrefs);
+  const sectionPrefs = tab === "live" ? catPrefs.live
+    : tab === "movies" ? catPrefs.movies
+    : tab === "series" ? catPrefs.series : null;
+  const rawCategories = tab === "live" ? catalog.liveCategories
     : tab === "movies" ? catalog.movieCategories
     : tab === "series" ? catalog.seriesCategories : [];
+  const categories = useMemo(
+    () => (sectionPrefs ? applyCatPrefs(rawCategories, sectionPrefs) : rawCategories),
+    [rawCategories, sectionPrefs],
+  );
+  const hiddenCats = useMemo(() => new Set(sectionPrefs?.hidden ?? []), [sectionPrefs]);
 
   const counts = useMemo(() => {
     const m = new Map<string, number>();
@@ -182,21 +192,25 @@ export function Home() {
     else out.sort((a, b) => collator.compare(a.name, b.name));
     return out;
   }, [sortMode, collator]);
+  // En "Todas" también se excluye el contenido de las categorías ocultas.
   const liveFiltered = useMemo(() => {
     if (tab !== "live") return [];
-    const byCat = category ? catalog.liveChannels.filter((c) => c.groupTitle === category) : catalog.liveChannels;
+    const byCat = category ? catalog.liveChannels.filter((c) => c.groupTitle === category)
+      : hiddenCats.size ? catalog.liveChannels.filter((c) => !hiddenCats.has(c.groupTitle ?? "")) : catalog.liveChannels;
     return q ? byCat.filter((c) => c.name.toLowerCase().includes(q)) : byCat;
-  }, [tab, catalog.liveChannels, category, q]);
+  }, [tab, catalog.liveChannels, category, q, hiddenCats]);
   const moviesFiltered = useMemo(() => {
     if (tab !== "movies") return [];
-    const byCat = category ? catalog.movies.filter((m) => m.category === category) : catalog.movies;
+    const byCat = category ? catalog.movies.filter((m) => m.category === category)
+      : hiddenCats.size ? catalog.movies.filter((m) => !hiddenCats.has(m.category ?? "")) : catalog.movies;
     return applySort(q ? byCat.filter((m) => m.name.toLowerCase().includes(q)) : byCat);
-  }, [tab, catalog.movies, category, q, applySort]);
+  }, [tab, catalog.movies, category, q, applySort, hiddenCats]);
   const seriesFiltered = useMemo(() => {
     if (tab !== "series") return [];
-    const byCat = category ? catalog.series.filter((s) => s.category === category) : catalog.series;
+    const byCat = category ? catalog.series.filter((s) => s.category === category)
+      : hiddenCats.size ? catalog.series.filter((s) => !hiddenCats.has(s.category ?? "")) : catalog.series;
     return applySort(q ? byCat.filter((s) => s.name.toLowerCase().includes(q)) : byCat);
-  }, [tab, catalog.series, category, q, applySort]);
+  }, [tab, catalog.series, category, q, applySort, hiddenCats]);
 
   const openSeries = (id: string, name: string) => {
     navigate(`/series/${id}?name=${encodeURIComponent(name)}`);

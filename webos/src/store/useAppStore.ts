@@ -18,6 +18,7 @@ const NATIVESUBS_KEY = "iptv.nativeSubs.v1";  // usar pipeline nativo de webOS p
 const SUBSCALE_KEY = "iptv.subtitleScale.v1"; // tamaño de subtítulos (s/m/l)
 const EPGOFF_KEY = "iptv.epgOffset.v1";      // corrección horaria de la guía (horas)
 const UI_KEY = "iptv.ui.v1";                  // navegación del Home (canal/categoría/tab): sobrevive al reinicio
+const CATPREFS_KEY = "iptv.catPrefs.v1";     // + ":<sourceKey>": ocultar/reordenar categorías por lista
 
 function genId(): string {
   return `src-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`;
@@ -104,6 +105,53 @@ function saveCatalogCache(s: SourceConfig, catalog: Catalog) {
   }
 }
 
+// ===== Preferencias de categorías (ocultar / reordenar), por lista =====
+export interface SectionCatPrefs {
+  /** Nombres de categorías en el orden elegido (las que falten van al final). */
+  order: string[];
+  /** Nombres de categorías ocultas. */
+  hidden: string[];
+}
+export interface CatPrefs {
+  live: SectionCatPrefs;
+  movies: SectionCatPrefs;
+  series: SectionCatPrefs;
+}
+export type CatSection = keyof CatPrefs;
+
+const emptySectionPrefs = (): SectionCatPrefs => ({ order: [], hidden: [] });
+const emptyCatPrefs = (): CatPrefs => ({ live: emptySectionPrefs(), movies: emptySectionPrefs(), series: emptySectionPrefs() });
+
+function loadCatPrefs(s: SourceConfig | null): CatPrefs {
+  if (!s) return emptyCatPrefs();
+  try {
+    const raw = localStorage.getItem(`${CATPREFS_KEY}:${sourceKeyOf(s)}`);
+    if (raw) return { ...emptyCatPrefs(), ...(JSON.parse(raw) as Partial<CatPrefs>) };
+  } catch {
+    /* ignore */
+  }
+  return emptyCatPrefs();
+}
+
+/** Aplica orden + ocultas a una lista de categorías (por nombre). */
+export function applyCatPrefs<T extends { name: string }>(cats: T[], prefs: SectionCatPrefs, includeHidden = false): T[] {
+  const hidden = new Set(prefs.hidden);
+  const list = includeHidden ? cats : cats.filter((c) => !hidden.has(c.name));
+  if (!prefs.order.length) return list;
+  const pos = new Map(prefs.order.map((n, i) => [n, i]));
+  return list
+    .map((c, i) => ({ c, i }))
+    .sort((a, b) => {
+      const pa = pos.get(a.c.name);
+      const pb = pos.get(b.c.name);
+      if (pa != null && pb != null) return pa - pb;
+      if (pa != null) return -1;
+      if (pb != null) return 1;
+      return a.i - b.i; // no listadas: al final, en orden del proveedor
+    })
+    .map((x) => x.c);
+}
+
 export interface FavoriteItem {
   id: string;
   name: string;
@@ -170,6 +218,8 @@ interface AppState {
   subtitleScale: "s" | "m" | "l";
   /** Corrección horaria de la guía EPG, en horas (-12..12). */
   epgOffsetH: number;
+  /** Ocultar/reordenar categorías de la lista activa. */
+  catPrefs: CatPrefs;
   /** Cola de reproducción (episodios de la temporada en curso) para "siguiente episodio". */
   playQueue: { route: string; label: string; url: string }[];
   epgByChannel: Map<string, EpgProgram[]>;
@@ -204,6 +254,7 @@ interface AppState {
   setNativeSubs: (on: boolean) => void;
   setSubtitleScale: (s: "s" | "m" | "l") => void;
   setEpgOffsetH: (h: number) => void;
+  setCatPrefs: (section: CatSection, prefs: SectionCatPrefs) => void;
   setPlayQueue: (q: { route: string; label: string; url: string }[]) => void;
 }
 
@@ -235,6 +286,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   subtitleScale: (() => { try { return (localStorage.getItem(SUBSCALE_KEY) as "s" | "m" | "l") || "m"; } catch { return "m"; } })(),
   playQueue: [],
   epgOffsetH: (() => { try { const v = Number(localStorage.getItem(EPGOFF_KEY)); return Number.isFinite(v) ? Math.max(-12, Math.min(12, v)) : 0; } catch { return 0; } })(),
+  catPrefs: loadCatPrefs(initial.sources.find((s) => s.id === initial.activeId)?.config ?? null),
   epgByChannel: new Map(),
   loadedSections: { movies: false, series: false },
   ui: (() => {
@@ -272,10 +324,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     let activeId = get().activeSourceId;
     if (activeId === id) activeId = remaining[0]?.id ?? null;
     persistSources(remaining, activeId);
+    const nextConfig = remaining.find((s) => s.id === activeId)?.config ?? null;
     set({
       sources: remaining,
       activeSourceId: activeId,
-      source: remaining.find((s) => s.id === activeId)?.config ?? null,
+      source: nextConfig,
+      catPrefs: loadCatPrefs(nextConfig),
     });
     if (activeId) void get().reload();
     else set({ catalog: emptyCatalog, epgByChannel: new Map() });
@@ -291,6 +345,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       catalog: emptyCatalog,
       loadedSections: { movies: false, series: false },
       ui: { tab: "live", category: null, selectedChannelId: null },
+      catPrefs: loadCatPrefs(src.config),
     });
     try { localStorage.setItem(UI_KEY, JSON.stringify({ tab: "live", category: null, selectedChannelId: null })); } catch { /* ignore */ }
     await get().reload();
@@ -478,6 +533,15 @@ export const useAppStore = create<AppState>((set, get) => ({
     const v = Math.max(-12, Math.min(12, Math.round(h)));
     try { localStorage.setItem(EPGOFF_KEY, String(v)); } catch { /* ignore */ }
     set({ epgOffsetH: v });
+  },
+
+  setCatPrefs: (section, prefs) => {
+    const next = { ...get().catPrefs, [section]: prefs };
+    const src = get().source;
+    if (src) {
+      try { localStorage.setItem(`${CATPREFS_KEY}:${sourceKeyOf(src)}`, JSON.stringify(next)); } catch { /* ignore */ }
+    }
+    set({ catPrefs: next });
   },
 }));
 
