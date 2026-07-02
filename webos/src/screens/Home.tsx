@@ -209,11 +209,13 @@ export function Home() {
   const favIds = useMemo(() => new Set(favorites.map((f) => f.id)), [favorites]);
   const selRef = useRef(selectedChannelId);
   selRef.current = selectedChannelId;
+  const liveFilteredRef = useRef<Channel[]>([]);
 
   const liveSelIdx = useMemo(
     () => (selectedChannelId ? liveFiltered.findIndex((c) => c.id === selectedChannelId) : -1),
     [liveFiltered, selectedChannelId],
   );
+  liveFilteredRef.current = liveFiltered;
   // Categorías con "Todas" al frente, para virtualizar la columna.
   const catItems = useMemo(() => [{ id: "__all__", name: "Todas" }, ...categories], [categories]);
   const selCatIdx = category === null ? 0 : catItems.findIndex((c) => c.name === category);
@@ -238,6 +240,21 @@ export function Home() {
     else setSelectedChannelId(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // Zapping en pantalla completa: canal anterior/siguiente en la lista actual.
+  const onZap = useCallback((dir: 1 | -1) => {
+    const list = liveFilteredRef.current;
+    if (!list.length) return;
+    const idx = list.findIndex((c) => c.id === selRef.current);
+    const next = list[((idx < 0 ? 0 : idx + dir) + list.length) % list.length];
+    if (next) setSelectedChannelId(next.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const onZapToNumber = useCallback((n: number) => {
+    const c = catalog.liveChannels[n - 1];
+    if (c) setSelectedChannelId(c.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [catalog.liveChannels]);
+
   const onRowFav = useCallback((c: Channel) => {
     const n = channelNumbers.get(c.id);
     const meta = [n ? `Nº ${n}` : null, quality(c.name)].filter(Boolean).join(" · ") || undefined;
@@ -341,6 +358,8 @@ export function Home() {
                   onEnterFullscreen={() => setFullscreen(true)}
                   onExitFullscreen={() => setFullscreen(false)}
                   onCatchup={() => { if (selectedChannelId) navigate(`/catchup/${selectedChannelId}`); }}
+                  onZap={onZap}
+                  onZapToNumber={onZapToNumber}
                 />
               </>
             ) : tab === "favorites" ? (
@@ -396,7 +415,7 @@ export function Home() {
 interface PreviewChannel { id: string; name: string; streamUrl: string; logoUrl?: string; tvgId?: string; archiveDays?: number }
 
 function PreviewPanel({
-  channel, channelNumber, epgByChannel, fullscreen, onEnterFullscreen, onExitFullscreen, onCatchup,
+  channel, channelNumber, epgByChannel, fullscreen, onEnterFullscreen, onExitFullscreen, onCatchup, onZap, onZapToNumber,
 }: {
   channel: PreviewChannel | null;
   channelNumber: number | null;
@@ -405,6 +424,8 @@ function PreviewPanel({
   onEnterFullscreen: () => void;
   onExitFullscreen: () => void;
   onCatchup: () => void;
+  onZap: (dir: 1 | -1) => void;
+  onZapToNumber: (n: number) => void;
 }) {
   const epgOffMs = useAppStore((s) => s.epgOffsetH) * 3600000;
   const now = channel ? findNowPlaying(epgByChannel as never, channel.tvgId, epgOffMs) : null;
@@ -433,15 +454,39 @@ function PreviewPanel({
   // (más profundo) la cierra; si no, salimos a la lista.
   useBack(() => { onExitFullscreen(); }, fullscreen);
 
+  // Zapping numérico: tipeás el número del canal y salta solo.
+  const [zapBuf, setZapBuf] = useState("");
+  const zapBufRef = useRef(""); zapBufRef.current = zapBuf;
+  const zapTimer = useRef<number | null>(null);
+  const commitZap = () => {
+    const n = parseInt(zapBufRef.current, 10);
+    setZapBuf("");
+    if (zapTimer.current) { window.clearTimeout(zapTimer.current); zapTimer.current = null; }
+    if (n > 0) onZapToNumber(n);
+  };
+
   useEffect(() => {
     if (!fullscreen) { if (prevFs.current) focusWhenReady(channel ? `CH_${channel.id}` : "PV_PAUSE"); prevFs.current = false; return; }
     prevFs.current = true; poke(); focusWhenReady("FS_PAUSE");
     const onKey = (e: KeyboardEvent) => {
-      if (!tracksRef.current && (e.key === "ArrowUp" || e.key === "ArrowDown")) e.stopPropagation();
+      if (!tracksRef.current) {
+        // ↑↓ y CH± cambian de canal sin salir de pantalla completa.
+        if (e.key === "ArrowUp" || e.keyCode === 33) { e.preventDefault(); e.stopPropagation(); onZap(-1); }
+        else if (e.key === "ArrowDown" || e.keyCode === 34) { e.preventDefault(); e.stopPropagation(); onZap(1); }
+        else if (/^[0-9]$/.test(e.key)) {
+          e.preventDefault(); e.stopPropagation();
+          const next = (zapBufRef.current + e.key).slice(0, 4);
+          setZapBuf(next); zapBufRef.current = next;
+          if (zapTimer.current) window.clearTimeout(zapTimer.current);
+          zapTimer.current = window.setTimeout(commitZap, 1800);
+        } else if (e.key === "Enter" && zapBufRef.current) {
+          e.preventDefault(); e.stopPropagation(); commitZap();
+        }
+      }
       poke();
     };
     window.addEventListener("keydown", onKey, true);
-    return () => { window.removeEventListener("keydown", onKey, true); if (fsTimer.current) window.clearTimeout(fsTimer.current); };
+    return () => { window.removeEventListener("keydown", onKey, true); if (fsTimer.current) window.clearTimeout(fsTimer.current); if (zapTimer.current) window.clearTimeout(zapTimer.current); };
   }, [fullscreen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const progPct = now && now.stopMs > now.startMs ? Math.max(0, Math.min(100, ((Date.now() - now.startMs) / (now.stopMs - now.startMs)) * 100)) : 0;
@@ -477,6 +522,7 @@ function PreviewPanel({
             ) : (
               <>
                 <div className="a-fs-grad" style={{ opacity: fsOverlay ? 1 : 0, transition: "opacity .25s" }} />
+                {zapBuf ? <div className="zap-num mono">{zapBuf}</div> : null}
                 <div style={{ opacity: fsOverlay ? 1 : 0, transition: "opacity .25s", pointerEvents: fsOverlay ? "auto" : "none" }}>
                   <div className="a-fs-top">
                     <div className="a-fs-name">{channel.name}</div>

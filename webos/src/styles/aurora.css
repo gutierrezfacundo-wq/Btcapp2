@@ -431,6 +431,9 @@ video::cue{background:rgba(0,0,0,.65);color:#fff}
 .ply-play{background:rgba(0,0,0,.4) !important}
 .ply-play.focused{box-shadow:0 0 0 3px var(--ring) !important;transform:none !important}
 
+/* Número tipeado para saltar de canal (zapping en pantalla completa) */
+.zap-num{position:absolute;top:44px;right:64px;z-index:5;font-size:88px;font-weight:700;color:var(--accent);text-shadow:0 4px 24px rgba(0,0,0,.8);letter-spacing:6px}
+
 /* Fila de info de cuenta (Mis Listas) */
 .acct-row{display:flex;align-items:center;gap:10px;font-size:19px;color:var(--muted)}
 .acct-row .sep{opacity:.4}
