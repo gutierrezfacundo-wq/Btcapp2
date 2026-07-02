@@ -10,6 +10,7 @@ import { Rail } from "../components/Rail";
 import { TopBar } from "../components/TopBar";
 import { Hints } from "../components/Hints";
 import { useRailNav } from "../hooks/useRailNav";
+import { encodeB64Url } from "../data/b64url";
 import { isBackKey } from "../webos/remote-keys";
 
 function initials(s: string) {
@@ -68,20 +69,34 @@ export function SeriesDetail() {
   );
 
   const pushHistory = useAppStore((s) => s.pushHistory);
+  const setPlayQueue = useAppStore((s) => s.setPlayQueue);
   const toggleFavorite = useAppStore((s) => s.toggleFavorite);
   const favorites = useAppStore((s) => s.favorites);
   const favId = `series:${id}`;
   const isFav = favorites.some((f) => f.id === favId);
   const favMeta = [meta?.year, meta?.genre, meta?.rating ? `${meta.rating} ★` : null].filter(Boolean).join(" · ") || undefined;
   const toggleFav = () => toggleFavorite({ id: favId, name: title, streamUrl: seasonEpisodes[0]?.streamUrl ?? episodes?.[0]?.streamUrl ?? "", logoUrl: info?.posterUrl ?? meta?.posterUrl, kind: "series-episode", meta: favMeta });
-  const play = (ep: Episode) => {
+  // Ruta del reproductor con todo el contexto DENTRO de la URL (?st=):
+  // location.state se pierde en webOS y en "Seguir viendo".
+  const routeFor = (ep: Episode): string => {
     const ft = `${title} · T${ep.seasonNumber} · E${ep.episodeNumber}`;
     const epMeta = `T${ep.seasonNumber} · E${ep.episodeNumber}${ep.duration ? ` · ${ep.duration}` : ""}`;
-    const route = `/player?url=${encodeURIComponent(ep.streamUrl)}&title=${encodeURIComponent(ft)}&meta=${encodeURIComponent(epMeta)}`;
+    const st = encodeB64Url({
+      from: `/series/${id}?name=${encodeURIComponent(title)}`,
+      cid: ep.id,
+      fav: { id: `series:${id}`, name: title, streamUrl: ep.streamUrl, logoUrl: info?.posterUrl, kind: "series-episode", meta: favMeta },
+      sub: { type: "episode", title, parentTmdbId: meta?.tmdbId, season: ep.seasonNumber, episode: ep.episodeNumber },
+    });
+    return `/player?url=${encodeURIComponent(ep.streamUrl)}&title=${encodeURIComponent(ft)}&meta=${encodeURIComponent(epMeta)}&st=${st}`;
+  };
+
+  const play = (ep: Episode) => {
+    const route = routeFor(ep);
+    const epMeta = `T${ep.seasonNumber} · E${ep.episodeNumber}${ep.duration ? ` · ${ep.duration}` : ""}`;
     pushHistory({ id: `series:${id}`, name: title, route, posterUrl: info?.posterUrl, sub: epMeta, kind: "series-episode" });
-    const fav = { id: `series:${id}`, name: title, streamUrl: ep.streamUrl, logoUrl: info?.posterUrl, kind: "series-episode" as const };
-    const sub = { type: "episode" as const, title, parentTmdbId: meta?.tmdbId, season: ep.seasonNumber, episode: ep.episodeNumber };
-    navigate(route, { state: { from: `/series/${id}?name=${encodeURIComponent(title)}`, fav, cid: ep.id, sub } });
+    // Cola de la temporada: habilita "Siguiente episodio" al terminar cada uno.
+    setPlayQueue(seasonEpisodes.map((e) => ({ route: routeFor(e), label: `T${e.seasonNumber} · E${e.episodeNumber}`, url: e.streamUrl })));
+    navigate(route);
   };
 
   return (

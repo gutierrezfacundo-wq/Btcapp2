@@ -19,6 +19,8 @@ export interface Movie {
   plot?: string;
   rating?: string;
   year?: string;
+  /** Unix (segundos) de cuando el proveedor agregó el título. */
+  addedAt?: number;
 }
 
 export interface SeriesInfo {
@@ -27,6 +29,9 @@ export interface SeriesInfo {
   posterUrl?: string;
   category?: string;
   plot?: string;
+  year?: string;
+  /** Unix (segundos) de última modificación en el proveedor. */
+  addedAt?: number;
 }
 
 /** Metadatos del detalle de serie (de get_series_info.info). */

@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { getCurrentFocusKey, setFocus } from "@noriginmedia/norigin-spatial-navigation";
 import { Setup } from "./screens/Setup";
 import { Hub } from "./screens/Hub";
@@ -7,8 +7,15 @@ import { Home } from "./screens/Home";
 import { SeriesDetail } from "./screens/SeriesDetail";
 import { Player } from "./screens/Player";
 import { Pair } from "./screens/Pair";
+import { Search } from "./screens/Search";
 import { useAppStore } from "./store/useAppStore";
 import { isBackKey } from "./webos/remote-keys";
+
+/** Remonta el Player al cambiar de contenido (episodio→episodio) para resetear su estado. */
+function KeyedPlayer() {
+  const loc = useLocation();
+  return <Player key={loc.search} />;
+}
 
 export default function App() {
   const source = useAppStore((s) => s.source);
@@ -57,7 +64,8 @@ export default function App() {
       <Route path="/hub" element={<Hub />} />
       <Route path="/home" element={<Home />} />
       <Route path="/series/:id" element={<SeriesDetail />} />
-      <Route path="/player" element={<Player />} />
+      <Route path="/player" element={<KeyedPlayer />} />
+      <Route path="/search" element={<Search />} />
       <Route path="/pair" element={<Pair />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

@@ -16,6 +16,7 @@ const SUBS_KEY = "iptv.subtitlesApiKey.v1";   // API key de OpenSubtitles (la in
 const PROGRESS_KEY = "iptv.progress.v1";      // posición de reproducción por contenido (continuar viendo)
 const COMPANION_KEY = "iptv.companionUrl.v1"; // URL del companion (web app + relay) para vincular con el celular
 const NATIVESUBS_KEY = "iptv.nativeSubs.v1";  // usar pipeline nativo de webOS para exponer subtítulos embebidos
+const SUBSCALE_KEY = "iptv.subtitleScale.v1"; // tamaño de subtítulos (s/m/l)
 
 function genId(): string {
   return `src-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`;
@@ -166,6 +167,10 @@ interface AppState {
   companionUrl: string;
   /** Pipeline nativo de webOS (source+MIME) para exponer subtítulos embebidos. */
   nativeSubs: boolean;
+  /** Tamaño de los subtítulos en el reproductor. */
+  subtitleScale: "s" | "m" | "l";
+  /** Cola de reproducción (episodios de la temporada en curso) para "siguiente episodio". */
+  playQueue: { route: string; label: string; url: string }[];
   epgByChannel: Map<string, EpgProgram[]>;
 
   /** Indica si una seccion VOD ya se cargo a demanda. */
@@ -197,6 +202,8 @@ interface AppState {
   clearProgress: (id: string) => void;
   setCompanionUrl: (url: string) => void;
   setNativeSubs: (on: boolean) => void;
+  setSubtitleScale: (s: "s" | "m" | "l") => void;
+  setPlayQueue: (q: { route: string; label: string; url: string }[]) => void;
 }
 
 const emptyCatalog: Catalog = {
@@ -225,6 +232,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   progress: (() => { try { return JSON.parse(localStorage.getItem(PROGRESS_KEY) ?? "{}"); } catch { return {}; } })(),
   companionUrl: (() => { try { return localStorage.getItem(COMPANION_KEY) ?? ""; } catch { return ""; } })(),
   nativeSubs: (() => { try { return localStorage.getItem(NATIVESUBS_KEY) !== "0"; } catch { return true; } })(),
+  subtitleScale: (() => { try { return (localStorage.getItem(SUBSCALE_KEY) as "s" | "m" | "l") || "m"; } catch { return "m"; } })(),
+  playQueue: [],
   epgByChannel: new Map(),
   loadedSections: { movies: false, series: false },
   ui: { tab: "live", category: null, selectedChannelId: null },
@@ -451,6 +460,13 @@ export const useAppStore = create<AppState>((set, get) => ({
     try { localStorage.setItem(NATIVESUBS_KEY, on ? "1" : "0"); } catch { /* ignore */ }
     set({ nativeSubs: on });
   },
+
+  setSubtitleScale: (s) => {
+    try { localStorage.setItem(SUBSCALE_KEY, s); } catch { /* ignore */ }
+    set({ subtitleScale: s });
+  },
+
+  setPlayQueue: (q) => set({ playQueue: q }),
 }));
 
 async function loadEpg(url: string) {

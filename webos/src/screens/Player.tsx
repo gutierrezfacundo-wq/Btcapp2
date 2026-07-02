@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import Hls from "hls.js";
 import { FocusContext, useFocusable, setFocus } from "@noriginmedia/norigin-spatial-navigation";
@@ -8,7 +8,16 @@ import { Icon } from "../components/Icon";
 import { TrackMenu } from "../components/TrackMenu";
 import { useAppStore, type FavoriteItem } from "../store/useAppStore";
 import { getSubtitleService, SubtitleError, type SubtitleResult, type SubtitleSearchRequest } from "../services/subtitles";
+import { decodeB64Url } from "../data/b64url";
 import { isBackKey, isPlayPauseKey, RemoteKey } from "../webos/remote-keys";
+
+/** Estado que viaja DENTRO de la URL (?st=): location.state se pierde en webOS. */
+export interface PlayerRouteState {
+  from?: string;
+  cid?: string;
+  fav?: FavoriteItem;
+  sub?: Partial<SubtitleSearchRequest>;
+}
 
 const SUB_LANGS = [
   { code: "es", name: "ES" },
@@ -77,9 +86,14 @@ export function Player() {
   const meta = params.get("meta") ?? "";
   const navigate = useNavigate();
   const location = useLocation();
-  const from = (location.state as { from?: string } | null)?.from;
-  // navegación normal (el mismo patrón que sí anda en el resto) + fallback por hash
-  // para el HashRouter de webOS si por algo no cambia la ruta.
+  // Estado de la ruta: preferimos ?st= (sobrevive en webOS y en "Seguir viendo");
+  // location.state queda como compat con rutas viejas.
+  const stParam = params.get("st");
+  const rst: PlayerRouteState = (stParam ? decodeB64Url<PlayerRouteState>(stParam) : null)
+    ?? (location.state as PlayerRouteState | null)
+    ?? {};
+  const from = rst.from;
+  // navegación normal + fallback por hash para el HashRouter de webOS.
   const goBack = () => {
     const dest = from && from.startsWith("/") ? from : "/hub";
     navigate(dest);
@@ -116,14 +130,34 @@ export function Player() {
   const [subError, setSubError] = useState<string | null>(null);
   const [subUrl, setSubUrl] = useState<string | null>(null);
   const [subLangs, setSubLangs] = useState<string[]>(["es", "en"]);
+  const subtitleScale = useAppStore((s) => s.subtitleScale);
+  const setSubtitleScale = useAppStore((s) => s.setSubtitleScale);
+
+  // ===== Siguiente episodio (cola armada por SeriesDetail) =====
+  const playQueue = useAppStore((s) => s.playQueue);
+  const [showNext, setShowNext] = useState(false);
+  const nextItem = useMemo(() => {
+    const idx = playQueue.findIndex((q) => q.url === url);
+    return idx >= 0 && idx + 1 < playQueue.length ? playQueue[idx + 1] : null;
+  }, [playQueue, url]);
+  const goNext = () => {
+    if (!nextItem) return;
+    setShowNext(false);
+    navigate(nextItem.route);
+    window.setTimeout(() => {
+      if (window.location.hash !== `#${nextItem.route}`) window.location.hash = `#${nextItem.route}`;
+    }, 60);
+  };
+  useEffect(() => {
+    if (showNext) window.setTimeout(() => setFocus("PL_NEXT"), 60);
+  }, [showNext]);
   // Identidad del contenido: la pasa la pantalla de origen (con tmdb/imdb si los tiene);
   // si no, se deriva del título/meta.
-  const stateSub = (location.state as { sub?: Partial<SubtitleSearchRequest> } | null)?.sub;
+  const stateSub = rst.sub;
   const derivedTitle = cleanTitle(title) || title.split(" · ")[0].trim();
   const derivedYear = (title.match(/\b(?:19|20)\d{2}\b/) || (meta.match(/\b(?:19|20)\d{2}\b/) ?? []))[0];
   const seMatch = `${title} ${meta}`.match(/\bT\s?(\d{1,3})\D+?E\s?(\d{1,3})\b/i) || `${title} ${meta}`.match(/\bS(\d{1,3})\s?E(\d{1,3})\b/i);
-  const favKind = (location.state as { fav?: { kind?: string } } | null)?.fav?.kind;
-  const isEpisode = stateSub?.type === "episode" || favKind === "series-episode" || !!seMatch;
+  const isEpisode = stateSub?.type === "episode" || rst.fav?.kind === "series-episode" || !!seMatch;
   const baseReq: SubtitleSearchRequest = {
     type: isEpisode ? "episode" : "movie",
     title: stateSub?.title ? (cleanTitle(stateSub.title) || stateSub.title) : derivedTitle,
@@ -138,8 +172,8 @@ export function Player() {
   const [subQuery, setSubQuery] = useState(baseReq.title ?? "");
 
   // ===== Favoritos / Continuar viendo =====
-  const cid = (location.state as { cid?: string } | null)?.cid;
-  const fav = (location.state as { fav?: FavoriteItem } | null)?.fav;
+  const cid = rst.cid;
+  const fav = rst.fav;
   const toggleFavorite = useAppStore((s) => s.toggleFavorite);
   const favorites = useAppStore((s) => s.favorites);
   const isFav = !!fav && favorites.some((f) => f.id === fav.id);
@@ -278,15 +312,18 @@ export function Player() {
     };
     const onPlay = () => setPaused(false);
     const onPause = () => setPaused(true);
+    const onEnded = () => { setShowNext(true); showOverlay(); };
     v.addEventListener("timeupdate", onTime);
     v.addEventListener("durationchange", onTime);
     v.addEventListener("play", onPlay);
     v.addEventListener("pause", onPause);
+    v.addEventListener("ended", onEnded);
     return () => {
       v.removeEventListener("timeupdate", onTime);
       v.removeEventListener("durationchange", onTime);
       v.removeEventListener("play", onPlay);
       v.removeEventListener("pause", onPause);
+      v.removeEventListener("ended", onEnded);
       if (cid && v.duration) saveProgress(cid, v.currentTime, v.duration);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -332,7 +369,7 @@ export function Player() {
 
   return (
     <FocusContext.Provider value={focusKey}>
-      <div className="ply" ref={ref} onMouseMove={showOverlay} style={{ position: "fixed" }}>
+      <div className={`ply cue-${subtitleScale}`} ref={ref} onMouseMove={showOverlay} style={{ position: "fixed" }}>
         <video ref={videoRef} autoPlay playsInline controls={false}
           onError={() => { if (useNativeSource && (videoRef.current?.readyState ?? 0) === 0) setNativeSrcFailed(true); }}
           style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain", background: "#000" }}>
@@ -417,6 +454,12 @@ export function Player() {
                     {SUB_LANGS.map((l) => (
                       <FocusableButton key={l.code} className={`chip ${subLangs.includes(l.code) ? "on" : ""}`} onEnterPress={() => toggleLang(l.code)}>{l.name}</FocusableButton>
                     ))}
+                    <span className="a-sub-sep" />
+                    {(["s", "m", "l"] as const).map((s) => (
+                      <FocusableButton key={s} className={`chip ${subtitleScale === s ? "on" : ""}`} onEnterPress={() => setSubtitleScale(s)}>
+                        {s === "s" ? "A−" : s === "m" ? "A" : "A+"}
+                      </FocusableButton>
+                    ))}
                   </div>
                   <div className="a-trk-scroll scroll">
                     {subLoading ? (
@@ -440,6 +483,19 @@ export function Player() {
                 </>
               )}
               <FocusableButton className="a-trk-close" onEnterPress={() => { setSubsOpen(false); setFocus("PL_SUBS"); }}>Cerrar</FocusableButton>
+            </div>
+          ) : null}
+          {showNext ? (
+            <div className="ply-next">
+              <div className="ply-next-t">Fin del episodio</div>
+              {nextItem ? (
+                <FocusableButton focusKey="PL_NEXT" className="btn primary" onEnterPress={goNext}>
+                  <Icon name="skip_next" /> Siguiente: {nextItem.label}
+                </FocusableButton>
+              ) : null}
+              <FocusableButton focusKey={nextItem ? undefined : "PL_NEXT"} className="btn" onEnterPress={goBack}>
+                <Icon name="arrow_back" /> Volver
+              </FocusableButton>
             </div>
           ) : null}
           {error ? (

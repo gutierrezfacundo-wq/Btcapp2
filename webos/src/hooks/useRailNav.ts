@@ -13,7 +13,7 @@ export function useRailNav() {
       case "movies": navigate("/home?tab=movies"); break;
       case "series": navigate("/home?tab=series"); break;
       case "favorites": navigate("/home?tab=favorites"); break;
-      case "search": navigate("/home?tab=live&search=1"); break;
+      case "search": navigate("/search"); break;
       case "reload": reload(); break;
       case "settings": navigate("/setup"); break;
     }

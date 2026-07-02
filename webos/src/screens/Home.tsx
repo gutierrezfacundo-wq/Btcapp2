@@ -14,6 +14,7 @@ import { Hints } from "../components/Hints";
 import { VideoPreview } from "../components/VideoPreview";
 import { VirtualList } from "../components/VirtualList";
 import { TrackMenu } from "../components/TrackMenu";
+import { encodeB64Url } from "../data/b64url";
 import { isBackKey } from "../webos/remote-keys";
 
 type Tab = "live" | "movies" | "series" | "favorites";
@@ -135,7 +136,7 @@ export function Home() {
     if (id === "hub") navigate("/hub");
     else if (id === "settings") navigate("/setup");
     else if (id === "reload") reload();
-    else if (id === "search") { setSearchOpen((v) => !v); window.setTimeout(() => setFocus("SEARCH_IN"), 60); }
+    else if (id === "search") navigate("/search");
     else { setTab(id as Tab); setCategory(null); setQuery(""); }
   };
 
@@ -162,6 +163,19 @@ export function Home() {
   // El input se actualiza al instante; el filtrado (caro) se difiere para no trabar el tipeo.
   const deferredQuery = useDeferredValue(query);
   const q = deferredQuery.trim().toLowerCase();
+
+  // Orden de la grilla VOD: por defecto (proveedor) / recientes / año / A-Z.
+  type SortMode = "default" | "recent" | "year" | "az";
+  const [sortMode, setSortMode] = useState<SortMode>("default");
+  const collator = useMemo(() => new Intl.Collator("es", { sensitivity: "base" }), []);
+  const applySort = useCallback(<T extends { name: string; year?: string; addedAt?: number }>(list: T[]): T[] => {
+    if (sortMode === "default") return list;
+    const out = [...list];
+    if (sortMode === "recent") out.sort((a, b) => (b.addedAt ?? 0) - (a.addedAt ?? 0));
+    else if (sortMode === "year") out.sort((a, b) => (Number(b.year?.slice(0, 4)) || 0) - (Number(a.year?.slice(0, 4)) || 0));
+    else out.sort((a, b) => collator.compare(a.name, b.name));
+    return out;
+  }, [sortMode, collator]);
   const liveFiltered = useMemo(() => {
     if (tab !== "live") return [];
     const byCat = category ? catalog.liveChannels.filter((c) => c.groupTitle === category) : catalog.liveChannels;
@@ -170,13 +184,13 @@ export function Home() {
   const moviesFiltered = useMemo(() => {
     if (tab !== "movies") return [];
     const byCat = category ? catalog.movies.filter((m) => m.category === category) : catalog.movies;
-    return q ? byCat.filter((m) => m.name.toLowerCase().includes(q)) : byCat;
-  }, [tab, catalog.movies, category, q]);
+    return applySort(q ? byCat.filter((m) => m.name.toLowerCase().includes(q)) : byCat);
+  }, [tab, catalog.movies, category, q, applySort]);
   const seriesFiltered = useMemo(() => {
     if (tab !== "series") return [];
     const byCat = category ? catalog.series.filter((s) => s.category === category) : catalog.series;
-    return q ? byCat.filter((s) => s.name.toLowerCase().includes(q)) : byCat;
-  }, [tab, catalog.series, category, q]);
+    return applySort(q ? byCat.filter((s) => s.name.toLowerCase().includes(q)) : byCat);
+  }, [tab, catalog.series, category, q, applySort]);
 
   useEffect(() => {
     if (restored.current || tab !== "live" || !selectedChannelId) { restored.current = true; return; }
@@ -186,11 +200,19 @@ export function Home() {
   }, [tab, selectedChannelId, liveFiltered]);
 
   const pushHistory = useAppStore((s) => s.pushHistory);
-  const play = (url: string, title: string, hist?: { id: string; posterUrl?: string; sub?: string; kind: "live" | "movie" | "series-episode" }) => {
-    const route = `/player?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}${hist?.sub ? `&meta=${encodeURIComponent(hist.sub)}` : ""}`;
-    if (hist) pushHistory({ id: hist.id, name: title, route, posterUrl: hist.posterUrl, sub: hist.sub, kind: hist.kind });
+  const play = (url: string, title: string, hist?: { id: string; posterUrl?: string; sub?: string; kind: "live" | "movie" | "series-episode"; year?: string }) => {
+    // Todo el contexto viaja DENTRO de la URL (?st=): location.state se pierde en
+    // webOS, y así "Seguir viendo" también conserva progreso/volver/favorito.
     const fav = hist ? { id: hist.id, name: title, streamUrl: url, logoUrl: hist.posterUrl, kind: hist.kind, meta: hist.sub } : undefined;
-    navigate(route, { state: { from: `/home?tab=${tab}`, fav, cid: hist?.id } });
+    const st = encodeB64Url({
+      from: `/home?tab=${tab}`,
+      cid: hist?.id,
+      fav,
+      sub: hist?.kind === "movie" ? { type: "movie", title, year: hist.year } : undefined,
+    });
+    const route = `/player?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}${hist?.sub ? `&meta=${encodeURIComponent(hist.sub)}` : ""}&st=${st}`;
+    if (hist) pushHistory({ id: hist.id, name: title, route, posterUrl: hist.posterUrl, sub: hist.sub, kind: hist.kind });
+    navigate(route);
   };
   const openSeries = (id: string, name: string, posterUrl?: string) => {
     const route = `/series/${id}?name=${encodeURIComponent(name)}`;
@@ -227,13 +249,13 @@ export function Home() {
   // Datos livianos para la grilla virtualizada (sin closures por item).
   const gridItems = useMemo(() => {
     if (tab === "movies") return moviesFiltered.map((m) => ({ id: m.id, name: m.name, posterUrl: m.posterUrl, year: m.year, rating: m.rating, genre: m.category }));
-    if (tab === "series") return seriesFiltered.map((s) => ({ id: s.id, name: s.name, posterUrl: s.posterUrl, year: undefined as string | undefined, rating: undefined as string | undefined, genre: s.category }));
+    if (tab === "series") return seriesFiltered.map((s) => ({ id: s.id, name: s.name, posterUrl: s.posterUrl, year: s.year, rating: undefined as string | undefined, genre: s.category }));
     return [];
   }, [tab, moviesFiltered, seriesFiltered]);
   const onPickGrid = (index: number) => {
     if (tab === "movies") {
       const m = moviesFiltered[index];
-      if (m) play(m.streamUrl, m.name, { id: m.id, posterUrl: m.posterUrl, sub: [m.year, m.category].filter(Boolean).join(" · ") || undefined, kind: "movie" });
+      if (m) play(m.streamUrl, m.name, { id: m.id, posterUrl: m.posterUrl, sub: [m.year, m.category].filter(Boolean).join(" · ") || undefined, kind: "movie", year: m.year?.slice(0, 4) });
     } else {
       const s = seriesFiltered[index];
       if (s) openSeries(s.id, s.name, s.posterUrl);
@@ -370,6 +392,8 @@ export function Home() {
                 onQuery={setQuery}
                 items={gridItems}
                 onPick={onPickGrid}
+                sortMode={sortMode}
+                onSort={() => setSortMode((m) => (m === "default" ? "recent" : m === "recent" ? "year" : m === "year" ? "az" : "default"))}
               />
             )}
           </div>
@@ -528,8 +552,10 @@ function PreviewPanel({
 // ===================== GRID (películas / series) =====================
 interface GridData { id: string; name: string; posterUrl?: string; year?: string; rating?: string; genre?: string }
 
+const SORT_LABEL: Record<string, string> = { default: "Por defecto", recent: "Recientes", year: "Año", az: "A-Z" };
+
 function GridScreen({
-  title, count, categories, category, onCategory, query, onQuery, items, onPick,
+  title, count, categories, category, onCategory, query, onQuery, items, onPick, sortMode, onSort,
 }: {
   title: string;
   count: number;
@@ -540,6 +566,8 @@ function GridScreen({
   onQuery: (q: string) => void;
   items: GridData[];
   onPick: (index: number) => void;
+  sortMode: string;
+  onSort: () => void;
 }) {
   // Filas de a 6 para virtualizar la grilla (solo se montan las visibles).
   const rows = useMemo(() => {
@@ -551,6 +579,9 @@ function GridScreen({
     <div className="grd">
       <div className="grd-h">
         <div className="grd-htitle"><span className="grd-title">{title}</span><span className="grd-count">{count.toLocaleString()} títulos</span></div>
+        <FocusableButton className="grd-sort" onEnterPress={onSort}>
+          <Icon name="swap_vert" /> {SORT_LABEL[sortMode]}
+        </FocusableButton>
         <div className="grd-search">
           <Icon name="search" />
           <FocusableInput focusKey="SEARCH_IN" value={query} onChange={onQuery} placeholder={`Buscar ${title.toLowerCase()}…`} />
