@@ -434,6 +434,13 @@
 /* Grilla VOD virtualizada: cada fila es una grilla de 6 columnas */
 .grd-row{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:26px;padding-bottom:26px}
 
+/* Barra de tiempo enfocable: las flechas ←→ hacen seek SOLO parado acá.
+   Sin scale ni sombra del focusable genérico; el anillo va sobre la barra. */
+.ply-seekbar{flex:1;display:flex;align-items:center;padding:10px 0}
+.ply-seekbar .ply-track{flex:1}
+.ply-seekbar.focused{box-shadow:none !important;transform:none !important}
+.ply-seekbar.focused .ply-track{box-shadow:0 0 0 3px var(--ring)}
+
 /* FIX: .ply-center ocupa toda la pantalla (inset:0) y tapaba el botón Volver,
    comiéndose los clicks. Que no capture eventos salvo en el botón de play. */
 .ply-center{pointer-events:none}

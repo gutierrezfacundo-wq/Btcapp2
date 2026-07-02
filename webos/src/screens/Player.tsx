@@ -8,7 +8,7 @@ import { Icon } from "../components/Icon";
 import { TrackMenu } from "../components/TrackMenu";
 import { useAppStore, type FavoriteItem } from "../store/useAppStore";
 import { getSubtitleService, SubtitleError, type SubtitleResult, type SubtitleSearchRequest } from "../services/subtitles";
-import { isBackKey, isPlayPauseKey } from "../webos/remote-keys";
+import { isBackKey, isPlayPauseKey, RemoteKey } from "../webos/remote-keys";
 
 const SUB_LANGS = [
   { code: "es", name: "ES" },
@@ -165,6 +165,7 @@ export function Player() {
   };
 
   const openSubs = () => {
+    setTracksOpen(false); // un panel a la vez
     setSubsOpen(true); showOverlay();
     window.setTimeout(() => setFocus("SUB_SEARCH"), 60);
     if (subResults || subLoading || !subtitlesApiKey || !companionUrl) return;
@@ -316,10 +317,10 @@ export function Player() {
         goBack(); return;
       }
       if (isPlayPauseKey(e)) { e.preventDefault(); togglePlay(); return; }
-      if (!tracksRef.current && !subsRef.current) {
-        if (e.key === "ArrowLeft") seek(-10);
-        else if (e.key === "ArrowRight") seek(10);
-      }
+      // Botones dedicados ⏪/⏩ del control: siempre saltan. Las flechas ya NO:
+      // solo navegan foco (el seek con flechas vive en la barra de tiempo).
+      if (e.keyCode === RemoteKey.FastForward) { e.preventDefault(); seek(30); }
+      else if (e.keyCode === RemoteKey.Rewind) { e.preventDefault(); seek(-30); }
       showOverlay();
     };
     window.addEventListener("keydown", onKey);
@@ -360,7 +361,18 @@ export function Player() {
           <div className="ply-bottom">
             <div className="ply-seek">
               <span className="ply-time">{fmt(cur)}</span>
-              <span className="ply-track"><i style={{ width: `${pct}%` }} /><span className="knob" style={{ left: `${pct}%` }} /></span>
+              <FocusableButton
+                focusKey="PL_SEEK"
+                className="ply-seekbar"
+                onEnterPress={togglePlay}
+                onArrowPress={(dir) => {
+                  if (dir === "left") { seek(-10); return false; }
+                  if (dir === "right") { seek(10); return false; }
+                  return true;
+                }}
+              >
+                <span className="ply-track"><i style={{ width: `${pct}%` }} /><span className="knob" style={{ left: `${pct}%` }} /></span>
+              </FocusableButton>
               <span className="ply-time" style={{ textAlign: "right" }}>{fmt(dur)}</span>
             </div>
             <div className="ply-ctrls">
@@ -369,7 +381,7 @@ export function Player() {
                 <Icon name={paused ? "play_arrow" : "pause"} /> {paused ? "Reproducir" : "Pausa"}
               </FocusableButton>
               <FocusableButton className="ply-btn" onEnterPress={() => seek(10)}><Icon name="forward_10" /> 10s</FocusableButton>
-              <FocusableButton focusKey="PL_TRACKS" className="ply-btn" onEnterPress={() => { setTracksOpen((v) => !v); showOverlay(); window.setTimeout(() => setFocus("TRK_FIRST"), 60); }}>
+              <FocusableButton focusKey="PL_TRACKS" className="ply-btn" onEnterPress={() => { setSubsOpen(false); setTracksOpen((v) => !v); showOverlay(); window.setTimeout(() => setFocus("TRK_FIRST"), 60); }}>
                 <Icon name="tune" /> Audio y subtítulos
               </FocusableButton>
               <FocusableButton focusKey="PL_SUBS" className="ply-btn" onEnterPress={openSubs}>
