@@ -42,7 +42,12 @@ export function Hub() {
   }, [source, navigate]);
 
   const { ref, focusKey } = useFocusable({ trackChildren: true, focusKey: "HUB" });
-  useEffect(() => { restoreFocus("hub:tiles", "HUB_T_0"); }, []);
+  // Enfocar recién cuando los tiles existen: durante la carga se muestra el
+  // spinner (sin focusables) y un intento en el mount moriría sin foco → D-pad muerto.
+  const hubReady = !loading && !loadingStep && !error;
+  useEffect(() => {
+    if (hubReady) restoreFocus("hub:tiles", "HUB_T_0");
+  }, [hubReady]);
 
   const tiles: { id: SectionId; title: string; sub: string; icon: string }[] = [
     { id: "live", title: "En vivo", sub: catalog.liveChannels.length ? `${catalog.liveChannels.length.toLocaleString()} canales` : "—", icon: "live_tv" },

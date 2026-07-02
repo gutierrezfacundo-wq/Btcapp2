@@ -144,6 +144,9 @@ export function TrackSheet({
 
   const emb = embedded ?? null;
   const mediaId = embeddedMediaId ?? null;
+  // Algunos firmwares de webOS dejan el pipeline pausado al cambiar de pista:
+  // empujamos play() después de aplicar para que la reproducción siga.
+  const nudgePlay = () => { video?.play().catch(() => undefined); };
   const useEmbedded = !hls && !!mediaId && !!emb && (emb.audio.length > 0 || emb.subs.length > 0);
 
   if (hls) {
@@ -202,6 +205,7 @@ export function TrackSheet({
         if (!mediaId) return;
         selectTrack(mediaId, "audio", i);
         setEmbAud(i);
+        nudgePlay();
       },
     }));
     subs = [
@@ -212,6 +216,7 @@ export function TrackSheet({
           if (!mediaId) return;
           setSubtitleEnable(mediaId, false);
           setEmbSub(-1);
+          nudgePlay();
         },
       },
       ...emb.subs.map((t, i) => ({
@@ -221,8 +226,8 @@ export function TrackSheet({
           if (!mediaId) return;
           setSubtitleEnable(mediaId, true);
           selectTrack(mediaId, "text", i);
-          setSubtitleFontSize(mediaId, SCALE_PX[subtitleScale]);
           setEmbSub(i);
+          nudgePlay();
         },
       })),
     ];
@@ -268,7 +273,7 @@ export function TrackSheet({
         selected: subtitleScale === sz,
         apply: () => {
           setSubtitleScale(sz);
-          if (useEmbedded && mediaId) setSubtitleFontSize(mediaId, SCALE_PX[sz]);
+          if (useEmbedded && mediaId) { setSubtitleFontSize(mediaId, SCALE_PX[sz]); nudgePlay(); }
         },
       }))
     : [];

@@ -3,8 +3,8 @@
    Fuente de verdad del diseño. Variables en global.css.
    Foco: .focused (norigin) en vez del .foc manual del prototipo.
    ============================================================ */
-.disp { font-family: "Schibsted Grotesk", sans-serif; }
-.mono { font-family: "Space Grotesk", monospace; }
+.disp{ font-family: "Schibsted Grotesk", sans-serif; }
+.mono{ font-family: "Space Grotesk", monospace; }
 
 
   
@@ -21,7 +21,6 @@
   .a-screentitle{font-family:'Schibsted Grotesk',sans-serif;font-size:24px;font-weight:600;color:var(--muted);letter-spacing:1px;text-transform:uppercase;border-left:1px solid var(--line);padding-left:24px}
   .a-spacer{flex:1}
   .a-listpill{display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:11px 18px;cursor:pointer;transition:box-shadow .12s}
-  .a-listpill:hover{box-shadow:0 0 0 2px var(--ring)}
   .a-listpill .ms{font-size:24px;color:var(--accent)}
   .a-listpill .lp-l{font-size:13px;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase}
   .a-listpill .lp-n{font-size:20px;font-weight:600;margin-top:1px}
@@ -32,7 +31,6 @@
   .a-railbtn{width:60px;height:60px;border-radius:18px;display:flex;align-items:center;justify-content:center;color:var(--muted);background:transparent;border:1px solid transparent;cursor:pointer;transition:transform .12s,box-shadow .12s,background .12s,color .12s}
   .a-railbtn .ms{font-size:30px}
   .a-railbtn.on{background:var(--soft);color:var(--accent)}
-  .a-railbtn:hover{color:var(--accent);transform:scale(1.05)}
   .a-railbtn.focused{border-color:var(--accent);color:var(--accent);box-shadow:0 0 0 3px var(--ring);background:var(--soft);transform:scale(1.06)}
   .a-railbtn.spin .ms{animation:aspin 1s linear infinite}
   .a-railsp{flex:1}
@@ -52,14 +50,14 @@
   .hub-tile-b{position:relative;z-index:1}
   .hub-tile-t{font-family:'Schibsted Grotesk',sans-serif;font-size:38px;font-weight:700}
   .hub-tile-s{font-size:20px;color:var(--muted);margin-top:6px}
-  .hub-tile.focused,.hub-tile:hover{transform:translateY(-6px);border-color:var(--accent);box-shadow:0 24px 60px -18px rgba(0,0,0,.8),0 0 0 2px var(--ring)}
+  .hub-tile.focused{transform:translateY(-6px);border-color:var(--accent);box-shadow:0 24px 60px -18px rgba(0,0,0,.8),0 0 0 2px var(--ring)}
   .hub-cont{display:flex;flex-direction:column;gap:18px}
   .hub-cont-h{font-size:16px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);font-weight:700}
   .hub-rowscroll{display:flex;gap:20px}
   .hub-mini{width:200px;flex-shrink:0;cursor:pointer}
   .hub-mini-p{width:100%;aspect-ratio:2/3;border-radius:14px;background:repeating-linear-gradient(125deg,#15151a 0 22px,#101015 22px 44px);border:1px solid var(--line);position:relative;overflow:hidden;display:flex;align-items:flex-end;padding:14px}
   .hub-mini-p::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,transparent 50%,rgba(0,0,0,.7))}
-  .hub-mini:hover .hub-mini-p,.hub-mini.focused .hub-mini-p{border-color:var(--accent);box-shadow:0 0 0 2px var(--ring)}
+  .hub-mini.focused .hub-mini-p{border-color:var(--accent);box-shadow:0 0 0 2px var(--ring)}
   .hub-mini.focused{transform:translateY(-4px)}
   .hub-mini-tag{position:relative;z-index:1;font-family:'Space Grotesk',monospace;font-size:13px;color:rgba(255,255,255,.65);letter-spacing:1px}
   .hub-mini-t{font-size:18px;font-weight:600;margin-top:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -76,7 +74,6 @@
   .grd-count{font-size:20px;color:var(--muted)}
   .grd-chips{display:flex;gap:12px;padding:14px 56px 20px;flex-wrap:wrap}
   .chip{padding:11px 22px;border-radius:999px;background:var(--surface);border:1px solid var(--line);font-size:20px;cursor:pointer;transition:background .12s,box-shadow .12s}
-  .chip:hover{box-shadow:0 0 0 2px var(--ring)}
   .chip.focused{box-shadow:0 0 0 3px var(--ring)}
   .chip.on{background:var(--accent);color:#1a1500;border-color:var(--accent);font-weight:600}
   .grd-scroll{flex:1;overflow:hidden;padding:0 56px 40px}
@@ -90,8 +87,8 @@
   .poster-ph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'Schibsted Grotesk',sans-serif;font-size:60px;font-weight:800;color:rgba(255,255,255,.07)}
   .poster-name{font-size:21px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:0 2px 10px rgba(0,0,0,.8)}
   .poster-year{font-family:'Space Grotesk',monospace;font-size:15px;color:rgba(255,255,255,.7);margin-top:2px}
-  .poster.focused .poster-img,.poster:hover .poster-img{border-color:var(--accent);box-shadow:0 20px 50px -16px rgba(0,0,0,.8),0 0 0 2px var(--ring)}
-  .poster.focused,.poster:hover{transform:translateY(-6px) scale(1.02)}
+  .poster.focused .poster-img{border-color:var(--accent);box-shadow:0 20px 50px -16px rgba(0,0,0,.8),0 0 0 2px var(--ring)}
+  .poster.focused{transform:translateY(-6px) scale(1.02)}
 
   /* ===== MIS LISTAS ===== */
   .lists{flex:1;display:flex;min-height:0}
@@ -101,7 +98,6 @@
   .src-h-c{font-size:18px;color:var(--muted)}
   .src-list{flex:1;overflow:hidden;padding:12px 24px;display:flex;flex-direction:column;gap:14px}
   .src-card{padding:20px 22px;border-radius:18px;background:var(--surface);border:1px solid var(--line);cursor:pointer;transition:box-shadow .12s,border-color .12s;display:flex;flex-direction:column;gap:12px}
-  .src-card:hover{box-shadow:0 0 0 2px var(--ring)}
   .src-card.focused{box-shadow:0 0 0 3px var(--ring);border-color:var(--accent)}
   .src-card.editing{border-color:var(--accent);box-shadow:0 0 0 2px var(--ring),0 14px 40px -16px rgba(0,0,0,.7)}
   .src-card.active-src{border-color:var(--accent)}
@@ -121,7 +117,7 @@
   .src-status.error{color:var(--err)}.src-status.error .dot{background:var(--err)}
   .src-foot .sep{opacity:.4}
   .src-add{margin:8px 24px 0;padding:18px;border-radius:16px;border:2px dashed var(--line);display:flex;align-items:center;justify-content:center;gap:12px;font-size:21px;font-weight:600;color:var(--muted);cursor:pointer;transition:border-color .12s,color .12s}
-  .src-add:hover,.src-add.focused{border-color:var(--accent);color:var(--accent);box-shadow:0 0 0 2px var(--ring)}
+  .src-add.focused{border-color:var(--accent);color:var(--accent);box-shadow:0 0 0 2px var(--ring)}
   .src-add .ms{font-size:28px}
   /* editor */
   .edt{flex:1;display:flex;flex-direction:column;padding:36px 48px;overflow:hidden;min-width:0}
@@ -147,13 +143,13 @@
   @keyframes aspin{to{transform:rotate(360deg)}}
   .edt-actions{display:flex;gap:16px;padding-top:10px}
   .btn{display:flex;align-items:center;justify-content:center;gap:11px;padding:18px 28px;border-radius:14px;background:var(--surface2);font-size:21px;font-weight:600;border:1px solid var(--line);cursor:pointer;transition:box-shadow .12s,transform .12s,background .12s}
-  .btn:hover,.btn.focused{box-shadow:0 0 0 3px var(--ring)}
+  .btn.focused{box-shadow:0 0 0 3px var(--ring)}
   .btn.focused{transform:scale(1.02)}
   .btn .ms{font-size:25px}
   .btn.primary{background:var(--accent);color:#1a1500;border-color:var(--accent)}
   .btn.ghost{background:transparent}
   .btn.danger{color:var(--err)}
-  .btn.danger.focused,.btn.danger:hover{box-shadow:0 0 0 3px rgba(255,93,108,.4);background:rgba(255,93,108,.08)}
+  .btn.danger.focused{box-shadow:0 0 0 3px rgba(255,93,108,.4);background:rgba(255,93,108,.08)}
   .btn.grow{flex:1}
 
   /* ===== PLAYER ===== */
@@ -162,14 +158,13 @@
   .ply-grad{position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.7) 0%,transparent 28%,transparent 55%,rgba(0,0,0,.9) 100%)}
   .ply-top{position:absolute;top:48px;left:64px;right:64px;z-index:2;display:flex;align-items:flex-start;justify-content:space-between}
   .ply-back{display:flex;align-items:center;gap:11px;background:rgba(20,20,24,.8);border:1px solid var(--line);border-radius:14px;padding:14px 24px;font-size:21px;font-weight:600;cursor:pointer;transition:box-shadow .12s}
-  .ply-back:hover,.ply-back.focused{box-shadow:0 0 0 3px var(--ring)}
+  .ply-back.focused{box-shadow:0 0 0 3px var(--ring)}
   .ply-back .ms{font-size:26px}
   .ply-titwrap{text-align:right}
   .ply-tit{font-family:'Schibsted Grotesk',sans-serif;font-size:48px;font-weight:800;text-shadow:0 2px 18px rgba(0,0,0,.85)}
   .ply-sub{font-size:22px;color:var(--accent);margin-top:6px}
   .ply-center{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:2}
   .ply-play{width:130px;height:130px;border-radius:50%;background:rgba(216,180,106,.16);border:2px solid var(--accent);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:transform .12s,box-shadow .12s}
-  .ply-play:hover{transform:scale(1.06);box-shadow:0 0 0 6px var(--ring)}
   .ply-play .ms{font-size:74px;color:var(--accent)}
   .ply-bottom{position:absolute;left:64px;right:64px;bottom:54px;z-index:2}
   .ply-seek{display:flex;align-items:center;gap:20px;margin-bottom:26px}
@@ -180,7 +175,7 @@
   .ply-track .knob{position:absolute;top:50%;width:24px;height:24px;border-radius:50%;background:var(--accent);transform:translate(-50%,-50%);box-shadow:0 2px 10px rgba(0,0,0,.6)}
   .ply-ctrls{display:flex;gap:16px}
   .ply-btn{display:flex;align-items:center;gap:10px;padding:16px 26px;border-radius:13px;background:rgba(20,20,24,.8);border:1px solid var(--line);font-size:20px;font-weight:600;cursor:pointer;transition:box-shadow .12s,transform .12s}
-  .ply-btn:hover,.ply-btn.focused{box-shadow:0 0 0 3px var(--ring)}
+  .ply-btn.focused{box-shadow:0 0 0 3px var(--ring)}
   .ply-btn.focused{transform:scale(1.03)}
   .ply-btn .ms{font-size:25px}
 
@@ -190,7 +185,7 @@
   .det{display:flex;flex-direction:column;overflow:hidden}
   .det-top{padding:22px 56px 0;display:flex}
   .det-back{display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:13px;padding:12px 22px;font-size:20px;font-weight:600;cursor:pointer;transition:box-shadow .12s}
-  .det-back:hover,.det-back.focused{box-shadow:0 0 0 3px var(--ring)}
+  .det-back.focused{box-shadow:0 0 0 3px var(--ring)}
   .det-back .ms{font-size:24px}
   .det-hero{display:flex;gap:36px;padding:18px 56px 20px}
   .det-art{width:230px;flex-shrink:0;aspect-ratio:2/3;border-radius:18px;background:repeating-linear-gradient(125deg,#16161c 0 24px,#101016 24px 48px);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-family:'Schibsted Grotesk',sans-serif;font-size:60px;font-weight:800;color:rgba(255,255,255,.08)}
@@ -202,12 +197,12 @@
   .det-mchip.rate .ms{font-size:18px}
   .det-syn{font-size:20px;line-height:1.55;color:var(--muted);margin-top:18px;max-width:920px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
   .det-play{margin-top:auto;display:inline-flex;align-items:center;gap:11px;align-self:flex-start;padding:17px 34px;border-radius:14px;background:var(--accent);color:#1a1500;font-size:22px;font-weight:700;cursor:pointer;border:1px solid var(--accent);transition:box-shadow .12s,transform .12s}
-  .det-play:hover,.det-play.focused{box-shadow:0 0 0 3px var(--ring);transform:scale(1.02)}
+  .det-play.focused{box-shadow:0 0 0 3px var(--ring);transform:scale(1.02)}
   .det-play .ms{font-size:28px}
   .det-seasons{display:flex;gap:12px;padding:4px 56px 14px}
   .det-eps{flex:1;overflow:hidden;padding:0 56px 26px;display:flex;flex-direction:column;gap:10px}
   .ep-row{display:flex;align-items:center;gap:22px;padding:13px 22px;border-radius:14px;background:var(--surface);border:1px solid transparent;cursor:pointer;transition:box-shadow .12s,border-color .12s}
-  .ep-row:hover,.ep-row.focused{border-color:var(--accent);box-shadow:0 0 0 2px var(--ring)}
+  .ep-row.focused{border-color:var(--accent);box-shadow:0 0 0 2px var(--ring)}
   .ep-num{font-family:'Space Grotesk',monospace;font-size:19px;font-weight:600;color:var(--accent);width:60px;flex-shrink:0}
   .ep-thumb{width:118px;height:66px;border-radius:10px;background:repeating-linear-gradient(120deg,#16161c 0 18px,#101016 18px 36px);border:1px solid var(--line);flex-shrink:0;display:flex;align-items:center;justify-content:center}
   .ep-thumb .ms{font-size:30px;color:rgba(255,255,255,.25)}
@@ -222,7 +217,7 @@
   /* ===== FAVORITOS ===== */
   .fav-list{flex:1;overflow:hidden;padding:0 56px 28px;display:flex;flex-direction:column;gap:10px}
   .fav-row{display:flex;align-items:center;gap:20px;padding:12px 22px;border-radius:14px;background:var(--surface);border:1px solid transparent;cursor:pointer;transition:box-shadow .12s,border-color .12s}
-  .fav-row:hover,.fav-row.focused{border-color:var(--accent);box-shadow:0 0 0 2px var(--ring)}
+  .fav-row.focused{border-color:var(--accent);box-shadow:0 0 0 2px var(--ring)}
   .fav-badge{font-family:'Space Grotesk',monospace;font-size:13px;font-weight:700;letter-spacing:1px;padding:6px 0;border-radius:7px;flex-shrink:0;width:104px;text-align:center}
   .fav-badge.live{background:rgba(255,93,108,.16);color:#ff8a94}
   .fav-badge.movie{background:rgba(216,180,106,.18);color:var(--accent)}
@@ -396,7 +391,7 @@
 
 /* Scroll con rueda del Magic Remote: los contenedores .scroll deben poder
    desplazarse (las reglas .grd-scroll/.a-list-vp/etc. ponen overflow:hidden y
-   ganaban por orden, dejándolos scrollables solo por D-pad). */
+   ganaban por orden,dejándolos scrollables solo por D-pad). */
 .scroll{overflow-y:auto !important}
 
 /* Grilla VOD virtualizada: cada fila es una grilla de 6 columnas */
@@ -427,14 +422,13 @@ video::cue{background:rgba(0,0,0,.65);color:#fff}
 .ply-seekbar.focused{box-shadow:none !important;transform:none !important}
 .ply-seekbar.focused .ply-track{box-shadow:0 0 0 3px var(--ring)}
 
-/* FIX: .ply-center ocupa toda la pantalla (inset:0) y tapaba el botón Volver,
-   comiéndose los clicks. Que no capture eventos salvo en el botón de play. */
+/* FIX: .ply-center ocupa toda la pantalla (inset:0) y tapaba el botón Volver,comiéndose los clicks. Que no capture eventos salvo en el botón de play. */
 .ply-center{pointer-events:none}
 .ply-play{pointer-events:auto}
-/* El botón de play tenía fondo dorado translúcido + halo dorado grande, que se
+/* El botón de play tenía fondo dorado translúcido + halo dorado grande,que se
    veía como una "sombra naranja" en el centro. Lo hacemos neutro y sutil. */
 .ply-play{background:rgba(0,0,0,.4) !important}
-.ply-play:hover,.ply-play.focused{box-shadow:0 0 0 3px var(--ring) !important;transform:none !important}
+.ply-play.focused{box-shadow:0 0 0 3px var(--ring) !important;transform:none !important}
 
 /* Detalle de película: créditos y fila de acciones */
 .det-credits{display:flex;flex-direction:column;gap:6px;margin-top:16px;font-size:18px;color:var(--muted)}

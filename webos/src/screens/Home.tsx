@@ -121,10 +121,17 @@ export function Home() {
 
   const { ref, focusKey } = useFocusable({ trackChildren: true, focusKey: "HOME" });
   const restored = useRef(false);
+  // Enfocar recién cuando el contenido del tab existe (si no, el intento vence
+  // durante el spinner de carga y el D-pad queda sin foco inicial).
+  const liveReady = catalog.liveChannels.length > 0;
   useEffect(() => {
+    const ready = tab === "live" ? liveReady
+      : tab === "favorites" ? true
+      : tab === "movies" ? loadedSections.movies : loadedSections.series;
+    if (!ready) return;
     if (tab === "live" && ui.selectedChannelId && !restored.current) return;
     restoreFocus(`home:${tab}`, "CAT_0");
-  }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tab, liveReady, loadedSections.movies, loadedSections.series]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const railSelect = (id: RailId) => {
     if (id === "hub") navigate("/hub");
