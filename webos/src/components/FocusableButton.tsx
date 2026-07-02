@@ -44,7 +44,12 @@ export function FocusableButton({
     },
     onArrowPress,
     onFocus: () => {
-      anchorScroll(ref.current as HTMLElement | null);
+      // Scroll anclado SOLO cuando el foco vino del D-pad. Si vino del puntero
+      // (hover/click), el ítem ya está bajo el cursor: scrollear lo movería y
+      // el puntero caería sobre otro ítem → bucle de auto-scroll.
+      if (Date.now() - pointerFocusAt > 150) {
+        anchorScroll(ref.current as HTMLElement | null);
+      }
       for (const z of zones) rememberFocus(z, resolvedKey);
       onFocus?.();
     },
@@ -56,13 +61,19 @@ export function FocusableButton({
       className={`focusable ${focused ? "focused" : ""} ${className ?? ""}`}
       style={style}
       onMouseEnter={() => {
-        if (!disabled && !(document.activeElement instanceof HTMLInputElement)) focusSelf();
+        if (!disabled && !(document.activeElement instanceof HTMLInputElement)) {
+          pointerFocusAt = Date.now();
+          focusSelf();
+        }
       }}
       onClick={() => {
-        if (!disabled) { focusSelf(); onEnterPress?.(); }
+        if (!disabled) { pointerFocusAt = Date.now(); focusSelf(); onEnterPress?.(); }
       }}
     >
       {children}
     </div>
   );
 }
+
+/** Momento del último foco iniciado por puntero (hover/click). */
+let pointerFocusAt = 0;
