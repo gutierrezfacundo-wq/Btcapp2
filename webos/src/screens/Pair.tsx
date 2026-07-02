@@ -20,7 +20,6 @@ interface CompanionPayload {
   v?: number;
   name?: string;
   source?: SourceConfig;
-  subtitlesApiKey?: string;
 }
 
 export function Pair() {
@@ -29,7 +28,6 @@ export function Pair() {
   const companionUrl = useAppStore((s) => s.companionUrl);
   const addSource = useAppStore((s) => s.addSource);
   const setActiveSource = useAppStore((s) => s.setActiveSource);
-  const setSubtitlesApiKey = useAppStore((s) => s.setSubtitlesApiKey);
 
   // Config actual del editor (si vinimos desde "Vincular con el celular" en Mis
   // Listas): se manda codificada en el propio QR para precargar el formulario.
@@ -43,7 +41,7 @@ export function Pair() {
   const { ref, focusKey } = useFocusable({ trackChildren: true, focusKey: "PAIR" });
   useEffect(() => { setFocus("PAIR_CANCEL"); }, []);
 
-  const cfgParam = prefill && (prefill.source || prefill.name || prefill.subtitlesApiKey) ? `&cfg=${encodeB64Url(prefill)}` : "";
+  const cfgParam = prefill && (prefill.source || prefill.name) ? `&cfg=${encodeB64Url(prefill)}` : "";
   const pairUrl = companionUrl ? `${companionUrl}/?code=${code}${cfgParam}` : "";
 
   useEffect(() => {
@@ -73,7 +71,6 @@ export function Pair() {
         if (data && !data.pending && data.source) {
           setStatus("applying");
           const id = addSource(data.name || "Mi lista", data.source);
-          if (data.subtitlesApiKey) setSubtitlesApiKey(data.subtitlesApiKey);
           await setActiveSource(id);
           if (!alive) return;
           setStatus("done");

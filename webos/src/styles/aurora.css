@@ -434,12 +434,8 @@
 /* Grilla VOD virtualizada: cada fila es una grilla de 6 columnas */
 .grd-row{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:26px;padding-bottom:26px}
 
-/* Tamaño de subtítulos (elegible en el panel de subtítulos) */
+/* Subtítulos del <track> del navegador (fallback PC) */
 video::cue{background:rgba(0,0,0,.65);color:#fff}
-.cue-s video::cue{font-size:26px}
-.cue-m video::cue{font-size:36px}
-.cue-l video::cue{font-size:48px}
-.a-sub-sep{width:1px;align-self:stretch;background:var(--line);margin:0 4px}
 
 /* Overlay "siguiente episodio" al terminar un capítulo */
 .ply-next{position:absolute;inset:0;z-index:4;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;background:rgba(0,0,0,.72)}
@@ -507,9 +503,5 @@ video::cue{background:rgba(0,0,0,.65);color:#fff}
 /* Panel de subtitulos online: idioma + release */
 .a-trk-lang{font-family:'Space Grotesk',monospace;font-size:15px;font-weight:700;color:var(--accent);background:var(--soft);padding:2px 9px;border-radius:6px;flex-shrink:0}
 .a-trk-rel{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left;margin-left:10px;font-size:19px}
-.a-sub-dl{color:var(--muted);font-size:15px}
-/* Buscador de subtitulos: campo editable + selector de idioma */
-.a-sub-search{display:flex;gap:10px;align-items:stretch;margin:6px 0 10px}
-.a-sub-search .bare{flex:1;background:var(--surface2);border:1px solid var(--line);border-radius:10px;padding:0 12px}
-.a-sub-search .a-trk-item{flex-shrink:0;justify-content:center;gap:8px;background:var(--surface2)}
-.a-sub-langs{display:flex;gap:8px;margin-bottom:10px}
+/* Chips de tamaño de subtítulo (menú de Pistas) */
+.a-sub-langs{display:flex;gap:8px;margin-bottom:10px;padding:0 6px}

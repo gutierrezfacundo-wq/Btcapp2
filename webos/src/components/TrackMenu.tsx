@@ -2,7 +2,10 @@ import { useEffect, useState } from "react";
 import type Hls from "hls.js";
 import { FocusableButton } from "./FocusableButton";
 import { Icon } from "./Icon";
-import { getMediaId, selectTrack, setSubtitleEnable, watchEmbeddedTracks, type EmbeddedTrackInfo } from "../webos/embeddedTracks";
+import { getMediaId, selectTrack, setSubtitleEnable, setSubtitleFontSize, watchEmbeddedTracks, type EmbeddedTrackInfo } from "../webos/embeddedTracks";
+import { useAppStore } from "../store/useAppStore";
+
+const SCALE_PX = { s: 24, m: 33, l: 44 } as const;
 
 const LANG_NAMES: Record<string, string> = {
   es: "Español", spa: "Español", en: "Inglés", eng: "Inglés", pt: "Portugués", por: "Portugués",
@@ -60,11 +63,21 @@ export function TrackMenu({ hls, video, onClose, embedded, embeddedMediaId, luna
     if (embedded !== undefined || !internalMediaId) return;
     return watchEmbeddedTracks(internalMediaId, setInternalEmb);
   }, [embedded, internalMediaId]);
+  const subtitleScale = useAppStore((s) => s.subtitleScale);
+  const setSubtitleScale = useAppStore((s) => s.setSubtitleScale);
   const pickEmbSub = (i: number) => {
     if (!mediaId) return;
     if (i < 0) setSubtitleEnable(mediaId, false);
-    else { setSubtitleEnable(mediaId, true); selectTrack(mediaId, "text", i); }
+    else {
+      setSubtitleEnable(mediaId, true);
+      selectTrack(mediaId, "text", i);
+      setSubtitleFontSize(mediaId, SCALE_PX[subtitleScale]);
+    }
     setEmbSub(i);
+  };
+  const pickScale = (s: "s" | "m" | "l") => {
+    setSubtitleScale(s);
+    if (mediaId) setSubtitleFontSize(mediaId, SCALE_PX[s]);
   };
   const pickEmbAud = (i: number) => {
     if (!mediaId) return;
@@ -195,6 +208,14 @@ export function TrackMenu({ hls, video, onClose, embedded, embeddedMediaId, luna
                 {langLabel(t.language, i, "Sub")} {embSub === i ? <Icon name="check" /> : null}
               </FocusableButton>
             ))}
+            <div className="a-trk-sec">Tamaño</div>
+            <div className="a-sub-langs">
+              {(["s", "m", "l"] as const).map((s) => (
+                <FocusableButton key={s} className={`chip ${subtitleScale === s ? "on" : ""}`} onEnterPress={() => pickScale(s)}>
+                  {s === "s" ? "A−" : s === "m" ? "A" : "A+"}
+                </FocusableButton>
+              ))}
+            </div>
           </>
         ) : (
           <>

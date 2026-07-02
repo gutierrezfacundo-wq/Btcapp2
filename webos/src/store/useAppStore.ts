@@ -12,7 +12,6 @@ const ACTIVE_KEY = "iptv.activeSource.v1";    // nuevo: id de la lista activa
 const FAVORITES_KEY = "iptv.favorites.v1";
 const CATALOG_CACHE_KEY = "iptv.catalog.v1";
 const HISTORY_KEY = "iptv.history.v1";
-const SUBS_KEY = "iptv.subtitlesApiKey.v1";   // API key de OpenSubtitles (la ingresa el usuario)
 const PROGRESS_KEY = "iptv.progress.v1";      // posición de reproducción por contenido (continuar viendo)
 const COMPANION_KEY = "iptv.companionUrl.v1"; // URL del companion (web app + relay) para vincular con el celular
 const NATIVESUBS_KEY = "iptv.nativeSubs.v1";  // usar pipeline nativo de webOS para exponer subtítulos embebidos
@@ -159,8 +158,6 @@ interface AppState {
   error: string | null;
   favorites: FavoriteItem[];
   history: HistoryItem[];
-  /** API key de OpenSubtitles para buscar/descargar subtítulos (vacío = desactivado). */
-  subtitlesApiKey: string;
   /** Posición de reproducción por contenido (segundos) para "continuar viendo". */
   progress: Record<string, { pos: number; dur: number }>;
   /** URL base del companion (web app + relay) para vincular con el celular vía QR. */
@@ -197,7 +194,6 @@ interface AppState {
   toggleFavorite: (item: FavoriteItem) => void;
   isFavorite: (id: string) => boolean;
   pushHistory: (item: Omit<HistoryItem, "at">) => void;
-  setSubtitlesApiKey: (key: string) => void;
   saveProgress: (id: string, pos: number, dur: number) => void;
   clearProgress: (id: string) => void;
   setCompanionUrl: (url: string) => void;
@@ -228,7 +224,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   error: null,
   favorites: loadFavorites(),
   history: loadHistory(),
-  subtitlesApiKey: (() => { try { return localStorage.getItem(SUBS_KEY) ?? ""; } catch { return ""; } })(),
   progress: (() => { try { return JSON.parse(localStorage.getItem(PROGRESS_KEY) ?? "{}"); } catch { return {}; } })(),
   companionUrl: (() => { try { return localStorage.getItem(COMPANION_KEY) ?? ""; } catch { return ""; } })(),
   nativeSubs: (() => { try { return localStorage.getItem(NATIVESUBS_KEY) !== "0"; } catch { return true; } })(),
@@ -426,12 +421,6 @@ export const useAppStore = create<AppState>((set, get) => ({
     const next = [entry, ...get().history.filter((h) => h.id !== item.id)].slice(0, HISTORY_MAX);
     try { localStorage.setItem(HISTORY_KEY, JSON.stringify(next)); } catch { /* ignore */ }
     set({ history: next });
-  },
-
-  setSubtitlesApiKey: (key) => {
-    const k = key.trim();
-    try { localStorage.setItem(SUBS_KEY, k); } catch { /* ignore */ }
-    set({ subtitlesApiKey: k });
   },
 
   saveProgress: (id, pos, dur) => {

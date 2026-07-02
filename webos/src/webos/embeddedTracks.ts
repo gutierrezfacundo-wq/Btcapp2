@@ -72,3 +72,8 @@ export function setSubtitleEnable(mediaId: string, enable: boolean): void {
 export function selectTrack(mediaId: string, type: "text" | "audio", index: number): void {
   lunaCall(MEDIA, "selectTrack", { mediaId, type, index });
 }
+
+/** Tamaño del subtítulo renderizado por la TV (mejor esfuerzo; depende del firmware). */
+export function setSubtitleFontSize(mediaId: string, px: number): void {
+  lunaCall(MEDIA, "setSubtitleFontSize", { mediaId, fontSize: px });
+}

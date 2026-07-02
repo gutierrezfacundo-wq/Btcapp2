@@ -204,12 +204,7 @@ export function Home() {
     // Todo el contexto viaja DENTRO de la URL (?st=): location.state se pierde en
     // webOS, y así "Seguir viendo" también conserva progreso/volver/favorito.
     const fav = hist ? { id: hist.id, name: title, streamUrl: url, logoUrl: hist.posterUrl, kind: hist.kind, meta: hist.sub } : undefined;
-    const st = encodeB64Url({
-      from: `/home?tab=${tab}`,
-      cid: hist?.id,
-      fav,
-      sub: hist?.kind === "movie" ? { type: "movie", title, year: hist.year } : undefined,
-    });
+    const st = encodeB64Url({ from: `/home?tab=${tab}`, cid: hist?.id, fav });
     const route = `/player?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}${hist?.sub ? `&meta=${encodeURIComponent(hist.sub)}` : ""}&st=${st}`;
     if (hist) pushHistory({ id: hist.id, name: title, route, posterUrl: hist.posterUrl, sub: hist.sub, kind: hist.kind });
     navigate(route);

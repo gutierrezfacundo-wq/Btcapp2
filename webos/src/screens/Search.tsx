@@ -64,7 +64,6 @@ export function Search() {
       from: "/search",
       cid: m.id,
       fav: { id: m.id, name: m.name, streamUrl: m.streamUrl, logoUrl: m.posterUrl, kind: "movie", meta: subMeta },
-      sub: { type: "movie", title: m.name, year: m.year?.slice(0, 4) },
     });
     const route = `/player?url=${encodeURIComponent(m.streamUrl)}&title=${encodeURIComponent(m.name)}${subMeta ? `&meta=${encodeURIComponent(subMeta)}` : ""}&st=${st}`;
     pushHistory({ id: m.id, name: m.name, route, posterUrl: m.posterUrl, sub: subMeta, kind: "movie" });

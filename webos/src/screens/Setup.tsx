@@ -33,8 +33,6 @@ export function Setup() {
   const updateSource = useAppStore((s) => s.updateSource);
   const removeSource = useAppStore((s) => s.removeSource);
   const setActiveSource = useAppStore((s) => s.setActiveSource);
-  const subtitlesApiKey = useAppStore((s) => s.subtitlesApiKey);
-  const setSubtitlesApiKey = useAppStore((s) => s.setSubtitlesApiKey);
   const companionUrl = useAppStore((s) => s.companionUrl);
   const setCompanionUrl = useAppStore((s) => s.setCompanionUrl);
   const nativeSubs = useAppStore((s) => s.nativeSubs);
@@ -253,15 +251,6 @@ export function Setup() {
                   </div>
 
                   <div className="fld" style={{ marginTop: 18 }}>
-                    <label className="fld-l"><Icon name="subtitles" /> Subtítulos · API key de OpenSubtitles</label>
-                    <div className="fld-in">
-                      <Icon name="vpn_key" />
-                      <FocusableInput value={subtitlesApiKey} onChange={setSubtitlesApiKey} placeholder="Pegá tu API key (opensubtitles.com)" />
-                    </div>
-                    <div className="a-pdesc" style={{ marginTop: 6 }}>Necesaria para buscar y descargar subtítulos desde el reproductor. Se genera gratis en opensubtitles.com → API Consumer.</div>
-                  </div>
-
-                  <div className="fld" style={{ marginTop: 18 }}>
                     <label className="fld-l"><Icon name="closed_caption" /> Subtítulos embebidos (reproductor nativo webOS)</label>
                     <FocusableButton className={`btn ${nativeSubs ? "primary" : ""}`} onEnterPress={() => setNativeSubs(!nativeSubs)}>
                       <Icon name={nativeSubs ? "toggle_on" : "toggle_off"} /> {nativeSubs ? "Activado" : "Desactivado"}
@@ -280,7 +269,7 @@ export function Setup() {
                       className="btn primary"
                       style={{ marginTop: 10 }}
                       disabled={!companionUrl}
-                      onEnterPress={() => navigate("/pair", { state: { prefill: { name, subtitlesApiKey, source: config } } })}
+                      onEnterPress={() => navigate("/pair", { state: { prefill: { name, source: config } } })}
                     >
                       <Icon name="qr_code_2" /> Vincular con el celular
                     </FocusableButton>

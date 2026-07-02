@@ -3,11 +3,9 @@ import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import Hls from "hls.js";
 import { FocusContext, useFocusable, setFocus } from "@noriginmedia/norigin-spatial-navigation";
 import { FocusableButton } from "../components/FocusableButton";
-import { FocusableInput } from "../components/FocusableInput";
 import { Icon } from "../components/Icon";
 import { TrackMenu } from "../components/TrackMenu";
 import { useAppStore, type FavoriteItem } from "../store/useAppStore";
-import { getSubtitleService, SubtitleError, type SubtitleResult, type SubtitleSearchRequest } from "../services/subtitles";
 import { decodeB64Url } from "../data/b64url";
 import { getMediaId, watchEmbeddedTracks, type EmbeddedTrackInfo } from "../webos/embeddedTracks";
 import { isBackKey, isPlayPauseKey, RemoteKey } from "../webos/remote-keys";
@@ -17,41 +15,6 @@ export interface PlayerRouteState {
   from?: string;
   cid?: string;
   fav?: FavoriteItem;
-  sub?: Partial<SubtitleSearchRequest>;
-}
-
-const SUB_LANGS = [
-  { code: "es", name: "ES" },
-  { code: "en", name: "EN" },
-  { code: "pt-br", name: "PT" },
-];
-function subErrorMessage(e: unknown): string {
-  if (e instanceof SubtitleError) {
-    switch (e.code) {
-      case "no_api_key": return "Configurá tu API key de OpenSubtitles en Mis Listas.";
-      case "no_relay": return "Configurá la URL del companion en Mis Listas.";
-      case "auth": return "API key inválida.";
-      case "rate_limit": return "Límite de descargas/consultas alcanzado (probá más tarde).";
-      case "timeout": return "La búsqueda tardó demasiado.";
-      case "network": return "Error de red.";
-      default: return e.message;
-    }
-  }
-  return "Error inesperado.";
-}
-
-/** Limpia el título para buscar subtítulos: saca prefijos de proveedor/calidad,
- * año, tags entre corchetes y palabras de calidad/idioma. */
-function cleanTitle(raw: string): string {
-  return raw
-    .split(" · ")[0]
-    .replace(/^\s*[^\s|]{1,12}\s*-\s*/, "")            // "4K-TOP - " / "VIP - "
-    .replace(/\[[^\]]*\]/g, "")                          // [tags]
-    .replace(/\(?\b(?:19|20)\d{2}\b\)?/g, "")           // año (2026)
-    .replace(/\b(4k|uhd|fhd|full\s*hd|hd|sd|hevc|x265|x264|dual|latino|castellano|español|espanol|subtitulad[oa]|vose?)\b/gi, "")
-    .replace(/[._]+/g, " ")
-    .replace(/\s{2,}/g, " ")
-    .trim();
 }
 
 const IS_WEBOS = typeof navigator !== "undefined"
@@ -142,23 +105,12 @@ export function Player() {
   }, [url, reloadKey]);
 
   // ===== Subtítulos (vía SubtitleService, agnóstico del proveedor) =====
-  const subtitlesApiKey = useAppStore((s) => s.subtitlesApiKey);
-  const companionUrl = useAppStore((s) => s.companionUrl);
   const nativeSubs = useAppStore((s) => s.nativeSubs);
   const isHls = /\.m3u8(\?|$)/i.test(url);
   const [nativeSrcFailed, setNativeSrcFailed] = useState(false);
   // En webOS, un <source> con MIME correcto usa el pipeline nativo y ayuda a que
   // exponga/renderice los subtítulos embebidos. Fallback a video.src si falla.
   const useNativeSource = IS_WEBOS && nativeSubs && !isHls && !nativeSrcFailed;
-  const [subsOpen, setSubsOpen] = useState(false);
-  const subsRef = useRef(false); subsRef.current = subsOpen;
-  const [subResults, setSubResults] = useState<SubtitleResult[] | null>(null);
-  const [subLoading, setSubLoading] = useState(false);
-  const [subError, setSubError] = useState<string | null>(null);
-  const [subUrl, setSubUrl] = useState<string | null>(null);
-  const [subLangs, setSubLangs] = useState<string[]>(["es", "en"]);
-  const subtitleScale = useAppStore((s) => s.subtitleScale);
-  const setSubtitleScale = useAppStore((s) => s.setSubtitleScale);
 
   // ===== Siguiente episodio (cola armada por SeriesDetail) =====
   const playQueue = useAppStore((s) => s.playQueue);
@@ -178,25 +130,6 @@ export function Player() {
   useEffect(() => {
     if (showNext) window.setTimeout(() => setFocus("PL_NEXT"), 60);
   }, [showNext]);
-  // Identidad del contenido: la pasa la pantalla de origen (con tmdb/imdb si los tiene);
-  // si no, se deriva del título/meta.
-  const stateSub = rst.sub;
-  const derivedTitle = cleanTitle(title) || title.split(" · ")[0].trim();
-  const derivedYear = (title.match(/\b(?:19|20)\d{2}\b/) || (meta.match(/\b(?:19|20)\d{2}\b/) ?? []))[0];
-  const seMatch = `${title} ${meta}`.match(/\bT\s?(\d{1,3})\D+?E\s?(\d{1,3})\b/i) || `${title} ${meta}`.match(/\bS(\d{1,3})\s?E(\d{1,3})\b/i);
-  const isEpisode = stateSub?.type === "episode" || rst.fav?.kind === "series-episode" || !!seMatch;
-  const baseReq: SubtitleSearchRequest = {
-    type: isEpisode ? "episode" : "movie",
-    title: stateSub?.title ? (cleanTitle(stateSub.title) || stateSub.title) : derivedTitle,
-    year: stateSub?.year ?? (isEpisode ? undefined : derivedYear),
-    tmdbId: stateSub?.tmdbId,
-    imdbId: stateSub?.imdbId,
-    parentTmdbId: stateSub?.parentTmdbId,
-    parentImdbId: stateSub?.parentImdbId,
-    season: stateSub?.season ?? (seMatch ? Number(seMatch[1]) : undefined),
-    episode: stateSub?.episode ?? (seMatch ? Number(seMatch[2]) : undefined),
-  };
-  const [subQuery, setSubQuery] = useState(baseReq.title ?? "");
 
   // ===== Favoritos / Continuar viendo =====
   const cid = rst.cid;
@@ -214,64 +147,6 @@ export function Player() {
     const v = videoRef.current; if (!v) return;
     v.currentTime = 0; if (cid) clearProgress(cid); resumeAt.current = 0; setResumed(false); showOverlay();
   };
-
-  const runSearch = () => {
-    if (!subtitlesApiKey || !companionUrl) return;
-    const req: SubtitleSearchRequest = { ...baseReq, title: subQuery.trim() || baseReq.title, languages: subLangs };
-    setSubLoading(true); setSubError(null); setSubResults(null);
-    getSubtitleService().searchSubtitles(req)
-      .then(setSubResults)
-      .catch((e) => setSubError(subErrorMessage(e)))
-      .finally(() => setSubLoading(false));
-  };
-
-  const openSubs = () => {
-    setTracksOpen(false); // un panel a la vez
-    setSubsOpen(true); showOverlay();
-    window.setTimeout(() => setFocus("SUB_SEARCH"), 60);
-    if (subResults || subLoading || !subtitlesApiKey || !companionUrl) return;
-    runSearch();
-  };
-
-  const toggleLang = (code: string) => {
-    setSubLangs((prev) => {
-      const next = prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code];
-      return next.length ? next : prev; // no permitir cero idiomas
-    });
-  };
-
-  const applySubUrl = (u: string) => {
-    setSubUrl((prev) => { if (prev && prev.startsWith("blob:")) URL.revokeObjectURL(prev); return u; });
-    setSubsOpen(false); setFocus("PL_SUBS");
-  };
-
-  const pickSub = async (fileId: number) => {
-    // Preferido (webOS): URL http real para el <track> nativo (no blob:).
-    const directUrl = getSubtitleService().getSubtitleUrl(fileId);
-    if (directUrl) { applySubUrl(directUrl); return; }
-    // Fallback (dev/PC sin relay): descargar el contenido y crear un blob.
-    setSubLoading(true); setSubError(null);
-    try {
-      const file = await getSubtitleService().downloadSubtitle(fileId);
-      const blob = new Blob([file.content], { type: "text/vtt" });
-      applySubUrl(URL.createObjectURL(blob));
-    } catch (e) {
-      setSubError(subErrorMessage(e));
-    } finally {
-      setSubLoading(false);
-    }
-  };
-
-  // Activa la pista recién cargada y limpia el blob al desmontar.
-  useEffect(() => {
-    const v = videoRef.current; if (!v || !subUrl) return;
-    const t = window.setTimeout(() => {
-      const tracks = v.textTracks;
-      for (let i = 0; i < tracks.length; i++) tracks[i].mode = i === tracks.length - 1 ? "showing" : "disabled";
-    }, 120);
-    return () => window.clearTimeout(t);
-  }, [subUrl]);
-  useEffect(() => () => { if (subUrl && subUrl.startsWith("blob:")) URL.revokeObjectURL(subUrl); }, [subUrl]);
 
   const { ref, focusKey } = useFocusable({ trackChildren: true, focusKey: "PLAYER" });
 
@@ -376,7 +251,6 @@ export function Player() {
     const onKey = (e: KeyboardEvent) => {
       if (isBackKey(e)) {
         e.preventDefault();
-        if (subsRef.current) { setSubsOpen(false); setFocus("PL_SUBS"); return; }
         if (tracksRef.current) { setTracksOpen(false); setFocus("PL_TRACKS"); return; }
         goBack(); return;
       }
@@ -396,12 +270,11 @@ export function Player() {
 
   return (
     <FocusContext.Provider value={focusKey}>
-      <div className={`ply cue-${subtitleScale}`} ref={ref} onMouseMove={showOverlay} style={{ position: "fixed" }}>
+      <div className="ply" ref={ref} onMouseMove={showOverlay} style={{ position: "fixed" }}>
         <video ref={videoRef} autoPlay playsInline controls={false}
           onError={() => { if (useNativeSource && (videoRef.current?.readyState ?? 0) === 0) setNativeSrcFailed(true); }}
           style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain", background: "#000" }}>
           {useNativeSource ? <source src={url} type={mimeForUrl(url)} /> : null}
-          {subUrl ? <track key={subUrl} kind="subtitles" src={subUrl} srcLang="es" label="Subtítulos" default /> : null}
         </video>
         <div className="ply-grad" style={{ opacity: overlayVisible ? 1 : 0, transition: "opacity .25s" }} />
         <div style={{ opacity: overlayVisible ? 1 : 0, transition: "opacity .25s", pointerEvents: overlayVisible ? "auto" : "none" }}>
@@ -445,11 +318,8 @@ export function Player() {
                 <Icon name={paused ? "play_arrow" : "pause"} /> {paused ? "Reproducir" : "Pausa"}
               </FocusableButton>
               <FocusableButton className="ply-btn" onEnterPress={() => seek(10)}><Icon name="forward_10" /> 10s</FocusableButton>
-              <FocusableButton focusKey="PL_TRACKS" className="ply-btn" onEnterPress={() => { setSubsOpen(false); setTracksOpen((v) => !v); showOverlay(); window.setTimeout(() => setFocus("TRK_FIRST"), 60); }}>
+              <FocusableButton focusKey="PL_TRACKS" className="ply-btn" onEnterPress={() => { setTracksOpen((v) => !v); showOverlay(); window.setTimeout(() => setFocus("TRK_FIRST"), 60); }}>
                 <Icon name="tune" /> Audio y subtítulos
-              </FocusableButton>
-              <FocusableButton focusKey="PL_SUBS" className="ply-btn" onEnterPress={openSubs}>
-                <Icon name="subtitles" /> Buscar subtítulos
               </FocusableButton>
               {resumeAt.current > 5 ? (
                 <FocusableButton className="ply-btn" onEnterPress={restart}>
@@ -464,54 +334,6 @@ export function Player() {
             </div>
           </div>
           {tracksOpen ? <TrackMenu hls={hls} video={videoRef.current} embedded={embTracks} embeddedMediaId={embMediaId} lunaDiag={lunaDiag} onClose={() => { setTracksOpen(false); setFocus("PL_TRACKS"); }} /> : null}
-          {subsOpen ? (
-            <div className="a-trk">
-              <div className="a-trk-h"><Icon name="subtitles" /> Subtítulos</div>
-              {!subtitlesApiKey ? (
-                <div className="a-trk-scroll"><div className="a-pdesc">Configurá tu API key de OpenSubtitles en Mis Listas para buscar subtítulos.</div></div>
-              ) : !companionUrl ? (
-                <div className="a-trk-scroll"><div className="a-pdesc">Para buscar subtítulos online necesitás la URL del companion en Mis Listas (OpenSubtitles bloquea el acceso directo desde la TV).</div></div>
-              ) : (
-                <>
-                  <div className="a-sub-search">
-                    <FocusableInput focusKey="SUB_SEARCH" value={subQuery} onChange={setSubQuery} placeholder="Título…" />
-                    <FocusableButton className="a-trk-item" onEnterPress={runSearch}><Icon name="search" /> Buscar</FocusableButton>
-                  </div>
-                  <div className="a-sub-langs">
-                    {SUB_LANGS.map((l) => (
-                      <FocusableButton key={l.code} className={`chip ${subLangs.includes(l.code) ? "on" : ""}`} onEnterPress={() => toggleLang(l.code)}>{l.name}</FocusableButton>
-                    ))}
-                    <span className="a-sub-sep" />
-                    {(["s", "m", "l"] as const).map((s) => (
-                      <FocusableButton key={s} className={`chip ${subtitleScale === s ? "on" : ""}`} onEnterPress={() => setSubtitleScale(s)}>
-                        {s === "s" ? "A−" : s === "m" ? "A" : "A+"}
-                      </FocusableButton>
-                    ))}
-                  </div>
-                  <div className="a-trk-scroll scroll">
-                    {subLoading ? (
-                      <div className="a-pdesc"><span className="spinner" style={{ width: 22, height: 22, display: "inline-block", verticalAlign: "middle", marginRight: 8 }} /> Buscando…</div>
-                    ) : subError ? (
-                      <div className="a-pdesc" style={{ color: "var(--err)" }}>{subError}</div>
-                    ) : subResults && subResults.length ? (
-                      <>
-                        {subUrl ? <FocusableButton className="a-trk-item" onEnterPress={() => { setSubUrl((p) => { if (p && p.startsWith("blob:")) URL.revokeObjectURL(p); return null; }); setSubsOpen(false); setFocus("PL_SUBS"); }}>Desactivar subtítulos</FocusableButton> : null}
-                        {subResults.map((r) => (
-                          <FocusableButton key={r.fileId} className="a-trk-item" onEnterPress={() => pickSub(r.fileId)}>
-                            <span className="a-trk-lang">{r.language}</span>
-                            <span className="a-trk-rel">{r.release}{r.hearingImpaired ? " · HI" : ""}<span className="a-sub-dl"> · ⬇ {r.downloads}</span></span>
-                          </FocusableButton>
-                        ))}
-                      </>
-                    ) : subResults ? (
-                      <div className="a-pdesc">Sin resultados. Probá editar el título o cambiar el idioma.</div>
-                    ) : null}
-                  </div>
-                </>
-              )}
-              <FocusableButton className="a-trk-close" onEnterPress={() => { setSubsOpen(false); setFocus("PL_SUBS"); }}>Cerrar</FocusableButton>
-            </div>
-          ) : null}
           {showNext ? (
             <div className="ply-next">
               <div className="ply-next-t">Fin del episodio</div>

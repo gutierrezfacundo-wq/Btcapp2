@@ -68,12 +68,6 @@
     </div>
   </div>
 
-  <div class="card">
-    <label>API key de OpenSubtitles (opcional)</label>
-    <input id="osk" placeholder="para buscar subtítulos" autocapitalize="off" autocorrect="off" />
-    <div class="hint">Se genera gratis en opensubtitles.com → API Consumer.</div>
-  </div>
-
   <button class="go" id="go">Enviar a la TV</button>
   <div class="msg" id="msg"></div>
 </div>
@@ -99,7 +93,6 @@
     var cfg = decodeB64Url(cfgRaw);
     if (cfg) {
       if (cfg.name) document.getElementById("name").value = cfg.name;
-      if (cfg.subtitlesApiKey) document.getElementById("osk").value = cfg.subtitlesApiKey;
       if (cfg.source) {
         if (cfg.source.kind === "m3u") {
           if (cfg.source.playlistUrl) document.getElementById("m3uUrl").value = cfg.source.playlistUrl;
@@ -139,7 +132,7 @@
       source = { kind:"m3u", playlistUrl:val("m3uUrl") };
       if (val("epgUrl")) source.epgUrl = val("epgUrl");
     }
-    var payload = { v:1, name: val("name") || (kind==="xtream"?"Mi lista Xtream":"Mi lista M3U"), source: source, subtitlesApiKey: val("osk") };
+    var payload = { v:1, name: val("name") || (kind==="xtream"?"Mi lista Xtream":"Mi lista M3U"), source: source };
     var btn = document.getElementById("go"); btn.disabled = true; show("ok","Enviando…");
     fetch("/api/pair/" + code, { method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify(payload) })
       .then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); })

@@ -85,7 +85,6 @@ export function SeriesDetail() {
       from: `/series/${id}?name=${encodeURIComponent(title)}`,
       cid: ep.id,
       fav: { id: `series:${id}`, name: title, streamUrl: ep.streamUrl, logoUrl: info?.posterUrl, kind: "series-episode", meta: favMeta },
-      sub: { type: "episode", title, parentTmdbId: meta?.tmdbId, season: ep.seasonNumber, episode: ep.episodeNumber },
     });
     return `/player?url=${encodeURIComponent(ep.streamUrl)}&title=${encodeURIComponent(ft)}&meta=${encodeURIComponent(epMeta)}&st=${st}`;
   };
