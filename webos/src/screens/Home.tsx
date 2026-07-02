@@ -67,6 +67,7 @@ const ChannelRow = memo(function ChannelRow({
           <div className="a-ch-prog"><i style={{ width: `${Math.max(0, Math.min(100, ((Date.now() - now.startMs) / (now.stopMs - now.startMs)) * 100))}%` }} /></div>
         ) : null}
       </span>
+      {channel.archiveDays ? <span className="a-ch-arch"><Icon name="history" /></span> : null}
       {ql ? <span className="a-ch-q">{ql}</span> : null}
       {fav ? <span className="a-ch-fav" onClick={(e) => { e.stopPropagation(); onFav(channel); }}><Icon name="star" /></span> : null}
     </FocusableButton>
@@ -498,6 +499,7 @@ function PreviewPanel({
                       <FocusableButton focusKey="FS_PAUSE" className="a-fs-btn" onEnterPress={togglePause}><Icon name={paused ? "play_arrow" : "pause"} /> {paused ? "Reproducir" : "Pausa"}</FocusableButton>
                       <FocusableButton focusKey="FS_TRACKS" className="a-fs-btn" onEnterPress={() => { setTracksOpen((v) => !v); poke(); }}><Icon name="tune" /> Pistas</FocusableButton>
                       <FocusableButton className="a-fs-btn" onEnterPress={toggleFav}><Icon name={isFav ? "star" : "star_border"} /> {isFav ? "Quitar" : "Favorito"}</FocusableButton>
+                      {channel.archiveDays ? <FocusableButton className="a-fs-btn" onEnterPress={onCatchup}><Icon name="history" /> Grabados</FocusableButton> : null}
                       <FocusableButton className="a-fs-btn" onEnterPress={onExitFullscreen}><Icon name="arrow_back" /> Volver</FocusableButton>
                     </div>
                   </div>
