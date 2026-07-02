@@ -430,6 +430,16 @@ video::cue{background:rgba(0,0,0,.65);color:#fff}
 .ply-play{background:rgba(0,0,0,.4) !important}
 .ply-play.focused{box-shadow:0 0 0 3px var(--ring) !important;transform:none !important}
 
+/* Skeletons de carga (pulso solo de opacity: barato en la TV) */
+.a-body-sk{flex:1;display:flex;min-height:0}
+.sk{background:var(--surface);border-radius:14px}
+.sk-side{padding:24px 0}
+.sk-cat{height:44px;margin:0 24px 10px}
+.sk-main{flex:1;padding:18px 0 0}
+.sk-ch{height:66px;margin:0 16px 9px;border-radius:16px}
+.sk{animation:skpulse 1.2s ease-in-out infinite}
+@keyframes skpulse{0%,100%{opacity:.6}50%{opacity:.22}}
+
 /* Detalle de película: créditos y fila de acciones */
 .det-credits{display:flex;flex-direction:column;gap:6px;margin-top:16px;font-size:18px;color:var(--muted)}
 .det-credits b{color:var(--text);font-weight:600}

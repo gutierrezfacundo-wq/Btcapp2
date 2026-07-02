@@ -276,10 +276,15 @@ export function Home() {
           <Rail active={tab} onSelect={railSelect} reloading={loading} />
           <FocusZone key={`home:${tab}`} zone={`home:${tab}`} className={`a-screen ${tab === "live" && !loading && !error ? "live-row" : ""}`}>
             {loading && !catalog.liveChannels.length ? (
-              <div className="ld">
-                <div className="ld-spin spinner" />
-                <div className="ld-step">{loadingStep ?? "Cargando…"}</div>
-                {loadingProgress ? <div className="ld-count">{loadingProgress.current} / {loadingProgress.total}</div> : null}
+              /* Skeletons con la geometría real: la pantalla nunca queda vacía. */
+              <div className="a-body-sk">
+                <div className="a-cats sk-side">
+                  {Array.from({ length: 9 }, (_, i) => <div key={i} className="sk sk-cat" style={{ animationDelay: `${i * 60}ms` }} />)}
+                </div>
+                <div className="a-list sk-main">
+                  <div className="a-list-h">{loadingStep ?? "Cargando…"}{loadingProgress ? ` · ${loadingProgress.current}/${loadingProgress.total}` : ""}</div>
+                  {Array.from({ length: 9 }, (_, i) => <div key={i} className="sk sk-ch" style={{ animationDelay: `${i * 60}ms` }} />)}
+                </div>
               </div>
             ) : error && !catalog.liveChannels.length ? (
               <div className="ld">

@@ -30,7 +30,6 @@ export function Hub() {
   const history = useAppStore((s) => s.history);
   const loading = useAppStore((s) => s.loading);
   const loadingStep = useAppStore((s) => s.loadingStep);
-  const loadingProgress = useAppStore((s) => s.loadingProgress);
   const error = useAppStore((s) => s.error);
   const loadedSections = useAppStore((s) => s.loadedSections);
   const ensureMovies = useAppStore((s) => s.ensureMovies);
@@ -42,15 +41,14 @@ export function Hub() {
   }, [source, navigate]);
 
   const { ref, focusKey } = useFocusable({ trackChildren: true, focusKey: "HUB" });
-  // Enfocar recién cuando los tiles existen: durante la carga se muestra el
-  // spinner (sin focusables) y un intento en el mount moriría sin foco → D-pad muerto.
-  const hubReady = !loading && !loadingStep && !error;
+  // Enfocar cuando los tiles existen (solo el estado de error sin catálogo los oculta).
+  const hubBlocked = !!error && !catalog.liveChannels.length;
   useEffect(() => {
-    if (hubReady) restoreFocus("hub:tiles", "HUB_T_0");
-  }, [hubReady]);
+    if (!hubBlocked) restoreFocus("hub:tiles", "HUB_T_0");
+  }, [hubBlocked]);
 
   const tiles: { id: SectionId; title: string; sub: string; icon: string }[] = [
-    { id: "live", title: "En vivo", sub: catalog.liveChannels.length ? `${catalog.liveChannels.length.toLocaleString()} canales` : "—", icon: "live_tv" },
+    { id: "live", title: "En vivo", sub: catalog.liveChannels.length ? `${catalog.liveChannels.length.toLocaleString()} canales` : loading || loadingStep ? "Cargando…" : "—", icon: "live_tv" },
     { id: "movies", title: "Películas", sub: loadedSections.movies ? `${catalog.movies.length.toLocaleString()} títulos` : "Cargar al entrar", icon: "movie" },
     { id: "series", title: "Series", sub: loadedSections.series ? `${catalog.series.length.toLocaleString()} títulos` : "Cargar al entrar", icon: "video_library" },
     { id: "favorites", title: "Favoritos", sub: `${favorites.length} guardados`, icon: "star" },
@@ -70,13 +68,7 @@ export function Hub() {
         <div className="a-body">
           <Rail active="hub" onSelect={railNav} reloading={loading} />
           <div className="a-screen">
-            {loading || loadingStep ? (
-              <div className="ld">
-                <div className="ld-spin spinner" />
-                <div className="ld-step">{loadingStep ?? "Cargando…"}</div>
-                {loadingProgress ? <div className="ld-count">{loadingProgress.current} / {loadingProgress.total}</div> : null}
-              </div>
-            ) : error ? (
+            {error && !catalog.liveChannels.length ? (
               <div className="ld">
                 <Icon name="wifi_off" className="eo-ic" />
                 <div className="ld-step" style={{ color: "var(--err)" }}>{error}</div>
