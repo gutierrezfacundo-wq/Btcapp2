@@ -35,6 +35,7 @@ export function Hub() {
   const ensureMovies = useAppStore((s) => s.ensureMovies);
   const ensureSeries = useAppStore((s) => s.ensureSeries);
   const reload = useAppStore((s) => s.reload);
+  const setUi = useAppStore((s) => s.setUi);
 
   useEffect(() => {
     if (!source) navigate("/setup");
@@ -53,6 +54,13 @@ export function Hub() {
     { id: "series", title: "Series", sub: loadedSections.series ? `${catalog.series.length.toLocaleString()} títulos` : "Cargar al entrar", icon: "video_library" },
     { id: "favorites", title: "Favoritos", sub: `${favorites.length} guardados`, icon: "star" },
   ];
+
+  // "Seguir viendo" lleva al detalle (película/serie) o al canal, no directo al player.
+  const openHistory = (h: { id: string; name: string; kind: string; route: string }) => {
+    if (h.kind === "movie") navigate(`/movie/${h.id}`);
+    else if (h.kind === "series-episode") navigate(`/series/${h.id.replace(/^series:/, "")}?name=${encodeURIComponent(h.name)}`);
+    else { setUi({ tab: "live", selectedChannelId: h.id }); navigate("/home?tab=live"); }
+  };
 
   const onTile = (id: SectionId) => {
     // Navegamos al instante; la sección muestra su propio spinner mientras carga.
@@ -101,7 +109,7 @@ export function Hub() {
                     <div className="hub-cont-h">Seguir viendo</div>
                     <FocusZone zone="hub:cont" className="hub-rowscroll scroll">
                       {history.slice(0, 8).map((h, i) => (
-                        <FocusableButton key={h.id} focusKey={`HUB_C_${i}`} className="hub-mini" onEnterPress={() => navigate(h.route)}>
+                        <FocusableButton key={h.id} focusKey={`HUB_C_${i}`} className="hub-mini" onEnterPress={() => openHistory(h)}>
                           <div className="hub-mini-p">
                             {h.posterUrl ? <img src={h.posterUrl} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} /> : null}
                             {h.sub ? <span className="hub-mini-tag">{h.sub}</span> : null}

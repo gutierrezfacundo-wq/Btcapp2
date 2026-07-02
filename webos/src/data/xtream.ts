@@ -192,8 +192,11 @@ export async function loadXtreamCatalog(
   return { ...live, ...movies, ...series };
 }
 
-/** Metadatos del detalle de película (get_vod_info.info), mejor esfuerzo. */
+/** Metadatos del detalle de película (get_vod_info), mejor esfuerzo. */
 export interface MovieDetails {
+  /** Nombre y stream (de movie_data): permiten renderizar el detalle sin el catálogo. */
+  name?: string;
+  streamUrl?: string;
   plot?: string;
   genre?: string;
   rating?: string;
@@ -205,6 +208,10 @@ export interface MovieDetails {
 }
 
 interface XtVodInfoDto {
+  movie_data?: {
+    name?: string;
+    container_extension?: string;
+  };
   info?: {
     plot?: string;
     description?: string;
@@ -230,7 +237,10 @@ export async function loadMovieInfo(
   const i = dto.info ?? {};
   const yearRaw = i.releasedate || i.releaseDate || "";
   const rating = i.rating != null ? String(i.rating).trim() : "";
+  const md = dto.movie_data;
   return {
+    name: md?.name || undefined,
+    streamUrl: xtreamStreamMovie(source, Number(streamId), md?.container_extension || "mp4"),
     plot: i.plot || i.description || undefined,
     genre: i.genre || undefined,
     rating: rating && rating !== "0" ? rating : undefined,

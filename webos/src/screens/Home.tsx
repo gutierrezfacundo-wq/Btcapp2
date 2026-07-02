@@ -15,7 +15,6 @@ import { VideoPreview } from "../components/VideoPreview";
 import { VirtualList } from "../components/VirtualList";
 import { TrackSheet } from "../components/TrackSheet";
 import { FocusZone } from "../components/FocusZone";
-import { encodeB64Url } from "../data/b64url";
 import { useBack } from "../navigation/backStack";
 import { focusWhenReady, restoreFocus } from "../navigation/focusMemory";
 
@@ -200,20 +199,8 @@ export function Home() {
     if (idx >= 0) focusWhenReady(`CH_${selectedChannelId}`);
   }, [tab, selectedChannelId, liveFiltered]);
 
-  const pushHistory = useAppStore((s) => s.pushHistory);
-  const play = (url: string, title: string, hist?: { id: string; posterUrl?: string; sub?: string; kind: "live" | "movie" | "series-episode"; year?: string }) => {
-    // Todo el contexto viaja DENTRO de la URL (?st=): location.state se pierde en
-    // webOS, y así "Seguir viendo" también conserva progreso/volver/favorito.
-    const fav = hist ? { id: hist.id, name: title, streamUrl: url, logoUrl: hist.posterUrl, kind: hist.kind, meta: hist.sub } : undefined;
-    const st = encodeB64Url({ from: `/home?tab=${tab}`, cid: hist?.id, fav });
-    const route = `/player?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}${hist?.sub ? `&meta=${encodeURIComponent(hist.sub)}` : ""}&st=${st}`;
-    if (hist) pushHistory({ id: hist.id, name: title, route, posterUrl: hist.posterUrl, sub: hist.sub, kind: hist.kind });
-    navigate(route);
-  };
-  const openSeries = (id: string, name: string, posterUrl?: string) => {
-    const route = `/series/${id}?name=${encodeURIComponent(name)}`;
-    pushHistory({ id: `series:${id}`, name, route, posterUrl, kind: "series-episode" });
-    navigate(route, { state: { from: `/home?tab=series` } });
+  const openSeries = (id: string, name: string) => {
+    navigate(`/series/${id}?name=${encodeURIComponent(name)}`);
   };
 
   const selectedChannel = selectedChannelId
@@ -244,7 +231,7 @@ export function Home() {
       if (m) navigate(`/movie/${m.id}`);
     } else {
       const s = seriesFiltered[index];
-      if (s) openSeries(s.id, s.name, s.posterUrl);
+      if (s) openSeries(s.id, s.name);
     }
   };
   const onRowEnter = useCallback((id: string) => {
@@ -356,7 +343,15 @@ export function Home() {
                 />
               </>
             ) : tab === "favorites" ? (
-              <FavScreen favorites={favorites} onPlay={(url, title, h) => play(url, title, h)} onToggle={toggleFavorite} />
+              <FavScreen
+                favorites={favorites}
+                onOpen={(f) => {
+                  if (f.kind === "movie") navigate(`/movie/${f.id}`);
+                  else if (f.kind === "series-episode") navigate(`/series/${f.id.replace(/^series:/, "")}?name=${encodeURIComponent(f.name)}`);
+                  else { setSelectedChannelId(f.id); setTab("live"); }
+                }}
+                onToggle={toggleFavorite}
+              />
             ) : sectionLoading ? (
               error ? (
                 <div className="ld">
@@ -627,9 +622,9 @@ const FAV_FILTERS: { id: string; label: string; kind: string | null }[] = [
 function favBadge(kind: string) { return kind === "live" ? "live" : kind === "movie" ? "movie" : "series"; }
 function favBadgeLabel(kind: string) { return kind === "live" ? "EN VIVO" : kind === "movie" ? "PELÍCULA" : "SERIE"; }
 
-function FavScreen({ favorites, onPlay, onToggle }: {
+function FavScreen({ favorites, onOpen, onToggle }: {
   favorites: { id: string; name: string; streamUrl: string; logoUrl?: string; kind: string; meta?: string }[];
-  onPlay: (url: string, title: string, h?: { id: string; posterUrl?: string; sub?: string; kind: "live" | "movie" | "series-episode" }) => void;
+  onOpen: (f: { id: string; name: string; kind: string }) => void;
   onToggle: (i: { id: string; name: string; streamUrl: string; logoUrl?: string; kind: "live" | "movie" | "series-episode" }) => void;
 }) {
   const [filter, setFilter] = useState("all");
@@ -645,7 +640,7 @@ function FavScreen({ favorites, onPlay, onToggle }: {
       </div>
       <div className="fav-list scroll">
         {shown.length === 0 ? <div className="grd-empty">Sin favoritos</div> : shown.map((f) => (
-          <FocusableButton key={f.id} className="fav-row" onEnterPress={() => onPlay(f.streamUrl, f.name, { id: f.id, posterUrl: f.logoUrl, sub: favBadgeLabel(f.kind), kind: f.kind as "live" | "movie" | "series-episode" })}>
+          <FocusableButton key={f.id} className="fav-row" onEnterPress={() => onOpen(f)}>
             <span className={`fav-badge ${favBadge(f.kind)}`}>{favBadgeLabel(f.kind)}</span>
             <span className="fav-thumb">{f.logoUrl ? <img src={f.logoUrl} alt="" loading="lazy" decoding="async" style={{ width: "100%", height: "100%", objectFit: "contain", borderRadius: 10 }} /> : initials(f.name)}</span>
             <span className="fav-mid"><div className="fav-name">{f.name}</div><div className="fav-meta">{f.meta || favBadgeLabel(f.kind)}</div></span>

@@ -17,6 +17,9 @@ import { focusWhenReady } from "../navigation/focusMemory";
 function initials(s: string) {
   return s.split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
 }
+// Caché en memoria del detalle por película: volver del reproductor es instantáneo.
+const detailsCache = new Map<string, MovieDetails>();
+
 function fmtPos(t: number): string {
   const h = Math.floor(t / 3600);
   const m = Math.floor((t % 3600) / 60);
@@ -38,22 +41,38 @@ export function MovieDetail() {
   const favorites = useAppStore((s) => s.favorites);
   const clearProgress = useAppStore((s) => s.clearProgress);
 
-  const movie = useMemo(() => movies.find((m) => m.id === id), [movies, id]);
-  const [details, setDetails] = useState<MovieDetails | null>(null);
+  const catMovie = useMemo(() => movies.find((m) => m.id === id), [movies, id]);
+  const [details, setDetails] = useState<MovieDetails | null>(detailsCache.get(id) ?? null);
+  const [detailsDone, setDetailsDone] = useState(detailsCache.has(id));
 
-  // Si se entra directo (deep link / Seguir viendo) sin la sección cargada.
+  // El catálogo completo se pide en segundo plano (para la grilla), pero el
+  // detalle NO lo espera: con get_vod_info alcanza para renderizar.
   useEffect(() => {
     if (!loadedSections.movies) ensureMovies();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Detalle enriquecido del proveedor (sinopsis/género/duración), mejor esfuerzo.
+  // Detalle enriquecido del proveedor (una sola llamada, cacheada en memoria).
   useEffect(() => {
-    if (!source || source.kind !== "xtream") return;
+    if (detailsCache.has(id)) return;
+    if (!source || source.kind !== "xtream") { setDetailsDone(true); return; }
     const streamId = id.match(/^xt-vod-(\d+)$/)?.[1];
-    if (!streamId) return;
-    loadMovieInfo(source, streamId).then(setDetails).catch(() => setDetails(null));
+    if (!streamId) { setDetailsDone(true); return; }
+    loadMovieInfo(source, streamId)
+      .then((d) => { detailsCache.set(id, d); setDetails(d); })
+      .catch(() => undefined)
+      .finally(() => setDetailsDone(true));
   }, [source, id]);
+
+  // Si el catálogo no está, sintetizamos la película desde get_vod_info.
+  const movie = useMemo(() => {
+    if (catMovie) return catMovie;
+    if (details?.name && details.streamUrl) {
+      return { id, name: details.name, streamUrl: details.streamUrl, posterUrl: details.posterUrl,
+        category: details.genre, plot: details.plot, rating: details.rating, year: details.year };
+    }
+    return undefined;
+  }, [catMovie, details, id]);
 
   const { ref, focusKey } = useFocusable({ trackChildren: true, focusKey: "MOVIE" });
   useEffect(() => { focusWhenReady("MOV_PLAY"); }, [movie?.id]);
@@ -102,7 +121,7 @@ export function MovieDetail() {
           <div className="a-screen">
             {!movie ? (
               <div className="ld">
-                {loadedSections.movies ? (
+                {detailsDone && loadedSections.movies ? (
                   <>
                     <Icon name="movie" className="eo-ic" />
                     <div className="ld-step">No se encontró la película.</div>
