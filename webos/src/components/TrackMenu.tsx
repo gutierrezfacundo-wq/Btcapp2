@@ -2,6 +2,16 @@ import { useEffect, useState } from "react";
 import type Hls from "hls.js";
 import { FocusableButton } from "./FocusableButton";
 import { Icon } from "./Icon";
+import { getMediaId, selectTrack, setSubtitleEnable, watchEmbeddedTracks, type EmbeddedTrackInfo } from "../webos/embeddedTracks";
+
+const LANG_NAMES: Record<string, string> = {
+  es: "Español", spa: "Español", en: "Inglés", eng: "Inglés", pt: "Portugués", por: "Portugués",
+  fr: "Francés", fre: "Francés", fra: "Francés", it: "Italiano", ita: "Italiano", de: "Alemán", ger: "Alemán", deu: "Alemán",
+};
+function langLabel(code: string | undefined, i: number, kind: string) {
+  if (!code) return `${kind} ${i + 1}`;
+  return LANG_NAMES[code.toLowerCase()] ?? code.toUpperCase();
+}
 
 /** Tipos nativos minimos (audioTracks no esta en lib.dom estandar). */
 interface NativeAudioTrack { id?: string; label?: string; language?: string; enabled: boolean }
@@ -28,6 +38,28 @@ function trackLabel(t: { label?: string; language?: string }, i: number, kind: s
 export function TrackMenu({ hls, video, onClose }: { hls: Hls | null; video?: HTMLVideoElement | null; onClose: () => void }) {
   const [, setTick] = useState(0);
   const refresh = () => setTick((t) => t + 1);
+
+  // Pistas embebidas vía el pipeline de webOS (luna://com.webos.media): es lo
+  // que ve el decodificador de la TV, aunque textTracks/audioTracks estén vacíos.
+  const [emb, setEmb] = useState<EmbeddedTrackInfo | null>(null);
+  const [embSub, setEmbSub] = useState(-1);   // índice elegido (-1 = desactivado)
+  const [embAud, setEmbAud] = useState(0);
+  const mediaId = !hls && video ? getMediaId(video) : null;
+  useEffect(() => {
+    if (!mediaId) return;
+    return watchEmbeddedTracks(mediaId, setEmb);
+  }, [mediaId]);
+  const pickEmbSub = (i: number) => {
+    if (!mediaId) return;
+    if (i < 0) setSubtitleEnable(mediaId, false);
+    else { setSubtitleEnable(mediaId, true); selectTrack(mediaId, "text", i); }
+    setEmbSub(i);
+  };
+  const pickEmbAud = (i: number) => {
+    if (!mediaId) return;
+    selectTrack(mediaId, "audio", i);
+    setEmbAud(i);
+  };
 
   // En video nativo las pistas suelen poblarse despues de loadedmetadata:
   // re-renderizamos cuando cambian las listas para que aparezcan sin reabrir.
@@ -87,9 +119,10 @@ export function TrackMenu({ hls, video, onClose }: { hls: Hls | null; video?: HT
   const audio = nativeAudio(video ?? null);
   const subs = nativeSubs(video ?? null);
   const rawSubs = video?.textTracks ? Array.from(video.textTracks) : [];
-  const subDiag = rawSubs.length
+  const subDiag = (rawSubs.length
     ? rawSubs.map((t, i) => `${i}:${t.kind || "?"}/${t.language || t.label || "?"}`).join("  ")
-    : "ninguna";
+    : "ninguna")
+    + ` · pipeline(${mediaId ? "ok" : "sin id"}): ${emb ? `${emb.audio.length}a/${emb.subs.length}s` : "—"}`;
   const activeAudio = audio.findIndex((t) => t.enabled);
   const activeSub = subs.findIndex((t) => t.mode === "showing");
 
@@ -102,11 +135,22 @@ export function TrackMenu({ hls, video, onClose }: { hls: Hls | null; video?: HT
     refresh();
   };
 
-  if (!audio.length && !subs.length) {
+  // Pistas del pipeline (embebidas): tienen prioridad porque son las que la TV
+  // realmente puede renderizar (incluye subtítulos de imagen).
+  const embAudio = emb?.audio ?? [];
+  const embSubs = emb?.subs ?? [];
+  const useEmbAudio = embAudio.length > 0;
+  const useEmbSubs = embSubs.length > 0;
+  const audioCount = useEmbAudio ? embAudio.length : audio.length;
+
+  if (!audioCount && !subs.length && !useEmbSubs) {
     return (
       <div className="a-trk">
         <div className="a-trk-h"><Icon name="tune" /> Pistas</div>
-        <div className="a-trk-scroll"><div className="a-pdesc">Este contenido no expone pistas de audio ni subtítulos alternativas.</div></div>
+        <div className="a-trk-scroll">
+          <div className="a-pdesc">Este contenido no expone pistas de audio ni subtítulos alternativas.</div>
+          <div className="a-pdesc" style={{ fontSize: 14, opacity: 0.7, marginTop: 8 }}>diag: {subDiag}</div>
+        </div>
         <FocusableButton focusKey="TRK_FIRST" className="a-trk-close" onEnterPress={onClose}>Cerrar</FocusableButton>
       </div>
     );
@@ -116,22 +160,43 @@ export function TrackMenu({ hls, video, onClose }: { hls: Hls | null; video?: HT
     <div className="a-trk">
       <div className="a-trk-h"><Icon name="tune" /> Pistas</div>
       <div className="a-trk-scroll scroll">
-        {audio.length ? <div className="a-trk-sec">Audio</div> : null}
-        {audio.map((t, i) => (
-          <FocusableButton key={i} focusKey={i === 0 ? "TRK_FIRST" : undefined} className="a-trk-item" onEnterPress={() => setAudio(i)}>
-            {trackLabel(t, i, "Pista")} {activeAudio === i ? <Icon name="check" /> : null}
-          </FocusableButton>
-        ))}
+        {audioCount ? <div className="a-trk-sec">Audio</div> : null}
+        {useEmbAudio
+          ? embAudio.map((t, i) => (
+              <FocusableButton key={i} focusKey={i === 0 ? "TRK_FIRST" : undefined} className="a-trk-item" onEnterPress={() => pickEmbAud(i)}>
+                {langLabel(t.language, i, "Pista")} {embAud === i ? <Icon name="check" /> : null}
+              </FocusableButton>
+            ))
+          : audio.map((t, i) => (
+              <FocusableButton key={i} focusKey={i === 0 ? "TRK_FIRST" : undefined} className="a-trk-item" onEnterPress={() => setAudio(i)}>
+                {trackLabel(t, i, "Pista")} {activeAudio === i ? <Icon name="check" /> : null}
+              </FocusableButton>
+            ))}
         <div className="a-trk-sec">Subtítulos</div>
-        <FocusableButton focusKey={!audio.length ? "TRK_FIRST" : undefined} className="a-trk-item" onEnterPress={() => setSub(-1)}>
-          Desactivados {activeSub === -1 ? <Icon name="check" /> : null}
-        </FocusableButton>
-        {subs.map((t, i) => (
-          <FocusableButton key={i} className="a-trk-item" onEnterPress={() => setSub(i)}>
-            {trackLabel(t, i, "Sub")} {activeSub === i ? <Icon name="check" /> : null}
-          </FocusableButton>
-        ))}
-        <div className="a-pdesc" style={{ fontSize: 14, opacity: 0.7, marginTop: 8 }}>diag pistas de texto: {subDiag}</div>
+        {useEmbSubs ? (
+          <>
+            <FocusableButton focusKey={!audioCount ? "TRK_FIRST" : undefined} className="a-trk-item" onEnterPress={() => pickEmbSub(-1)}>
+              Desactivados {embSub === -1 ? <Icon name="check" /> : null}
+            </FocusableButton>
+            {embSubs.map((t, i) => (
+              <FocusableButton key={i} className="a-trk-item" onEnterPress={() => pickEmbSub(i)}>
+                {langLabel(t.language, i, "Sub")} {embSub === i ? <Icon name="check" /> : null}
+              </FocusableButton>
+            ))}
+          </>
+        ) : (
+          <>
+            <FocusableButton focusKey={!audioCount ? "TRK_FIRST" : undefined} className="a-trk-item" onEnterPress={() => setSub(-1)}>
+              Desactivados {activeSub === -1 ? <Icon name="check" /> : null}
+            </FocusableButton>
+            {subs.map((t, i) => (
+              <FocusableButton key={i} className="a-trk-item" onEnterPress={() => setSub(i)}>
+                {trackLabel(t, i, "Sub")} {activeSub === i ? <Icon name="check" /> : null}
+              </FocusableButton>
+            ))}
+          </>
+        )}
+        <div className="a-pdesc" style={{ fontSize: 14, opacity: 0.7, marginTop: 8 }}>diag pistas: {subDiag}</div>
       </div>
       <FocusableButton className="a-trk-close" onEnterPress={onClose}>Cerrar</FocusableButton>
     </div>
