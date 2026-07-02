@@ -375,12 +375,14 @@ export function Player() {
             <div className="ply-next">
               <div className="ply-next-t">Fin del episodio</div>
               {nextItem ? (
-                <FocusableButton focusKey="PL_NEXT" className="btn primary" onEnterPress={goNext}>
-                  <Icon name="skip_next" /> Siguiente: {nextItem.label}{nextIn !== null ? ` · ${nextIn}s` : ""}
-                </FocusableButton>
-                <FocusableButton className="btn" onEnterPress={cancelNext}>
-                  Cancelar
-                </FocusableButton>
+                <>
+                  <FocusableButton focusKey="PL_NEXT" className="btn primary" onEnterPress={goNext}>
+                    <Icon name="skip_next" /> Siguiente: {nextItem.label}{nextIn !== null ? ` · ${nextIn}s` : ""}
+                  </FocusableButton>
+                  <FocusableButton className="btn" onEnterPress={cancelNext}>
+                    Cancelar
+                  </FocusableButton>
+                </>
               ) : null}
               <FocusableButton focusKey={nextItem ? undefined : "PL_NEXT"} className="btn" onEnterPress={goBack}>
                 <Icon name="arrow_back" /> Volver
