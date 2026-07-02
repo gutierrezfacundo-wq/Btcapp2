@@ -12,6 +12,7 @@ import { MovieDetail } from "./screens/MovieDetail";
 import { Player } from "./screens/Player";
 import { Pair } from "./screens/Pair";
 import { Search } from "./screens/Search";
+import { Catchup } from "./screens/Catchup";
 import { useAppStore } from "./store/useAppStore";
 import { installBackHandler } from "./navigation/backStack";
 
@@ -73,6 +74,7 @@ export default function App() {
       <Route path="/movie/:id" element={<MovieDetail />} />
       <Route path="/player" element={<KeyedPlayer />} />
       <Route path="/search" element={<Search />} />
+      <Route path="/catchup/:id" element={<Catchup />} />
       <Route path="/pair" element={<Pair />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

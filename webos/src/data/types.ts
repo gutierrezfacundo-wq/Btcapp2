@@ -8,6 +8,8 @@ export interface Channel {
   groupTitle?: string;
   tvgId?: string;
   kind: MediaKind;
+  /** Días de catch-up (tv_archive) que ofrece el proveedor; undefined = sin archivo. */
+  archiveDays?: number;
 }
 
 export interface Movie {
@@ -107,6 +109,16 @@ export function xtreamStreamLive(
   ext = "ts",
 ): string {
   return `${s.server.replace(/\/$/, "")}/live/${s.username}/${s.password}/${streamId}.${ext}`;
+}
+
+/** URL de timeshift/catch-up. `start` en formato "YYYY-MM-DD:HH-MM" (hora del proveedor). */
+export function xtreamTimeshiftUrl(
+  s: Extract<SourceConfig, { kind: "xtream" }>,
+  streamId: number,
+  start: string,
+  durationMins: number,
+): string {
+  return `${s.server.replace(/\/$/, "")}/timeshift/${s.username}/${s.password}/${durationMins}/${start}/${streamId}.m3u8`;
 }
 
 export function xtreamStreamMovie(

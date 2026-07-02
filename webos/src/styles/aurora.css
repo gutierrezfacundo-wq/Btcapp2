@@ -430,6 +430,17 @@ video::cue{background:rgba(0,0,0,.65);color:#fff}
 .ply-play{background:rgba(0,0,0,.4) !important}
 .ply-play.focused{box-shadow:0 0 0 3px var(--ring) !important;transform:none !important}
 
+/* Menú desplegable de orden (grilla VOD) */
+.grd-sortwrap{position:relative;flex-shrink:0;margin-right:14px}
+.grd-sortwrap .grd-sort{margin-right:0}
+.sort-pop{position:absolute;top:calc(100% + 10px);right:0;z-index:30;min-width:280px;background:rgba(10,10,14,.97);border:1px solid rgba(216,180,106,.35);border-radius:14px;padding:10px;display:flex;flex-direction:column;gap:4px;box-shadow:0 24px 60px -18px rgba(0,0,0,.85)}
+.sort-item{display:flex;align-items:center;gap:10px;padding:12px 16px;border-radius:10px;font-size:20px;border:1px solid transparent;cursor:pointer}
+.sort-check{width:24px;display:flex;justify-content:center;flex-shrink:0;opacity:0}
+.sort-item .ms{font-size:22px;color:var(--accent)}
+.sort-item.on{color:var(--accent);font-weight:600}
+.sort-item.on .sort-check{opacity:1}
+.sort-item.focused{border-color:var(--accent);background:var(--soft);box-shadow:0 0 0 3px var(--ring)}
+
 /* Skeletons de carga (pulso solo de opacity: barato en la TV) */
 .a-body-sk{flex:1;display:flex;min-height:0}
 .sk{background:var(--surface);border-radius:14px}

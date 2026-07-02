@@ -340,6 +340,7 @@ export function Home() {
                   fullscreen={fullscreen}
                   onEnterFullscreen={() => setFullscreen(true)}
                   onExitFullscreen={() => setFullscreen(false)}
+                  onCatchup={() => { if (selectedChannelId) navigate(`/catchup/${selectedChannelId}`); }}
                 />
               </>
             ) : tab === "favorites" ? (
@@ -378,7 +379,7 @@ export function Home() {
                 items={gridItems}
                 onPick={onPickGrid}
                 sortMode={sortMode}
-                onSort={() => setSortMode((m) => (m === "default" ? "recent" : m === "recent" ? "year" : m === "year" ? "az" : "default"))}
+                onSortChange={(m) => setSortMode(m as SortMode)}
               />
             )}
           </FocusZone>
@@ -392,10 +393,10 @@ export function Home() {
 }
 
 // ===================== PREVIEW + FULLSCREEN + TRACKS =====================
-interface PreviewChannel { id: string; name: string; streamUrl: string; logoUrl?: string; tvgId?: string }
+interface PreviewChannel { id: string; name: string; streamUrl: string; logoUrl?: string; tvgId?: string; archiveDays?: number }
 
 function PreviewPanel({
-  channel, channelNumber, epgByChannel, fullscreen, onEnterFullscreen, onExitFullscreen,
+  channel, channelNumber, epgByChannel, fullscreen, onEnterFullscreen, onExitFullscreen, onCatchup,
 }: {
   channel: PreviewChannel | null;
   channelNumber: number | null;
@@ -403,6 +404,7 @@ function PreviewPanel({
   fullscreen: boolean;
   onEnterFullscreen: () => void;
   onExitFullscreen: () => void;
+  onCatchup: () => void;
 }) {
   const now = channel ? findNowPlaying(epgByChannel as never, channel.tvgId) : null;
   const next = channel ? findNextProgram(epgByChannel as never, channel.tvgId) : null;
@@ -527,6 +529,9 @@ function PreviewPanel({
                 <FocusableButton focusKey="PV_PAUSE" className="a-btn" onEnterPress={togglePause}><Icon name={paused ? "play_arrow" : "pause"} /> {paused ? "Reproducir" : "Pausa"}</FocusableButton>
                 <FocusableButton className="a-btn primary" onEnterPress={onEnterFullscreen}><Icon name="fullscreen" /> Pantalla completa</FocusableButton>
                 <FocusableButton className="a-btn" onEnterPress={toggleFav}><Icon name={isFav ? "star" : "star_border"} /> {isFav ? "Quitar" : "Favorito"}</FocusableButton>
+                {channel.archiveDays ? (
+                  <FocusableButton className="a-btn" onEnterPress={onCatchup}><Icon name="history" /> Grabados</FocusableButton>
+                ) : null}
               </div>
             </>
           ) : null}
@@ -540,10 +545,16 @@ function PreviewPanel({
 // ===================== GRID (películas / series) =====================
 interface GridData { id: string; name: string; posterUrl?: string; year?: string; rating?: string; genre?: string }
 
+const SORT_OPTIONS = [
+  { id: "default", label: "Por defecto" },
+  { id: "recent", label: "Recientes" },
+  { id: "year", label: "Año" },
+  { id: "az", label: "A-Z" },
+] as const;
 const SORT_LABEL: Record<string, string> = { default: "Por defecto", recent: "Recientes", year: "Año", az: "A-Z" };
 
 function GridScreen({
-  title, count, categories, category, onCategory, query, onQuery, items, onPick, sortMode, onSort,
+  title, count, categories, category, onCategory, query, onQuery, items, onPick, sortMode, onSortChange,
 }: {
   title: string;
   count: number;
@@ -555,8 +566,20 @@ function GridScreen({
   items: GridData[];
   onPick: (index: number) => void;
   sortMode: string;
-  onSort: () => void;
+  onSortChange: (m: string) => void;
 }) {
+  // Menú de orden: lista desplegable (OK abre, ↑↓ elige, OK aplica, Back cierra).
+  const [sortOpen, setSortOpen] = useState(false);
+  useBack(() => { setSortOpen(false); focusWhenReady("GRD_SORT"); }, sortOpen);
+  const openSort = () => {
+    setSortOpen(true);
+    focusWhenReady(`SORT_${sortMode}`);
+  };
+  const pickSort = (m: string) => {
+    onSortChange(m);
+    setSortOpen(false);
+    focusWhenReady("GRD_SORT");
+  };
   // Filas de a 6 para virtualizar la grilla (solo se montan las visibles).
   const rows = useMemo(() => {
     const r: GridData[][] = [];
@@ -567,9 +590,20 @@ function GridScreen({
     <div className="grd">
       <div className="grd-h">
         <div className="grd-htitle"><span className="grd-title">{title}</span><span className="grd-count">{count.toLocaleString()} títulos</span></div>
-        <FocusableButton className="grd-sort" onEnterPress={onSort}>
-          <Icon name="swap_vert" /> {SORT_LABEL[sortMode]}
-        </FocusableButton>
+        <div className="grd-sortwrap">
+          <FocusableButton focusKey="GRD_SORT" className="grd-sort" onEnterPress={openSort}>
+            <Icon name="swap_vert" /> {SORT_LABEL[sortMode]}
+          </FocusableButton>
+          {sortOpen ? (
+            <FocusZone zone="grd:sort" className="sort-pop">
+              {SORT_OPTIONS.map((o) => (
+                <FocusableButton key={o.id} focusKey={`SORT_${o.id}`} className={`sort-item ${sortMode === o.id ? "on" : ""}`} onEnterPress={() => pickSort(o.id)}>
+                  <span className="sort-check"><Icon name="check" /></span> {o.label}
+                </FocusableButton>
+              ))}
+            </FocusZone>
+          ) : null}
+        </div>
         <div className="grd-search">
           <Icon name="search" />
           <FocusableInput focusKey="SEARCH_IN" value={query} onChange={onQuery} placeholder={`Buscar ${title.toLowerCase()}…`} />

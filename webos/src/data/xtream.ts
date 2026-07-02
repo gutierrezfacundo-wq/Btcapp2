@@ -27,6 +27,8 @@ interface XtLiveDto {
   stream_icon?: string;
   epg_channel_id?: string;
   category_id?: string;
+  tv_archive?: number | string;
+  tv_archive_duration?: number | string;
 }
 
 interface XtMovieDto {
@@ -119,6 +121,7 @@ export async function loadXtreamLive(
     groupTitle: categoryName(liveCats, d.category_id),
     tvgId: d.epg_channel_id || undefined,
     kind: "live",
+    archiveDays: Number(d.tv_archive) ? Number(d.tv_archive_duration) || 1 : undefined,
   }));
   return { liveChannels, liveCategories: liveCats };
 }
@@ -250,6 +253,62 @@ export async function loadMovieInfo(
     director: i.director || undefined,
     cast: i.cast || i.actors || undefined,
   };
+}
+
+/** Programa de la guía con archivo disponible (catch-up). */
+export interface CatchupProgram {
+  title: string;
+  /** "YYYY-MM-DD HH:MM:SS" en hora del proveedor (se usa tal cual para timeshift). */
+  start: string;
+  end: string;
+  startTs: number;
+  stopTs: number;
+  durationMins: number;
+}
+
+interface XtEpgDto {
+  epg_listings?: Array<{
+    title?: string;
+    start?: string;
+    end?: string;
+    stop?: string;
+    start_timestamp?: string | number;
+    stop_timestamp?: string | number;
+    has_archive?: number | string;
+  }>;
+}
+
+function b64Title(t: string | undefined): string {
+  if (!t) return "Programa";
+  try { return decodeURIComponent(escape(atob(t))); } catch { return t; }
+}
+
+/** Guía de programas grabados de un canal (get_simple_data_table). */
+export async function loadCatchupGuide(
+  source: Extract<SourceConfig, { kind: "xtream" }>,
+  streamId: string,
+): Promise<CatchupProgram[]> {
+  const url = `${xtreamPlayerApi(source)}&action=get_simple_data_table&stream_id=${streamId}`;
+  const dto = await getJson<XtEpgDto>(url);
+  const nowTs = Math.floor(Date.now() / 1000);
+  const out: CatchupProgram[] = [];
+  for (const e of dto.epg_listings ?? []) {
+    const startTs = Number(e.start_timestamp) || 0;
+    const stopTs = Number(e.stop_timestamp) || 0;
+    if (Number(e.has_archive) !== 1 || !startTs || !stopTs) continue;
+    if (stopTs >= nowTs) continue; // todavía no terminó
+    out.push({
+      title: b64Title(e.title),
+      start: e.start ?? "",
+      end: e.end ?? e.stop ?? "",
+      startTs,
+      stopTs,
+      durationMins: Math.max(1, Math.round((stopTs - startTs) / 60)),
+    });
+  }
+  // Más recientes primero
+  out.sort((a, b) => b.startTs - a.startTs);
+  return out;
 }
 
 export async function loadSeriesEpisodes(
