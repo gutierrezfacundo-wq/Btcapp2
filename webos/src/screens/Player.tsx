@@ -117,6 +117,8 @@ export function Player() {
   // ===== Siguiente episodio (cola armada por SeriesDetail) =====
   const playQueue = useAppStore((s) => s.playQueue);
   const [showNext, setShowNext] = useState(false);
+  const showNextRef = useRef(false); showNextRef.current = showNext;
+  const [nextIn, setNextIn] = useState<number | null>(null);
   const nextItem = useMemo(() => {
     const idx = playQueue.findIndex((q) => q.url === url);
     return idx >= 0 && idx + 1 < playQueue.length ? playQueue[idx + 1] : null;
@@ -132,6 +134,27 @@ export function Player() {
   };
   useEffect(() => {
     if (showNext) focusWhenReady("PL_NEXT");
+  }, [showNext]);
+
+  const cancelNext = () => {
+    setShowNext(false);
+    setNextIn(null);
+    focusWhenReady("PL_SEEK");
+  };
+
+  // Cuenta regresiva: a los 10s reproduce el siguiente episodio solo.
+  useEffect(() => {
+    if (!showNext || !nextItem) { setNextIn(null); return; }
+    setNextIn(10);
+    const t = window.setInterval(() => {
+      setNextIn((n) => {
+        if (n === null) return n;
+        if (n <= 1) { window.clearInterval(t); goNext(); return 0; }
+        return n - 1;
+      });
+    }, 1000);
+    return () => window.clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showNext]);
 
   // ===== Favoritos / Continuar viendo =====
@@ -259,8 +282,12 @@ export function Player() {
     showOverlay();
   };
 
-  // Back: la hoja de pistas (si está abierta) lo consume con su propio useBack.
-  useBack(() => { goBack(); });
+  // Back: la hoja de pistas (si está abierta) lo consume con su propio useBack;
+  // con el overlay de "siguiente episodio" visible, cancela la cuenta regresiva.
+  useBack(() => {
+    if (showNextRef.current) { cancelNext(); return; }
+    goBack();
+  });
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -349,7 +376,10 @@ export function Player() {
               <div className="ply-next-t">Fin del episodio</div>
               {nextItem ? (
                 <FocusableButton focusKey="PL_NEXT" className="btn primary" onEnterPress={goNext}>
-                  <Icon name="skip_next" /> Siguiente: {nextItem.label}
+                  <Icon name="skip_next" /> Siguiente: {nextItem.label}{nextIn !== null ? ` · ${nextIn}s` : ""}
+                </FocusableButton>
+                <FocusableButton className="btn" onEnterPress={cancelNext}>
+                  Cancelar
                 </FocusableButton>
               ) : null}
               <FocusableButton focusKey={nextItem ? undefined : "PL_NEXT"} className="btn" onEnterPress={goBack}>
