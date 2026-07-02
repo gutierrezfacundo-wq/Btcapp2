@@ -66,17 +66,21 @@ export function groupByChannel(programs: EpgProgram[]): Map<string, EpgProgram[]
 export function findNowPlaying(
   byChannel: Map<string, EpgProgram[]>,
   tvgId: string | undefined,
+  offsetMs = 0,
 ): EpgProgram | undefined {
   if (!tvgId) return undefined;
   const list = byChannel.get(tvgId);
   if (!list) return undefined;
   const now = Date.now();
-  return list.find((p) => now >= p.startMs && now <= p.stopMs);
+  const p = list.find((x) => now >= x.startMs + offsetMs && now <= x.stopMs + offsetMs);
+  // Devolvemos los horarios ya corregidos: las barras/horas se muestran bien.
+  return p && offsetMs ? { ...p, startMs: p.startMs + offsetMs, stopMs: p.stopMs + offsetMs } : p;
 }
 
 export function findNextProgram(
   byChannel: Map<string, EpgProgram[]>,
   tvgId: string | undefined,
+  offsetMs = 0,
 ): EpgProgram | undefined {
   if (!tvgId) return undefined;
   const list = byChannel.get(tvgId);
@@ -84,7 +88,7 @@ export function findNextProgram(
   const now = Date.now();
   let best: EpgProgram | undefined;
   for (const p of list) {
-    if (p.startMs > now && (!best || p.startMs < best.startMs)) best = p;
+    if (p.startMs + offsetMs > now && (!best || p.startMs < best.startMs)) best = p;
   }
-  return best;
+  return best && offsetMs ? { ...best, startMs: best.startMs + offsetMs, stopMs: best.stopMs + offsetMs } : best;
 }

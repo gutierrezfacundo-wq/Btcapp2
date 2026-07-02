@@ -40,17 +40,18 @@ function fmtClock(ms: number) {
  * filas cuyo `sel`/`fav` cambió, no las 250. Los callbacks deben ser estables.
  */
 const ChannelRow = memo(function ChannelRow({
-  channel, num, sel, fav, epg, onEnter, onFav,
+  channel, num, sel, fav, epg, epgOff, onEnter, onFav,
 }: {
   channel: Channel;
   num: number | string;
   sel: boolean;
   fav: boolean;
   epg: Map<string, EpgProgram[]>;
+  epgOff: number;
   onEnter: (id: string) => void;
   onFav: (c: Channel) => void;
 }) {
-  const now = findNowPlaying(epg, channel.tvgId);
+  const now = findNowPlaying(epg, channel.tvgId, epgOff);
   const ql = quality(channel.name);
   return (
     <FocusableButton
@@ -91,6 +92,7 @@ export function Home() {
   const loadedSections = useAppStore((s) => s.loadedSections);
   const toggleFavorite = useAppStore((s) => s.toggleFavorite);
   const epgByChannel = useAppStore((s) => s.epgByChannel);
+  const epgOffMs = useAppStore((s) => s.epgOffsetH) * 3600000;
   const ui = useAppStore((s) => s.ui);
   const setUi = useAppStore((s) => s.setUi);
 
@@ -323,6 +325,7 @@ export function Home() {
                         sel={c.id === selectedChannelId}
                         fav={favIds.has(c.id)}
                         epg={epgByChannel}
+                        epgOff={epgOffMs}
                         onEnter={onRowEnter}
                         onFav={onRowFav}
                       />
@@ -403,8 +406,9 @@ function PreviewPanel({
   onExitFullscreen: () => void;
   onCatchup: () => void;
 }) {
-  const now = channel ? findNowPlaying(epgByChannel as never, channel.tvgId) : null;
-  const next = channel ? findNextProgram(epgByChannel as never, channel.tvgId) : null;
+  const epgOffMs = useAppStore((s) => s.epgOffsetH) * 3600000;
+  const now = channel ? findNowPlaying(epgByChannel as never, channel.tvgId, epgOffMs) : null;
+  const next = channel ? findNextProgram(epgByChannel as never, channel.tvgId, epgOffMs) : null;
   const videoElRef = useRef<HTMLVideoElement | null>(null);
   const [paused, setPaused] = useState(false);
   const [hls, setHls] = useState<Hls | null>(null);

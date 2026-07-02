@@ -16,6 +16,7 @@ const PROGRESS_KEY = "iptv.progress.v1";      // posición de reproducción por 
 const COMPANION_KEY = "iptv.companionUrl.v1"; // URL del companion (web app + relay) para vincular con el celular
 const NATIVESUBS_KEY = "iptv.nativeSubs.v1";  // usar pipeline nativo de webOS para exponer subtítulos embebidos
 const SUBSCALE_KEY = "iptv.subtitleScale.v1"; // tamaño de subtítulos (s/m/l)
+const EPGOFF_KEY = "iptv.epgOffset.v1";      // corrección horaria de la guía (horas)
 const UI_KEY = "iptv.ui.v1";                  // navegación del Home (canal/categoría/tab): sobrevive al reinicio
 
 function genId(): string {
@@ -167,6 +168,8 @@ interface AppState {
   nativeSubs: boolean;
   /** Tamaño de los subtítulos en el reproductor. */
   subtitleScale: "s" | "m" | "l";
+  /** Corrección horaria de la guía EPG, en horas (-12..12). */
+  epgOffsetH: number;
   /** Cola de reproducción (episodios de la temporada en curso) para "siguiente episodio". */
   playQueue: { route: string; label: string; url: string }[];
   epgByChannel: Map<string, EpgProgram[]>;
@@ -200,6 +203,7 @@ interface AppState {
   setCompanionUrl: (url: string) => void;
   setNativeSubs: (on: boolean) => void;
   setSubtitleScale: (s: "s" | "m" | "l") => void;
+  setEpgOffsetH: (h: number) => void;
   setPlayQueue: (q: { route: string; label: string; url: string }[]) => void;
 }
 
@@ -230,6 +234,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   nativeSubs: (() => { try { return localStorage.getItem(NATIVESUBS_KEY) !== "0"; } catch { return true; } })(),
   subtitleScale: (() => { try { return (localStorage.getItem(SUBSCALE_KEY) as "s" | "m" | "l") || "m"; } catch { return "m"; } })(),
   playQueue: [],
+  epgOffsetH: (() => { try { const v = Number(localStorage.getItem(EPGOFF_KEY)); return Number.isFinite(v) ? Math.max(-12, Math.min(12, v)) : 0; } catch { return 0; } })(),
   epgByChannel: new Map(),
   loadedSections: { movies: false, series: false },
   ui: (() => {
@@ -468,6 +473,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   setPlayQueue: (q) => set({ playQueue: q }),
+
+  setEpgOffsetH: (h) => {
+    const v = Math.max(-12, Math.min(12, Math.round(h)));
+    try { localStorage.setItem(EPGOFF_KEY, String(v)); } catch { /* ignore */ }
+    set({ epgOffsetH: v });
+  },
 }));
 
 async function loadEpg(url: string) {

@@ -12,6 +12,7 @@ import { useAppStore } from "../store/useAppStore";
 import { useBack } from "../navigation/backStack";
 import { fetchJson, fetchText } from "../data/http";
 import { parseM3u } from "../data/m3u";
+import { loadAccountInfo, type AccountInfo } from "../data/xtream";
 import type { SavedSource, SourceConfig } from "../data/types";
 
 type Tab = "xtream" | "m3u";
@@ -34,10 +35,20 @@ export function Setup() {
   const updateSource = useAppStore((s) => s.updateSource);
   const removeSource = useAppStore((s) => s.removeSource);
   const setActiveSource = useAppStore((s) => s.setActiveSource);
+  const source = useAppStore((s) => s.source);
   const companionUrl = useAppStore((s) => s.companionUrl);
   const setCompanionUrl = useAppStore((s) => s.setCompanionUrl);
   const nativeSubs = useAppStore((s) => s.nativeSubs);
   const setNativeSubs = useAppStore((s) => s.setNativeSubs);
+  const epgOffsetH = useAppStore((s) => s.epgOffsetH);
+  const setEpgOffsetH = useAppStore((s) => s.setEpgOffsetH);
+
+  // Info de la cuenta Xtream activa (vencimiento/conexiones), mejor esfuerzo.
+  const [acct, setAcct] = useState<AccountInfo | null>(null);
+  useEffect(() => {
+    setAcct(null);
+    if (source?.kind === "xtream") loadAccountInfo(source).then(setAcct).catch(() => setAcct(null));
+  }, [source]);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isNew, setIsNew] = useState(sources.length === 0);
@@ -55,7 +66,6 @@ export function Setup() {
   const { ref, focusKey } = useFocusable({ trackChildren: true, focusKey: "SETUP" });
 
   // Back: con lista activa vuelve al Inicio; sin lista, deja pasar (raíz).
-  const source = useAppStore((s) => s.source);
   useBack(() => {
     if (source) { navigate("/hub"); return; }
     return false;
@@ -265,6 +275,28 @@ export function Setup() {
                     </FocusableButton>
                     <div className="a-pdesc" style={{ marginTop: 6 }}>Usa el pipeline nativo de webOS para exponer/renderizar subtítulos embebidos de las pelis/series. Si algún video no reproduce en la TV, desactivalo (cae al modo estándar).</div>
                   </div>
+
+                  <div className="fld" style={{ marginTop: 18 }}>
+                    <label className="fld-l"><Icon name="schedule" /> Corrección horaria de la guía (EPG)</label>
+                    <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                      <FocusableButton className="btn" onEnterPress={() => setEpgOffsetH(epgOffsetH - 1)}><Icon name="remove" /></FocusableButton>
+                      <span className="mono" style={{ fontSize: 24, minWidth: 90, textAlign: "center" }}>{epgOffsetH > 0 ? `+${epgOffsetH}` : epgOffsetH} h</span>
+                      <FocusableButton className="btn" onEnterPress={() => setEpgOffsetH(epgOffsetH + 1)}><Icon name="add" /></FocusableButton>
+                    </div>
+                    <div className="a-pdesc" style={{ marginTop: 6 }}>Si los programas de la guía aparecen corridos (empiezan antes/después de lo real), ajustá acá las horas de diferencia.</div>
+                  </div>
+
+                  {acct ? (
+                    <div className="fld" style={{ marginTop: 18 }}>
+                      <label className="fld-l"><Icon name="badge" /> Cuenta</label>
+                      <div className="acct-row">
+                        <span className={`src-status ${acct.status?.toLowerCase() === "active" ? "ok" : "error"}`}><span className="dot" /> {acct.status?.toLowerCase() === "active" ? "Activa" : acct.status ?? "—"}</span>
+                        {acct.expDate ? <><span className="sep">·</span><span>Vence {new Date(acct.expDate).toLocaleDateString([], { day: "2-digit", month: "2-digit", year: "numeric" })}</span></> : null}
+                        {acct.maxCons ? <><span className="sep">·</span><span>Conexiones {acct.activeCons ?? 0}/{acct.maxCons}</span></> : null}
+                        {acct.trial ? <><span className="sep">·</span><span>Prueba</span></> : null}
+                      </div>
+                    </div>
+                  ) : null}
 
                   <div className="fld" style={{ marginTop: 18 }}>
                     <label className="fld-l"><Icon name="qr_code_2" /> Configurar desde el celular (QR)</label>

@@ -93,6 +93,39 @@ function categoryName(list: Category[], id: string | undefined): string | undefi
   return list.find((c) => c.id === id)?.name;
 }
 
+/** Estado de la cuenta Xtream (player_api user_info). */
+export interface AccountInfo {
+  status?: string;
+  expDate?: number;        // ms
+  activeCons?: number;
+  maxCons?: number;
+  trial?: boolean;
+}
+
+interface XtUserInfoDto {
+  user_info?: {
+    status?: string;
+    exp_date?: string | number | null;
+    active_cons?: string | number;
+    max_connections?: string | number;
+    is_trial?: string | number;
+  };
+}
+
+export async function loadAccountInfo(
+  source: Extract<SourceConfig, { kind: "xtream" }>,
+): Promise<AccountInfo> {
+  const dto = await getJson<XtUserInfoDto>(xtreamPlayerApi(source));
+  const u = dto.user_info ?? {};
+  return {
+    status: u.status || undefined,
+    expDate: u.exp_date ? Number(u.exp_date) * 1000 || undefined : undefined,
+    activeCons: u.active_cons != null ? Number(u.active_cons) : undefined,
+    maxCons: u.max_connections != null ? Number(u.max_connections) : undefined,
+    trial: Number(u.is_trial) === 1,
+  };
+}
+
 export type LoadProgress = (step: string, current: number, total: number) => void;
 
 const LONG_TIMEOUT = 120000;

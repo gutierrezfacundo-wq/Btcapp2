@@ -431,6 +431,10 @@ video::cue{background:rgba(0,0,0,.65);color:#fff}
 .ply-play{background:rgba(0,0,0,.4) !important}
 .ply-play.focused{box-shadow:0 0 0 3px var(--ring) !important;transform:none !important}
 
+/* Fila de info de cuenta (Mis Listas) */
+.acct-row{display:flex;align-items:center;gap:10px;font-size:19px;color:var(--muted)}
+.acct-row .sep{opacity:.4}
+
 /* Indicador de canal con archivo (catch-up) en la lista */
 .a-ch-arch{display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--muted)}
 .a-ch-arch .ms{font-size:20px}
