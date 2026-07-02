@@ -155,7 +155,7 @@ export function SeriesDetail() {
                     seasonEpisodes.map((ep) => {
                       const p = progress[ep.id];
                       const watched = p && p.dur > 0 && p.pos > p.dur - 60;
-                      const continuing = p && p.dur > 0 && p.pos > 30 && p.pos <= p.dur - 60;
+                      const continuing = p && p.pos > 30 && (p.dur === 0 || p.pos <= p.dur - 60);
                       return (
                         <FocusableButton key={ep.id} className="ep-row" onEnterPress={() => play(ep)}>
                           <span className="ep-num">E{String(ep.episodeNumber).padStart(2, "0")}</span>

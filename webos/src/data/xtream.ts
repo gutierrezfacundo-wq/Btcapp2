@@ -192,6 +192,56 @@ export async function loadXtreamCatalog(
   return { ...live, ...movies, ...series };
 }
 
+/** Metadatos del detalle de película (get_vod_info.info), mejor esfuerzo. */
+export interface MovieDetails {
+  plot?: string;
+  genre?: string;
+  rating?: string;
+  year?: string;
+  duration?: string;
+  posterUrl?: string;
+  director?: string;
+  cast?: string;
+}
+
+interface XtVodInfoDto {
+  info?: {
+    plot?: string;
+    description?: string;
+    genre?: string;
+    rating?: string | number;
+    releasedate?: string;
+    releaseDate?: string;
+    duration?: string;
+    movie_image?: string;
+    cover_big?: string;
+    director?: string;
+    cast?: string;
+    actors?: string;
+  };
+}
+
+export async function loadMovieInfo(
+  source: Extract<SourceConfig, { kind: "xtream" }>,
+  streamId: string,
+): Promise<MovieDetails> {
+  const url = `${xtreamPlayerApi(source)}&action=get_vod_info&vod_id=${streamId}`;
+  const dto = await getJson<XtVodInfoDto>(url);
+  const i = dto.info ?? {};
+  const yearRaw = i.releasedate || i.releaseDate || "";
+  const rating = i.rating != null ? String(i.rating).trim() : "";
+  return {
+    plot: i.plot || i.description || undefined,
+    genre: i.genre || undefined,
+    rating: rating && rating !== "0" ? rating : undefined,
+    year: yearRaw ? String(yearRaw).slice(0, 4) : undefined,
+    duration: i.duration || undefined,
+    posterUrl: i.movie_image || i.cover_big || undefined,
+    director: i.director || undefined,
+    cast: i.cast || i.actors || undefined,
+  };
+}
+
 export async function loadSeriesEpisodes(
   source: Extract<SourceConfig, { kind: "xtream" }>,
   seriesId: string,

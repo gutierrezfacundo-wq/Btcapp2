@@ -12,7 +12,6 @@ import { TopBar } from "../components/TopBar";
 import { Hints } from "../components/Hints";
 import { useRailNav } from "../hooks/useRailNav";
 import { useBack } from "../navigation/backStack";
-import { encodeB64Url } from "../data/b64url";
 
 const MAX_PER_GROUP = 10;
 
@@ -29,7 +28,6 @@ export function Search() {
   const ensureMovies = useAppStore((s) => s.ensureMovies);
   const ensureSeries = useAppStore((s) => s.ensureSeries);
   const setUi = useAppStore((s) => s.setUi);
-  const pushHistory = useAppStore((s) => s.pushHistory);
 
   const [query, setQuery] = useState("");
   const deferred = useDeferredValue(query);
@@ -56,17 +54,7 @@ export function Search() {
     setUi({ tab: "live", selectedChannelId: id });
     navigate("/home?tab=live");
   };
-  const playMovie = (m: { id: string; name: string; streamUrl: string; posterUrl?: string; year?: string; category?: string }) => {
-    const subMeta = [m.year, m.category].filter(Boolean).join(" · ") || undefined;
-    const st = encodeB64Url({
-      from: "/search",
-      cid: m.id,
-      fav: { id: m.id, name: m.name, streamUrl: m.streamUrl, logoUrl: m.posterUrl, kind: "movie", meta: subMeta },
-    });
-    const route = `/player?url=${encodeURIComponent(m.streamUrl)}&title=${encodeURIComponent(m.name)}${subMeta ? `&meta=${encodeURIComponent(subMeta)}` : ""}&st=${st}`;
-    pushHistory({ id: m.id, name: m.name, route, posterUrl: m.posterUrl, sub: subMeta, kind: "movie" });
-    navigate(route);
-  };
+  const openMovie = (id: string) => navigate(`/movie/${id}`);
 
   return (
     <FocusContext.Provider value={focusKey}>
@@ -101,7 +89,7 @@ export function Search() {
                     ))}
                     {movies.length ? <div className="gsr-h">Películas</div> : null}
                     {movies.map((m) => (
-                      <FocusableButton key={m.id} className="fav-row" onEnterPress={() => playMovie(m)}>
+                      <FocusableButton key={m.id} className="fav-row" onEnterPress={() => openMovie(m.id)}>
                         <span className="fav-badge movie">PELÍCULA</span>
                         <span className="fav-thumb">{m.posterUrl ? <img src={m.posterUrl} alt="" loading="lazy" decoding="async" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 10 }} /> : initials(m.name)}</span>
                         <span className="fav-mid"><div className="fav-name">{m.name}</div><div className="fav-meta">{[m.year?.slice(0, 4), m.category].filter(Boolean).join(" · ")}</div></span>

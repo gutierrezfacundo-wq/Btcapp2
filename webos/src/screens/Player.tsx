@@ -61,6 +61,7 @@ export function Player() {
   const from = rst.from;
   // navegación normal + fallback por hash para el HashRouter de webOS.
   const goBack = () => {
+    persistProgress();
     const dest = from && from.startsWith("/") ? from : "/hub";
     navigate(dest);
     window.setTimeout(() => {
@@ -122,6 +123,7 @@ export function Player() {
   }, [playQueue, url]);
   const goNext = () => {
     if (!nextItem) return;
+    persistProgress();
     setShowNext(false);
     navigate(nextItem.route);
     window.setTimeout(() => {
@@ -143,6 +145,13 @@ export function Player() {
   const resumeAt = useRef(cid ? (useAppStore.getState().progress[cid]?.pos ?? 0) : 0);
   const resumedRef = useRef(false);
   const lastSave = useRef(0);
+  // Última posición/duración conocidas: el cleanup no puede leer el <video>
+  // (ya está reseteado) y en webOS duration puede ser Infinity.
+  const lastPos = useRef(0);
+  const lastDur = useRef(0);
+  const persistProgress = () => {
+    if (cid && lastPos.current > 0) saveProgress(cid, lastPos.current, lastDur.current);
+  };
   const [resumed, setResumed] = useState(false);
   const restart = () => {
     const v = videoRef.current; if (!v) return;
@@ -207,14 +216,16 @@ export function Player() {
     const v = videoRef.current; if (!v) return;
     const onTime = () => {
       setCur(v.currentTime); setDur(v.duration || 0);
+      if (v.currentTime > 0) lastPos.current = v.currentTime;
+      if (isFinite(v.duration) && v.duration > 0) lastDur.current = v.duration;
       // Guardar progreso cada ~5s para "continuar viendo".
-      if (cid && v.duration && Math.abs(v.currentTime - lastSave.current) > 5) {
+      if (cid && Math.abs(v.currentTime - lastSave.current) > 5) {
         lastSave.current = v.currentTime;
-        saveProgress(cid, v.currentTime, v.duration);
+        saveProgress(cid, v.currentTime, lastDur.current);
       }
     };
     const onPlay = () => setPaused(false);
-    const onPause = () => setPaused(true);
+    const onPause = () => { setPaused(true); persistProgress(); };
     const onEnded = () => { setShowNext(true); showOverlay(); };
     v.addEventListener("timeupdate", onTime);
     v.addEventListener("durationchange", onTime);
@@ -227,7 +238,7 @@ export function Player() {
       v.removeEventListener("play", onPlay);
       v.removeEventListener("pause", onPause);
       v.removeEventListener("ended", onEnded);
-      if (cid && v.duration) saveProgress(cid, v.currentTime, v.duration);
+      persistProgress();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

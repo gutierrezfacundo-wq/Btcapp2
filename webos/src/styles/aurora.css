@@ -436,6 +436,11 @@ video::cue{background:rgba(0,0,0,.65);color:#fff}
 .ply-play{background:rgba(0,0,0,.4) !important}
 .ply-play:hover,.ply-play.focused{box-shadow:0 0 0 3px var(--ring) !important;transform:none !important}
 
+/* Detalle de película: créditos y fila de acciones */
+.det-credits{display:flex;flex-direction:column;gap:6px;margin-top:16px;font-size:18px;color:var(--muted)}
+.det-credits b{color:var(--text);font-weight:600}
+.det-actions{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-top:22px}
+
 /* Vincular con el celular (QR) */
 .pair{flex:1;display:flex;align-items:center;justify-content:center;padding:40px}
 .pair-card{background:var(--surface);border:1px solid var(--line);border-radius:24px;padding:40px;display:flex;gap:48px;align-items:center;max-width:1100px}

@@ -8,6 +8,7 @@ import { Setup } from "./screens/Setup";
 import { Hub } from "./screens/Hub";
 import { Home } from "./screens/Home";
 import { SeriesDetail } from "./screens/SeriesDetail";
+import { MovieDetail } from "./screens/MovieDetail";
 import { Player } from "./screens/Player";
 import { Pair } from "./screens/Pair";
 import { Search } from "./screens/Search";
@@ -69,6 +70,7 @@ export default function App() {
       <Route path="/hub" element={<Hub />} />
       <Route path="/home" element={<Home />} />
       <Route path="/series/:id" element={<SeriesDetail />} />
+      <Route path="/movie/:id" element={<MovieDetail />} />
       <Route path="/player" element={<KeyedPlayer />} />
       <Route path="/search" element={<Search />} />
       <Route path="/pair" element={<Pair />} />

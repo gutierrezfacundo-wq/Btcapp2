@@ -424,11 +424,14 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   saveProgress: (id, pos, dur) => {
-    if (!id || !isFinite(pos) || !isFinite(dur) || dur <= 0) return;
+    // El pipeline nativo de webOS puede reportar duration Infinity/0 (MKV/TS):
+    // guardamos igual con dur=0 (desconocida) para no perder el progreso.
+    if (!id || !isFinite(pos)) return;
+    const d = isFinite(dur) && dur > 0 ? dur : 0;
     const next = { ...get().progress };
-    // Cerca del final o del principio: no guardamos (se considera "visto"/sin empezar).
-    if (pos < 15 || pos > dur - 30) delete next[id];
-    else next[id] = { pos, dur };
+    // Recién empezado, o (con duración conocida) cerca del final: no guardar.
+    if (pos < 15 || (d > 0 && pos > d - 30)) delete next[id];
+    else next[id] = { pos, dur: d };
     try { localStorage.setItem(PROGRESS_KEY, JSON.stringify(next)); } catch { /* ignore */ }
     set({ progress: next });
   },

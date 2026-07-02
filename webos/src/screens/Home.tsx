@@ -234,7 +234,7 @@ export function Home() {
   const onPickGrid = (index: number) => {
     if (tab === "movies") {
       const m = moviesFiltered[index];
-      if (m) play(m.streamUrl, m.name, { id: m.id, posterUrl: m.posterUrl, sub: [m.year, m.category].filter(Boolean).join(" · ") || undefined, kind: "movie", year: m.year?.slice(0, 4) });
+      if (m) navigate(`/movie/${m.id}`);
     } else {
       const s = seriesFiltered[index];
       if (s) openSeries(s.id, s.name, s.posterUrl);
