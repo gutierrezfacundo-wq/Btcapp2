@@ -545,7 +545,7 @@ function PreviewPanel({
                       <FocusableButton focusKey="FS_PAUSE" className="a-fs-btn" onEnterPress={togglePause}><Icon name={paused ? "play_arrow" : "pause"} /> {paused ? "Reproducir" : "Pausa"}</FocusableButton>
                       <FocusableButton focusKey="FS_TRACKS" className="a-fs-btn" onEnterPress={() => { setTracksOpen((v) => !v); poke(); }}><Icon name="tune" /> Pistas</FocusableButton>
                       <FocusableButton className="a-fs-btn" onEnterPress={toggleFav}><Icon name={isFav ? "star" : "star_border"} /> {isFav ? "Quitar" : "Favorito"}</FocusableButton>
-                      {channel.archiveDays ? <FocusableButton className="a-fs-btn" onEnterPress={onCatchup}><Icon name="history" /> Grabados</FocusableButton> : null}
+                      <FocusableButton className="a-fs-btn" onEnterPress={onCatchup}><Icon name="calendar_month" /> Guía</FocusableButton>
                       <FocusableButton className="a-fs-btn" onEnterPress={onExitFullscreen}><Icon name="arrow_back" /> Volver</FocusableButton>
                     </div>
                   </div>
@@ -577,9 +577,7 @@ function PreviewPanel({
                 <FocusableButton focusKey="PV_PAUSE" className="a-btn" onEnterPress={togglePause}><Icon name={paused ? "play_arrow" : "pause"} /> {paused ? "Reproducir" : "Pausa"}</FocusableButton>
                 <FocusableButton className="a-btn primary" onEnterPress={onEnterFullscreen}><Icon name="fullscreen" /> Pantalla completa</FocusableButton>
                 <FocusableButton className="a-btn" onEnterPress={toggleFav}><Icon name={isFav ? "star" : "star_border"} /> {isFav ? "Quitar" : "Favorito"}</FocusableButton>
-                {channel.archiveDays ? (
-                  <FocusableButton className="a-btn" onEnterPress={onCatchup}><Icon name="history" /> Grabados</FocusableButton>
-                ) : null}
+                <FocusableButton className="a-btn" onEnterPress={onCatchup}><Icon name="calendar_month" /> Guía</FocusableButton>
               </div>
             </>
           ) : null}

@@ -288,7 +288,7 @@ export async function loadMovieInfo(
   };
 }
 
-/** Programa de la guía con archivo disponible (catch-up). */
+/** Programa de la guía del canal (get_simple_data_table). */
 export interface CatchupProgram {
   title: string;
   /** "YYYY-MM-DD HH:MM:SS" en hora del proveedor (se usa tal cual para timeshift). */
@@ -297,6 +297,8 @@ export interface CatchupProgram {
   startTs: number;
   stopTs: number;
   durationMins: number;
+  /** Terminado y con archivo: reproducible vía timeshift. */
+  hasArchive: boolean;
 }
 
 interface XtEpgDto {
@@ -316,8 +318,8 @@ function b64Title(t: string | undefined): string {
   try { return decodeURIComponent(escape(atob(t))); } catch { return t; }
 }
 
-/** Guía de programas grabados de un canal (get_simple_data_table). */
-export async function loadCatchupGuide(
+/** Guía completa del canal: pasada (con flag de archivo), actual y futura. */
+export async function loadChannelGuide(
   source: Extract<SourceConfig, { kind: "xtream" }>,
   streamId: string,
 ): Promise<CatchupProgram[]> {
@@ -328,8 +330,7 @@ export async function loadCatchupGuide(
   for (const e of dto.epg_listings ?? []) {
     const startTs = Number(e.start_timestamp) || 0;
     const stopTs = Number(e.stop_timestamp) || 0;
-    if (Number(e.has_archive) !== 1 || !startTs || !stopTs) continue;
-    if (stopTs >= nowTs) continue; // todavía no terminó
+    if (!startTs || !stopTs) continue;
     out.push({
       title: b64Title(e.title),
       start: e.start ?? "",
@@ -337,10 +338,10 @@ export async function loadCatchupGuide(
       startTs,
       stopTs,
       durationMins: Math.max(1, Math.round((stopTs - startTs) / 60)),
+      hasArchive: Number(e.has_archive) === 1 && stopTs < nowTs,
     });
   }
-  // Más recientes primero
-  out.sort((a, b) => b.startTs - a.startTs);
+  out.sort((a, b) => a.startTs - b.startTs);
   return out;
 }
 
