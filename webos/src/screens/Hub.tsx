@@ -1,13 +1,15 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { FocusContext, useFocusable, setFocus } from "@noriginmedia/norigin-spatial-navigation";
+import { FocusContext, useFocusable } from "@noriginmedia/norigin-spatial-navigation";
 import { useAppStore } from "../store/useAppStore";
 import { FocusableButton } from "../components/FocusableButton";
+import { FocusZone } from "../components/FocusZone";
 import { Icon } from "../components/Icon";
 import { Rail } from "../components/Rail";
 import { TopBar } from "../components/TopBar";
 import { Hints, HINTS_NAV } from "../components/Hints";
 import { useRailNav } from "../hooks/useRailNav";
+import { restoreFocus } from "../navigation/focusMemory";
 
 type SectionId = "live" | "movies" | "series" | "favorites";
 
@@ -40,7 +42,7 @@ export function Hub() {
   }, [source, navigate]);
 
   const { ref, focusKey } = useFocusable({ trackChildren: true, focusKey: "HUB" });
-  useEffect(() => { setFocus("HUB_T_0"); }, []);
+  useEffect(() => { restoreFocus("hub:tiles", "HUB_T_0"); }, []);
 
   const tiles: { id: SectionId; title: string; sub: string; icon: string }[] = [
     { id: "live", title: "En vivo", sub: catalog.liveChannels.length ? `${catalog.liveChannels.length.toLocaleString()} canales` : "—", icon: "live_tv" },
@@ -86,7 +88,7 @@ export function Hub() {
                     <div className="hub-title">¿Qué querés <span>ver</span> hoy?</div>
                   </div>
                 </div>
-                <div className="hub-grid">
+                <FocusZone zone="hub:tiles" preferred="HUB_T_0" className="hub-grid">
                   {tiles.map((t, i) => (
                     <FocusableButton key={t.id} focusKey={`HUB_T_${i}`} className="hub-tile" onEnterPress={() => onTile(t.id)}>
                       <div className="hub-tile-ic"><Icon name={t.icon} /></div>
@@ -96,11 +98,11 @@ export function Hub() {
                       </div>
                     </FocusableButton>
                   ))}
-                </div>
+                </FocusZone>
                 {history.length ? (
                   <div className="hub-cont">
                     <div className="hub-cont-h">Seguir viendo</div>
-                    <div className="hub-rowscroll scroll">
+                    <FocusZone zone="hub:cont" className="hub-rowscroll scroll">
                       {history.slice(0, 8).map((h, i) => (
                         <FocusableButton key={h.id} focusKey={`HUB_C_${i}`} className="hub-mini" onEnterPress={() => navigate(h.route)}>
                           <div className="hub-mini-p">
@@ -110,7 +112,7 @@ export function Hub() {
                           <div className="hub-mini-t">{h.name}</div>
                         </FocusableButton>
                       ))}
-                    </div>
+                    </FocusZone>
                   </div>
                 ) : null}
               </div>

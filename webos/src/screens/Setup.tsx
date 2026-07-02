@@ -9,6 +9,7 @@ import { TopBar } from "../components/TopBar";
 import { Hints } from "../components/Hints";
 import { useRailNav } from "../hooks/useRailNav";
 import { useAppStore } from "../store/useAppStore";
+import { useBack } from "../navigation/backStack";
 import { fetchJson, fetchText } from "../data/http";
 import { parseM3u } from "../data/m3u";
 import type { SavedSource, SourceConfig } from "../data/types";
@@ -52,6 +53,13 @@ export function Setup() {
   const [testResult, setTestResult] = useState<string | null>(null);
 
   const { ref, focusKey } = useFocusable({ trackChildren: true, focusKey: "SETUP" });
+
+  // Back: con lista activa vuelve al Inicio; sin lista, deja pasar (raíz).
+  const source = useAppStore((s) => s.source);
+  useBack(() => {
+    if (source) { navigate("/hub"); return; }
+    return false;
+  });
   useEffect(() => {
     setFocus(sources.length === 0 ? "ED_NAME" : "SRC_0");
   }, []); // eslint-disable-line react-hooks/exhaustive-deps

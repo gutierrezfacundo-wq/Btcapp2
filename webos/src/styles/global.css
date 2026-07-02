@@ -10,7 +10,7 @@
   --accent: #d8b46a;          /* dorado: foco, activos, primario */
   --accent-2: #e7c987;        /* dorado claro: degradados */
   --soft: rgba(216, 180, 106, 0.13);   /* fondos suaves del acento */
-  --ring: rgba(216, 180, 106, 0.40);   /* anillo de foco */
+  --ring: rgba(216, 180, 106, 0.55);   /* anillo de foco (Apple TV: más visible) */
   --ok: #5fcaa0;
   --err: #ff5d6c;
   --live: #ff5470;            /* punto/chip "EN VIVO" */

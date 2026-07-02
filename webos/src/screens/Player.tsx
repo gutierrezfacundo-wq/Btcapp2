@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import Hls from "hls.js";
-import { FocusContext, useFocusable, setFocus } from "@noriginmedia/norigin-spatial-navigation";
+import { FocusContext, useFocusable } from "@noriginmedia/norigin-spatial-navigation";
 import { FocusableButton } from "../components/FocusableButton";
 import { Icon } from "../components/Icon";
-import { TrackMenu } from "../components/TrackMenu";
+import { TrackSheet } from "../components/TrackSheet";
 import { useAppStore, type FavoriteItem } from "../store/useAppStore";
 import { decodeB64Url } from "../data/b64url";
+import { useBack } from "../navigation/backStack";
+import { focusWhenReady } from "../navigation/focusMemory";
 import { getMediaId, watchEmbeddedTracks, type EmbeddedTrackInfo } from "../webos/embeddedTracks";
-import { isBackKey, isPlayPauseKey, RemoteKey } from "../webos/remote-keys";
+import { isPlayPauseKey, RemoteKey } from "../webos/remote-keys";
 
 /** Estado que viaja DENTRO de la URL (?st=): location.state se pierde en webOS. */
 export interface PlayerRouteState {
@@ -81,7 +83,6 @@ export function Player() {
   // Pistas embebidas (pipeline webOS): suscribirse APENAS arranca el video,
   // porque el pipeline anuncia sourceInfo una sola vez al cargar.
   const [embTracks, setEmbTracks] = useState<EmbeddedTrackInfo | null>(null);
-  const [lunaDiag, setLunaDiag] = useState("");
   const [embMediaId, setEmbMediaId] = useState<string | null>(null);
   useEffect(() => {
     if (!IS_WEBOS) return;
@@ -94,10 +95,10 @@ export function Player() {
       if (id) {
         window.clearInterval(timer);
         setEmbMediaId(id);
-        cancel = watchEmbeddedTracks(id, setEmbTracks, (keys) => setLunaDiag(keys));
+        cancel = watchEmbeddedTracks(id, setEmbTracks, (keys) => console.info("[pipeline]", keys));
       } else if (tries > 40) {
         window.clearInterval(timer);
-        setLunaDiag("sin mediaId");
+        console.info("[pipeline] sin mediaId");
       }
     }, 250);
     return () => { window.clearInterval(timer); cancel?.(); };
@@ -128,7 +129,7 @@ export function Player() {
     }, 60);
   };
   useEffect(() => {
-    if (showNext) window.setTimeout(() => setFocus("PL_NEXT"), 60);
+    if (showNext) focusWhenReady("PL_NEXT");
   }, [showNext]);
 
   // ===== Favoritos / Continuar viendo =====
@@ -186,7 +187,7 @@ export function Player() {
     }
     video.play().catch(() => undefined);
     showOverlay();
-    setFocus("PL_PLAY");
+    focusWhenReady("PL_PLAY");
     return () => { if (hlsInst) hlsInst.destroy(); setHls(null); video.removeAttribute("src"); video.load(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url, reloadKey]);
@@ -232,7 +233,7 @@ export function Player() {
   }, []);
 
   useEffect(() => {
-    if (error) { showOverlay(); window.setTimeout(() => setFocus("PL_RETRY"), 60); }
+    if (error) { showOverlay(); focusWhenReady("PL_RETRY"); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [error]);
 
@@ -247,13 +248,11 @@ export function Player() {
     showOverlay();
   };
 
+  // Back: la hoja de pistas (si está abierta) lo consume con su propio useBack.
+  useBack(() => { goBack(); });
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (isBackKey(e)) {
-        e.preventDefault();
-        if (tracksRef.current) { setTracksOpen(false); setFocus("PL_TRACKS"); return; }
-        goBack(); return;
-      }
       if (isPlayPauseKey(e)) { e.preventDefault(); togglePlay(); return; }
       // Botones dedicados ⏪/⏩ del control: siempre saltan. Las flechas ya NO:
       // solo navegan foco (el seek con flechas vive en la barra de tiempo).
@@ -318,7 +317,7 @@ export function Player() {
                 <Icon name={paused ? "play_arrow" : "pause"} /> {paused ? "Reproducir" : "Pausa"}
               </FocusableButton>
               <FocusableButton className="ply-btn" onEnterPress={() => seek(10)}><Icon name="forward_10" /> 10s</FocusableButton>
-              <FocusableButton focusKey="PL_TRACKS" className="ply-btn" onEnterPress={() => { setTracksOpen((v) => !v); showOverlay(); window.setTimeout(() => setFocus("TRK_FIRST"), 60); }}>
+              <FocusableButton focusKey="PL_TRACKS" className="ply-btn" onEnterPress={() => { setTracksOpen((v) => !v); showOverlay(); }}>
                 <Icon name="tune" /> Audio y subtítulos
               </FocusableButton>
               {resumeAt.current > 5 ? (
@@ -333,7 +332,7 @@ export function Player() {
               ) : null}
             </div>
           </div>
-          {tracksOpen ? <TrackMenu hls={hls} video={videoRef.current} embedded={embTracks} embeddedMediaId={embMediaId} lunaDiag={lunaDiag} onClose={() => { setTracksOpen(false); setFocus("PL_TRACKS"); }} /> : null}
+          {tracksOpen ? <TrackSheet hls={hls} video={videoRef.current} embedded={embTracks} embeddedMediaId={embMediaId} onClose={() => { setTracksOpen(false); focusWhenReady("PL_TRACKS"); }} /> : null}
           {showNext ? (
             <div className="ply-next">
               <div className="ply-next-t">Fin del episodio</div>
@@ -350,7 +349,7 @@ export function Player() {
           {error ? (
             <div style={{ position: "absolute", bottom: 170, left: 0, right: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
               <div className="eo-r" style={{ textAlign: "center", color: "var(--err)" }}>{error}</div>
-              <FocusableButton focusKey="PL_RETRY" className="btn primary" onEnterPress={() => { setError(null); setReloadKey((k) => k + 1); window.setTimeout(() => setFocus("PL_PLAY"), 80); }}>
+              <FocusableButton focusKey="PL_RETRY" className="btn primary" onEnterPress={() => { setError(null); setReloadKey((k) => k + 1); focusWhenReady("PL_PLAY"); }}>
                 <Icon name="refresh" /> Reintentar
               </FocusableButton>
             </div>

@@ -1,6 +1,9 @@
 import { useEffect } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
-import { getCurrentFocusKey, setFocus } from "@noriginmedia/norigin-spatial-navigation";
+import {
+  getCurrentFocusKey,
+  setFocus,
+} from "@noriginmedia/norigin-spatial-navigation";
 import { Setup } from "./screens/Setup";
 import { Hub } from "./screens/Hub";
 import { Home } from "./screens/Home";
@@ -9,7 +12,7 @@ import { Player } from "./screens/Player";
 import { Pair } from "./screens/Pair";
 import { Search } from "./screens/Search";
 import { useAppStore } from "./store/useAppStore";
-import { isBackKey } from "./webos/remote-keys";
+import { installBackHandler } from "./navigation/backStack";
 
 /** Remonta el Player al cambiar de contenido (episodio→episodio) para resetear su estado. */
 function KeyedPlayer() {
@@ -25,35 +28,37 @@ export default function App() {
     if (source) reload();
   }, [source, reload]);
 
-  useEffect(() => {
-    // Global back-key fallback: close app at root, otherwise let route components handle it.
-    const onKey = (e: KeyboardEvent) => {
-      if (isBackKey(e) && window.location.hash.replace(/^#/, "") === "/hub") {
-        // On webOS, history.back() at the root will exit the app via disableBackHistoryAPI.
-        e.preventDefault();
-        try {
-          (window as unknown as { webOS?: { platformBack?: () => void } }).webOS?.platformBack?.();
-        } catch {
-          /* noop */
+  // ÚNICO listener de Back de toda la app (pila LIFO en backStack.ts).
+  // Cada pantalla/overlay registra su handler con useBack(). Acá solo
+  // queda el caso raíz: en /hub, Back sale de la app (webOS platformBack).
+  useEffect(
+    () =>
+      installBackHandler(() => {
+        if (window.location.hash.replace(/^#/, "") === "/hub") {
+          try {
+            (
+              window as unknown as { webOS?: { platformBack?: () => void } }
+            ).webOS?.platformBack?.();
+          } catch {
+            /* noop */
+          }
         }
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
+      }),
+    [],
+  );
 
+  // Recuperación de foco: si el D-pad "se pierde" (el puntero del Magic
+  // Remote movió el foco fuera, o se desmontó el elemento enfocado), al
+  // apretar una flecha sin foco visible restauramos el último conocido.
   useEffect(() => {
-    // Recuperación de foco: si el D-pad "se pierde" (el puntero del Magic Remote
-    // movió el foco fuera, o se desmontó el elemento enfocado), al apretar una
-    // flecha sin ningún elemento enfocado, restauramos el último foco conocido.
     const ARROWS = [37, 38, 39, 40];
     const onKey = (e: KeyboardEvent) => {
       if (!ARROWS.includes(e.keyCode)) return;
-      if (document.querySelector(".focused")) return; // ya hay foco visible
+      if (document.querySelector(".focused")) return;
       const last = getCurrentFocusKey();
       if (last) setFocus(last);
     };
-    window.addEventListener("keydown", onKey, true); // captura: antes que norigin
+    window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
   }, []);
 

@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { FocusContext, useFocusable, setFocus } from "@noriginmedia/norigin-spatial-navigation";
+import { FocusContext, useFocusable } from "@noriginmedia/norigin-spatial-navigation";
+import { focusWhenReady } from "../navigation/focusMemory";
 import QRCode from "qrcode";
 import { useAppStore } from "../store/useAppStore";
 import type { SourceConfig } from "../data/types";
 import { encodeB64Url } from "../data/b64url";
+import { useBack } from "../navigation/backStack";
 import { FocusableButton } from "../components/FocusableButton";
 import { Icon } from "../components/Icon";
-import { isBackKey } from "../webos/remote-keys";
 
 function genCode(): string {
   const abc = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // sin O/0/I/1 para que sea legible
@@ -39,7 +40,7 @@ export function Pair() {
   const [status, setStatus] = useState<"waiting" | "applying" | "done" | "error">("waiting");
 
   const { ref, focusKey } = useFocusable({ trackChildren: true, focusKey: "PAIR" });
-  useEffect(() => { setFocus("PAIR_CANCEL"); }, []);
+  useEffect(() => { focusWhenReady("PAIR_CANCEL"); }, []);
 
   const cfgParam = prefill && (prefill.source || prefill.name) ? `&cfg=${encodeB64Url(prefill)}` : "";
   const pairUrl = companionUrl ? `${companionUrl}/?code=${code}${cfgParam}` : "";
@@ -52,11 +53,7 @@ export function Pair() {
   }, [pairUrl]);
 
   // Back vuelve a Mis Listas.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (isBackKey(e)) { e.preventDefault(); navigate("/setup"); } };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [navigate]);
+  useBack(() => { navigate("/setup"); });
 
   // Polling del relay hasta recibir la config.
   useEffect(() => {

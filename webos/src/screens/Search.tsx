@@ -1,16 +1,18 @@
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FocusContext, useFocusable, setFocus } from "@noriginmedia/norigin-spatial-navigation";
+import { FocusContext, useFocusable } from "@noriginmedia/norigin-spatial-navigation";
+import { focusWhenReady } from "../navigation/focusMemory";
 import { useAppStore } from "../store/useAppStore";
 import { FocusableButton } from "../components/FocusableButton";
 import { FocusableInput } from "../components/FocusableInput";
+import { FocusZone } from "../components/FocusZone";
 import { Icon } from "../components/Icon";
 import { Rail } from "../components/Rail";
 import { TopBar } from "../components/TopBar";
 import { Hints } from "../components/Hints";
 import { useRailNav } from "../hooks/useRailNav";
+import { useBack } from "../navigation/backStack";
 import { encodeB64Url } from "../data/b64url";
-import { isBackKey } from "../webos/remote-keys";
 
 const MAX_PER_GROUP = 10;
 
@@ -34,7 +36,7 @@ export function Search() {
   const q = deferred.trim().toLowerCase();
 
   const { ref, focusKey } = useFocusable({ trackChildren: true, focusKey: "SEARCH" });
-  useEffect(() => { setFocus("SEARCH_IN"); }, []);
+  useEffect(() => { focusWhenReady("SEARCH_IN"); }, []);
 
   // Cargar las secciones VOD en segundo plano para poder buscar en todo.
   useEffect(() => {
@@ -43,11 +45,7 @@ export function Search() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (isBackKey(e)) { e.preventDefault(); navigate("/hub"); } };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [navigate]);
+  useBack(() => { navigate("/hub"); });
 
   const channels = useMemo(() => (q.length < 2 ? [] : catalog.liveChannels.filter((c) => c.name.toLowerCase().includes(q)).slice(0, MAX_PER_GROUP)), [catalog.liveChannels, q]);
   const movies = useMemo(() => (q.length < 2 ? [] : catalog.movies.filter((m) => m.name.toLowerCase().includes(q)).slice(0, MAX_PER_GROUP)), [catalog.movies, q]);
@@ -85,7 +83,7 @@ export function Search() {
               {!loadedSections.movies || !loadedSections.series ? (
                 <div className="a-pdesc" style={{ padding: "6px 0 0" }}><span className="spinner" style={{ width: 18, height: 18, display: "inline-block", verticalAlign: "middle", marginRight: 8 }} /> Cargando catálogo para buscar en todo…</div>
               ) : null}
-              <div className="gsr-scroll scroll">
+              <FocusZone zone="search:results" className="gsr-scroll scroll">
                 {q.length < 2 ? (
                   <div className="grd-empty">Escribí al menos 2 letras.</div>
                 ) : empty ? (
@@ -121,7 +119,7 @@ export function Search() {
                     ))}
                   </>
                 )}
-              </div>
+              </FocusZone>
             </div>
           </div>
         </div>

@@ -1,7 +1,7 @@
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import type { Channel, EpgProgram } from "../data/types";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { FocusContext, useFocusable, setFocus } from "@noriginmedia/norigin-spatial-navigation";
+import { FocusContext, useFocusable } from "@noriginmedia/norigin-spatial-navigation";
 import type Hls from "hls.js";
 import { useAppStore } from "../store/useAppStore";
 import { findNextProgram, findNowPlaying } from "../data/xmltv";
@@ -13,9 +13,11 @@ import { TopBar } from "../components/TopBar";
 import { Hints } from "../components/Hints";
 import { VideoPreview } from "../components/VideoPreview";
 import { VirtualList } from "../components/VirtualList";
-import { TrackMenu } from "../components/TrackMenu";
+import { TrackSheet } from "../components/TrackSheet";
+import { FocusZone } from "../components/FocusZone";
 import { encodeB64Url } from "../data/b64url";
-import { isBackKey } from "../webos/remote-keys";
+import { useBack } from "../navigation/backStack";
+import { focusWhenReady, restoreFocus } from "../navigation/focusMemory";
 
 type Tab = "live" | "movies" | "series" | "favorites";
 // Listas y grilla VOD se virtualizan (VirtualList): se renderizan completas sin tope.
@@ -39,7 +41,7 @@ function fmtClock(ms: number) {
  * filas cuyo `sel`/`fav` cambió, no las 250. Los callbacks deben ser estables.
  */
 const ChannelRow = memo(function ChannelRow({
-  channel, num, sel, fav, epg, onEnter, onFav, onArrow,
+  channel, num, sel, fav, epg, onEnter, onFav,
 }: {
   channel: Channel;
   num: number | string;
@@ -48,7 +50,6 @@ const ChannelRow = memo(function ChannelRow({
   epg: Map<string, EpgProgram[]>;
   onEnter: (id: string) => void;
   onFav: (c: Channel) => void;
-  onArrow: (dir: string) => boolean;
 }) {
   const now = findNowPlaying(epg, channel.tvgId);
   const ql = quality(channel.name);
@@ -57,7 +58,6 @@ const ChannelRow = memo(function ChannelRow({
       focusKey={`CH_${channel.id}`}
       className={`a-ch ${sel ? "playing" : ""}`}
       onEnterPress={() => onEnter(channel.id)}
-      onArrowPress={onArrow}
     >
       <span className="a-ch-num">{num}</span>
       <span className="a-ch-logo">{channel.logoUrl ? <img src={channel.logoUrl} alt="" loading="lazy" decoding="async" style={{ width: "100%", height: "100%", objectFit: "contain", borderRadius: 11 }} /> : initials(channel.name)}</span>
@@ -107,18 +107,12 @@ export function Home() {
 
   useEffect(() => { if (!source) navigate("/setup"); }, [source, navigate]);
 
-  // Back del control: si hay buscador abierto lo cierra; si no, vuelve al Inicio.
-  // (En pantalla completa, PreviewPanel intercepta el back antes con captura.)
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (!isBackKey(e) || fullscreen) return;
-      e.preventDefault();
-      if (searchOpen) { setSearchOpen(false); return; }
-      navigate("/hub");
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [fullscreen, searchOpen, navigate]);
+  // Back: buscador abierto lo cierra; si no, vuelve al Inicio.
+  // (El fullscreen del preview registra su propia capa más profunda.)
+  useBack(() => {
+    if (searchOpen) { setSearchOpen(false); return; }
+    navigate("/hub");
+  }, !fullscreen);
 
   useEffect(() => {
     if (tab === "movies" && !loadedSections.movies) ensureMovies();
@@ -129,7 +123,7 @@ export function Home() {
   const restored = useRef(false);
   useEffect(() => {
     if (tab === "live" && ui.selectedChannelId && !restored.current) return;
-    setFocus("CAT_0");
+    restoreFocus(`home:${tab}`, "CAT_0");
   }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const railSelect = (id: RailId) => {
@@ -196,7 +190,7 @@ export function Home() {
     if (restored.current || tab !== "live" || !selectedChannelId) { restored.current = true; return; }
     const idx = liveFiltered.findIndex((c) => c.id === selectedChannelId);
     restored.current = true;
-    if (idx >= 0) window.setTimeout(() => setFocus(`CH_${selectedChannelId}`), 140);
+    if (idx >= 0) focusWhenReady(`CH_${selectedChannelId}`);
   }, [tab, selectedChannelId, liveFiltered]);
 
   const pushHistory = useAppStore((s) => s.pushHistory);
@@ -223,16 +217,6 @@ export function Home() {
   const selRef = useRef(selectedChannelId);
   selRef.current = selectedChannelId;
 
-  // Al volver a la izquierda desde un canal, enfocar la categoría seleccionada.
-  const selCatKey = category === null ? "CAT_0" : `CATG_${categories.find((c) => c.name === category)?.id ?? ""}`;
-  const selCatKeyRef = useRef(selCatKey);
-  selCatKeyRef.current = selCatKey;
-  const onChannelLeft = useCallback((dir: string) => {
-    if (dir !== "left") return true;
-    setFocus(selCatKeyRef.current);
-    return false;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
   const liveSelIdx = useMemo(
     () => (selectedChannelId ? liveFiltered.findIndex((c) => c.id === selectedChannelId) : -1),
     [liveFiltered, selectedChannelId],
@@ -283,7 +267,7 @@ export function Home() {
         />
         <div className="a-body">
           <Rail active={tab} onSelect={railSelect} reloading={loading} />
-          <div className={`a-screen ${tab === "live" && !loading && !error ? "live-row" : ""}`}>
+          <FocusZone key={`home:${tab}`} zone={`home:${tab}`} className={`a-screen ${tab === "live" && !loading && !error ? "live-row" : ""}`}>
             {loading && !catalog.liveChannels.length ? (
               <div className="ld">
                 <div className="ld-spin spinner" />
@@ -298,7 +282,7 @@ export function Home() {
               </div>
             ) : tab === "live" ? (
               <>
-                <div className="a-cats">
+                <FocusZone zone="cats" preferred="CAT_0" className="a-cats">
                   <div className="a-cats-h"><span className="a-cats-t">Categorías</span><span className="a-cats-c">{categories.length}</span></div>
                   {searchOpen ? (
                     <div className="a-search">
@@ -325,9 +309,9 @@ export function Home() {
                       )
                     )}
                   />
-                </div>
+                </FocusZone>
 
-                <div className="a-list">
+                <FocusZone zone="list" className="a-list">
                   <div className="a-list-h">Canales · {category ?? "Todas"} · {liveFiltered.length}</div>
                   <VirtualList
                     className="a-list-vp scroll"
@@ -345,11 +329,10 @@ export function Home() {
                         epg={epgByChannel}
                         onEnter={onRowEnter}
                         onFav={onRowFav}
-                        onArrow={onChannelLeft}
                       />
                     )}
                   />
-                </div>
+                </FocusZone>
 
                 <PreviewPanel
                   channel={selectedChannel}
@@ -391,7 +374,7 @@ export function Home() {
                 onSort={() => setSortMode((m) => (m === "default" ? "recent" : m === "recent" ? "year" : m === "year" ? "az" : "default"))}
               />
             )}
-          </div>
+          </FocusZone>
         </div>
         <Hints items={tab === "live"
           ? [{ k: "↕↔", label: "Navegar" }, { k: "OK", label: "Ver / Pantalla completa" }, { k: "F", label: "Favorito" }, { k: "Esc", label: "Volver" }]
@@ -436,11 +419,14 @@ function PreviewPanel({
   const togglePause = () => { const v = videoElRef.current; if (!v) return; if (v.paused) { v.play().catch(() => undefined); setPaused(false); } else { v.pause(); setPaused(true); } };
   const poke = () => { setFsOverlay(true); if (fsTimer.current) window.clearTimeout(fsTimer.current); fsTimer.current = window.setTimeout(() => { if (!tracksRef.current) setFsOverlay(false); }, 5000); };
 
+  // Back en fullscreen: si la hoja de pistas está abierta, su propio useBack
+  // (más profundo) la cierra; si no, salimos a la lista.
+  useBack(() => { onExitFullscreen(); }, fullscreen);
+
   useEffect(() => {
-    if (!fullscreen) { if (prevFs.current) setFocus(channel ? `CH_${channel.id}` : "PV_PAUSE"); prevFs.current = false; return; }
-    prevFs.current = true; poke(); setFocus("FS_PAUSE");
+    if (!fullscreen) { if (prevFs.current) focusWhenReady(channel ? `CH_${channel.id}` : "PV_PAUSE"); prevFs.current = false; return; }
+    prevFs.current = true; poke(); focusWhenReady("FS_PAUSE");
     const onKey = (e: KeyboardEvent) => {
-      if (isBackKey(e)) { e.preventDefault(); e.stopPropagation(); if (tracksRef.current) { setTracksOpen(false); setFocus("FS_TRACKS"); } else onExitFullscreen(); return; }
       if (!tracksRef.current && (e.key === "ArrowUp" || e.key === "ArrowDown")) e.stopPropagation();
       poke();
     };
@@ -451,7 +437,7 @@ function PreviewPanel({
   const progPct = now && now.stopMs > now.startMs ? Math.max(0, Math.min(100, ((Date.now() - now.startMs) / (now.stopMs - now.startMs)) * 100)) : 0;
 
   return (
-    <aside className="a-prev">
+    <FocusZone zone="preview" className="a-prev">
       {!channel ? (
         <div className="a-prev-empty"><Icon name="live_tv" size={64} /><div>Apretá OK en un canal para verlo acá con sonido. OK de nuevo: pantalla completa.</div></div>
       ) : (
@@ -501,12 +487,12 @@ function PreviewPanel({
                     ) : null}
                     <div className="a-fs-ctrls">
                       <FocusableButton focusKey="FS_PAUSE" className="a-fs-btn" onEnterPress={togglePause}><Icon name={paused ? "play_arrow" : "pause"} /> {paused ? "Reproducir" : "Pausa"}</FocusableButton>
-                      <FocusableButton focusKey="FS_TRACKS" className="a-fs-btn" onEnterPress={() => { setTracksOpen((v) => !v); poke(); window.setTimeout(() => setFocus("TRK_FIRST"), 60); }}><Icon name="tune" /> Pistas</FocusableButton>
+                      <FocusableButton focusKey="FS_TRACKS" className="a-fs-btn" onEnterPress={() => { setTracksOpen((v) => !v); poke(); }}><Icon name="tune" /> Pistas</FocusableButton>
                       <FocusableButton className="a-fs-btn" onEnterPress={toggleFav}><Icon name={isFav ? "star" : "star_border"} /> {isFav ? "Quitar" : "Favorito"}</FocusableButton>
                       <FocusableButton className="a-fs-btn" onEnterPress={onExitFullscreen}><Icon name="arrow_back" /> Volver</FocusableButton>
                     </div>
                   </div>
-                  {tracksOpen ? <TrackMenu hls={hls} onClose={() => { setTracksOpen(false); setFocus("FS_TRACKS"); }} /> : null}
+                  {tracksOpen ? <TrackSheet hls={hls} onClose={() => { setTracksOpen(false); focusWhenReady("FS_TRACKS"); }} /> : null}
                 </div>
               </>
             )}
@@ -539,7 +525,7 @@ function PreviewPanel({
           ) : null}
         </>
       )}
-    </aside>
+    </FocusZone>
   );
 }
 

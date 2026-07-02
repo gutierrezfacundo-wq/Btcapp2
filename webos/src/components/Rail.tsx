@@ -1,4 +1,5 @@
 import { FocusableButton } from "./FocusableButton";
+import { FocusZone } from "./FocusZone";
 import { Icon } from "./Icon";
 
 export type RailId =
@@ -42,10 +43,10 @@ export function Rail({
     </FocusableButton>
   );
   return (
-    <nav className="a-rail">
+    <FocusZone zone={`${focusPrefix}:zone`} className="a-rail">
       {TOP.map(btn)}
       <div className="a-railsp" />
       {BOTTOM.map(btn)}
-    </nav>
+    </FocusZone>
   );
 }

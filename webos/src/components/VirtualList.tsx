@@ -1,4 +1,16 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+// ============================================================
+// REEMPLAZO drop-in del VirtualList actual. Cambio clave de rendimiento:
+// la versión actual re-mide con getBoundingClientRect en CADA render
+// (useLayoutEffect sin deps) → layout sync forzado en cada pulsación
+// del D-pad = micro-trabas al scrollear. Ahora mide UNA vez por lista.
+// ============================================================
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 
 interface Props<T> {
   items: T[];
@@ -13,16 +25,18 @@ interface Props<T> {
   scrollToIndex?: number;
 }
 
-/**
- * Lista virtualizada por scroll: solo renderiza las filas visibles (+overscan),
- * con espaciadores arriba/abajo para preservar la geometría del scroll. Mantiene
- * el DOM chico para que el D-pad y el pintado vayan rápido en la TV.
- */
 export function VirtualList<T>({
-  items, estRowHeight, overscan = 8, getKey, renderRow, className, scrollToIndex,
+  items,
+  estRowHeight,
+  overscan = 8,
+  getKey,
+  renderRow,
+  className,
+  scrollToIndex,
 }: Props<T>) {
   const ref = useRef<HTMLDivElement | null>(null);
   const rowH = useRef(estRowHeight);
+  const measured = useRef(false);
   const [range, setRange] = useState({ start: 0, end: overscan * 3 });
 
   const recompute = () => {
@@ -36,23 +50,30 @@ export function VirtualList<T>({
     setRange((r) => (r.start === start && r.end === end ? r : { start, end }));
   };
 
-  // Medir la altura real de fila (incluye margen) entre dos filas consecutivas.
+  // Medir la altura real de fila UNA sola vez por lista (antes corría en
+  // cada render y forzaba layout sync con cada movimiento de foco).
   useLayoutEffect(() => {
+    if (measured.current) return;
     const el = ref.current;
     if (!el) return;
     const rows = el.querySelectorAll("[data-vrow]");
     if (rows.length >= 2) {
       const a = (rows[0] as HTMLElement).getBoundingClientRect();
       const b = (rows[1] as HTMLElement).getBoundingClientRect();
-      const measured = Math.abs(b.top - a.top);
-      if (measured > 1 && Math.abs(measured - rowH.current) > 0.5) {
-        rowH.current = measured;
-        recompute();
+      const m = Math.abs(b.top - a.top);
+      if (m > 1) {
+        measured.current = true;
+        if (Math.abs(m - rowH.current) > 0.5) {
+          rowH.current = m;
+          recompute();
+        }
       }
     }
   });
 
-  useEffect(() => { recompute(); /* reset al cambiar la lista */
+  useEffect(() => {
+    measured.current = false; // nueva lista → volver a medir una vez
+    recompute();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items]);
 
@@ -60,7 +81,10 @@ export function VirtualList<T>({
     if (scrollToIndex == null || scrollToIndex < 0) return;
     const el = ref.current;
     if (!el) return;
-    el.scrollTop = Math.max(0, scrollToIndex * rowH.current - el.clientHeight / 2);
+    el.scrollTop = Math.max(
+      0,
+      scrollToIndex * rowH.current - el.clientHeight / 2,
+    );
     recompute();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scrollToIndex]);
@@ -74,7 +98,9 @@ export function VirtualList<T>({
     <div ref={ref} className={className} onScroll={recompute}>
       <div style={{ height: topPad, flexShrink: 0 }} />
       {items.slice(start, end).map((it, i) => (
-        <div data-vrow key={getKey(it, start + i)}>{renderRow(it, start + i)}</div>
+        <div data-vrow key={getKey(it, start + i)}>
+          {renderRow(it, start + i)}
+        </div>
       ))}
       <div style={{ height: botPad, flexShrink: 0 }} />
     </div>

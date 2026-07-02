@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { FocusContext, useFocusable, setFocus } from "@noriginmedia/norigin-spatial-navigation";
+import { FocusContext, useFocusable } from "@noriginmedia/norigin-spatial-navigation";
 import { useAppStore } from "../store/useAppStore";
 import { loadSeriesEpisodes } from "../data/xtream";
 import type { Episode, SeriesMeta } from "../data/types";
@@ -11,7 +11,9 @@ import { TopBar } from "../components/TopBar";
 import { Hints } from "../components/Hints";
 import { useRailNav } from "../hooks/useRailNav";
 import { encodeB64Url } from "../data/b64url";
-import { isBackKey } from "../webos/remote-keys";
+import { useBack } from "../navigation/backStack";
+import { focusWhenReady } from "../navigation/focusMemory";
+import { FocusZone } from "../components/FocusZone";
 
 function initials(s: string) {
   return s.split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
@@ -45,7 +47,7 @@ export function SeriesDetail() {
       .catch((e) => setError(e instanceof Error ? e.message : "Error"));
   }, [source, id]);
 
-  useEffect(() => { setFocus("SER_PLAY"); }, [episodes]);
+  useEffect(() => { if (episodes) focusWhenReady("SER_PLAY"); }, [episodes]);
 
   const goBack = () => {
     navigate("/home?tab=series");
@@ -53,11 +55,7 @@ export function SeriesDetail() {
       if (window.location.hash.replace(/^#/, "").startsWith("/series")) window.location.hash = "#/home?tab=series";
     }, 60);
   };
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (isBackKey(e)) { e.preventDefault(); goBack(); } };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useBack(() => { goBack(); });
 
   const seasons = useMemo(
     () => (episodes ? [...new Set(episodes.map((e) => e.seasonNumber))].sort((a, b) => a - b) : []),
@@ -142,15 +140,15 @@ export function SeriesDetail() {
                   </div>
                 </div>
                 {seasons.length > 1 ? (
-                  <div className="det-seasons">
+                  <FocusZone zone="seasons" className="det-seasons">
                     {seasons.map((s) => (
                       <FocusableButton key={s} className={`chip ${s === season ? "on" : ""}`} onEnterPress={() => setSeason(s)}>
                         Temporada {s}
                       </FocusableButton>
                     ))}
-                  </div>
+                  </FocusZone>
                 ) : null}
-                <div className="det-eps scroll">
+                <FocusZone zone="episodes" className="det-eps scroll">
                   {seasonEpisodes.length === 0 ? (
                     <div className="grd-empty">Sin episodios</div>
                   ) : (
@@ -175,7 +173,7 @@ export function SeriesDetail() {
                       );
                     })
                   )}
-                </div>
+                </FocusZone>
               </div>
             )}
           </div>

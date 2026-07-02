@@ -3,16 +3,23 @@ import ReactDOM from "react-dom/client";
 import { HashRouter } from "react-router-dom";
 import { init as initSpatial } from "@noriginmedia/norigin-spatial-navigation";
 import App from "./App";
+import { installKeyAcceleration } from "./navigation/keyAccel";
 import "./styles/global.css";
 import "./styles/aurora.css";
+import "./styles/focus.css";
+import "./styles/tracksheet.css";
 
 initSpatial({
   debug: false,
   visualDebug: false,
-  // Sin throttle el foco responde inmediato a cada pulsacion del D-pad.
+  // Sin throttle el foco responde inmediato a cada pulsación del D-pad.
+  // La velocidad al MANTENER apretado la maneja keyAccel (2x/3x).
   throttle: 0,
   throttleKeypresses: false,
 });
+
+// Mantener flecha apretada = acelerar (estilo Apple TV).
+installKeyAcceleration();
 
 // Escala el stage 1920x1080 para llenar la pantalla real (4K, ventana de PC, etc.)
 // manteniendo las coordenadas de diseño. Centra con letterbox si el aspecto difiere.

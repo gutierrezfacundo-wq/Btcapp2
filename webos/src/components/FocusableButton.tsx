@@ -1,10 +1,23 @@
+// ============================================================
+// FocusableButton (rediseño de navegación estilo Apple TV):
+// 1. anchorScroll en vez de scrollIntoView({block:"nearest"}) →
+//    foco fijo: la lista se desliza suave debajo del ítem.
+// 2. Registra memoria de foco en todas las zonas ancestras
+//    (FocusZone + focusMemory) al recibir foco.
+// 3. onArrowPress se reenvía a norigin.
+// 4. Magic Remote: hover toma el foco (salvo mientras se escribe en un
+//    input) y el click activa — puntero y D-pad comparten un solo foco.
+// ============================================================
 import { type CSSProperties, type ReactNode } from "react";
 import { useFocusable } from "@noriginmedia/norigin-spatial-navigation";
+import { anchorScroll } from "../navigation/anchorScroll";
+import { rememberFocus } from "../navigation/focusMemory";
+import { useZoneChain } from "./FocusZone";
 
 interface Props {
   onEnterPress?: () => void;
   onFocus?: () => void;
-  /** Devolver false cancela la navegación por defecto en esa dirección. */
+  /** Devolver false para bloquear el movimiento por defecto. */
   onArrowPress?: (direction: string) => boolean;
   children: ReactNode;
   className?: string;
@@ -23,18 +36,16 @@ export function FocusableButton({
   focusKey,
   disabled,
 }: Props) {
-  const { ref, focused, focusSelf } = useFocusable({
+  const zones = useZoneChain();
+  const { ref, focused, focusSelf, focusKey: resolvedKey } = useFocusable({
     focusKey,
-    onArrowPress: (direction) => (onArrowPress ? onArrowPress(direction) : true),
     onEnterPress: () => {
       if (!disabled) onEnterPress?.();
     },
+    onArrowPress,
     onFocus: () => {
-      // Mantener visible el item enfocado al navegar listas largas.
-      (ref.current as HTMLElement | null)?.scrollIntoView({
-        block: "nearest",
-        inline: "nearest",
-      });
+      anchorScroll(ref.current as HTMLElement | null);
+      for (const z of zones) rememberFocus(z, resolvedKey);
       onFocus?.();
     },
   });
@@ -44,10 +55,9 @@ export function FocusableButton({
       ref={ref}
       className={`focusable ${focused ? "focused" : ""} ${className ?? ""}`}
       style={style}
-      // Magic Remote (puntero): al pasar por encima tomamos el foco para que el
-      // D-pad continúe desde acá. Excepción: si se está escribiendo en un input
-      // (teclado en pantalla), no robamos el foco al pasar por encima.
-      onMouseEnter={() => { if (!disabled && !(document.activeElement instanceof HTMLInputElement)) focusSelf(); }}
+      onMouseEnter={() => {
+        if (!disabled && !(document.activeElement instanceof HTMLInputElement)) focusSelf();
+      }}
       onClick={() => {
         if (!disabled) { focusSelf(); onEnterPress?.(); }
       }}

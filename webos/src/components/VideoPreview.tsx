@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import Hls from "hls.js";
-import { setFocus } from "@noriginmedia/norigin-spatial-navigation";
+import { focusWhenReady } from "../navigation/focusMemory";
 import { FocusableButton } from "./FocusableButton";
 import { Icon } from "./Icon";
 
@@ -28,7 +28,7 @@ export function VideoPreview({ url, muted = true, onVideoEl, onHls, onResolution
 
   // Al fallar, llevamos el foco al botón Reintentar para que se pueda usar con el control.
   useEffect(() => {
-    if (status === "error") window.setTimeout(() => setFocus("PV_RETRY"), 60);
+    if (status === "error") focusWhenReady("PV_RETRY");
   }, [status]);
 
   useEffect(() => {

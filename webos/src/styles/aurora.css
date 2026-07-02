@@ -185,18 +185,6 @@
   .ply-btn .ms{font-size:25px}
 
   /* ===== TRACKS PANEL ===== */
-  .a-trk{position:absolute;top:0;right:0;bottom:0;width:480px;z-index:40;background:rgba(10,10,14,.97);border-left:2px solid var(--accent);display:flex;flex-direction:column;padding:40px 36px;box-shadow:-30px 0 80px rgba(0,0,0,.6)}
-  .a-trk-h{display:flex;align-items:center;gap:14px;font-family:'Schibsted Grotesk',sans-serif;font-size:34px;font-weight:700}
-  .a-trk-h .ms{font-size:36px;color:var(--accent)}
-  .a-trk-scroll{flex:1;overflow:hidden;margin-top:18px}
-  .a-trk-sec{font-size:15px;letter-spacing:2.5px;color:var(--accent);font-weight:700;text-transform:uppercase;margin:22px 0 8px}
-  .a-trk-sec.first{margin-top:0}
-  .a-trk-item{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-radius:12px;font-size:23px;border:1px solid transparent;cursor:pointer}
-  .a-trk-item .ms{font-size:26px;color:var(--accent)}
-  .a-trk-item.on{color:var(--accent);font-weight:700}
-  .a-trk-item.focused{border-color:var(--accent);background:var(--soft);box-shadow:0 0 0 2px var(--ring)}
-  .a-trk-close{margin-top:14px;text-align:center;padding:16px;border-radius:12px;background:var(--surface2);border:1px solid var(--line);font-size:20px;font-weight:600;cursor:pointer}
-  .a-trk-close.focused{box-shadow:0 0 0 3px var(--ring)}
 
   /* ===== DETALLE DE SERIE ===== */
   .det{display:flex;flex-direction:column;overflow:hidden}
@@ -391,18 +379,6 @@
   .a-fs-btn.primary{background:var(--accent);color:#1a1500;border-color:var(--accent)}
   .a-fs-btn.focused{box-shadow:0 0 0 3px var(--ring);transform:scale(1.03)}
   /* tracks */
-  .a-trk{position:absolute;top:0;right:0;bottom:0;width:480px;z-index:40;background:rgba(10,10,14,.97);border-left:2px solid var(--accent);display:flex;flex-direction:column;padding:40px 36px;box-shadow:-30px 0 80px rgba(0,0,0,.6)}
-  .a-trk-h{display:flex;align-items:center;gap:14px;font-family:'Schibsted Grotesk',sans-serif;font-size:34px;font-weight:700;margin-bottom:10px}
-  .a-trk-h .ms{font-size:36px;color:var(--accent)}
-  .a-trk-scroll{flex:1;overflow:hidden;margin-top:14px}
-  .a-trk-sec{font-size:15px;letter-spacing:2.5px;color:var(--accent);font-weight:700;text-transform:uppercase;margin:22px 0 8px}
-  .a-trk-sec:first-child{margin-top:0}
-  .a-trk-item{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-radius:12px;font-size:23px;border:1px solid transparent;cursor:pointer}
-  .a-trk-item .ms{font-size:26px;color:var(--accent)}
-  .a-trk-item.on{color:var(--accent);font-weight:700}
-  .a-trk-item.focused{border-color:var(--accent);background:var(--soft);box-shadow:0 0 0 2px var(--ring)}
-  .a-trk-close{margin-top:14px;text-align:center;padding:16px;border-radius:12px;background:var(--surface2);border:1px solid var(--line);font-size:20px;font-weight:600;cursor:pointer}
-  .a-trk-close.focused{box-shadow:0 0 0 3px var(--ring)}
 
 /* ===== Añadidos de integración ===== */
 .ascreen{width:100%;height:100%;display:flex;flex-direction:column;overflow:hidden}
@@ -422,14 +398,6 @@
    desplazarse (las reglas .grd-scroll/.a-list-vp/etc. ponen overflow:hidden y
    ganaban por orden, dejándolos scrollables solo por D-pad). */
 .scroll{overflow-y:auto !important}
-
-/* Navegación más rápida: el cambio de foco no anima box-shadow (repaint caro). */
-.a-ch{transition:transform .09s !important}
-.a-cat{transition:none !important}
-/* En items con imagen, escalar al enfocar repinta la imagen (lento en TV):
-   dejamos solo el anillo dorado, sin scale/translate. */
-.a-ch.focused,.a-ch:hover{transform:none !important}
-.poster.focused,.poster:hover{transform:none !important}
 
 /* Grilla VOD virtualizada: cada fila es una grilla de 6 columnas */
 .grd-row{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:26px;padding-bottom:26px}
@@ -501,7 +469,3 @@ video::cue{background:rgba(0,0,0,.65);color:#fff}
 .a-cat-t{font-size:15px}
 
 /* Panel de subtitulos online: idioma + release */
-.a-trk-lang{font-family:'Space Grotesk',monospace;font-size:15px;font-weight:700;color:var(--accent);background:var(--soft);padding:2px 9px;border-radius:6px;flex-shrink:0}
-.a-trk-rel{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left;margin-left:10px;font-size:19px}
-/* Chips de tamaño de subtítulo (menú de Pistas) */
-.a-sub-langs{display:flex;gap:8px;margin-bottom:10px;padding:0 6px}
