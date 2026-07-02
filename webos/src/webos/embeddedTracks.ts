@@ -37,15 +37,21 @@ interface SourceInfoMsg {
 
 /**
  * Se suscribe al pipeline y reporta las pistas embebidas cuando el demuxer
- * las publica. Devuelve la función para cancelar la suscripción.
+ * las publica. IMPORTANTE: el pipeline anuncia sourceInfo al cargar el video,
+ * así que hay que suscribirse APENAS empieza la reproducción (no al abrir el
+ * menú). `onRaw` recibe las claves de cada mensaje (diagnóstico).
  */
 export function watchEmbeddedTracks(
   mediaId: string,
   onTracks: (t: EmbeddedTrackInfo) => void,
+  onRaw?: (keys: string) => void,
 ): () => void {
   if (!hasLuna()) return () => undefined;
-  return lunaCall<SourceInfoMsg>(MEDIA, "subscribe", { mediaId }, (msg) => {
-    const prog = msg.sourceInfo?.programInfo?.[0];
+  return lunaCall<SourceInfoMsg & Record<string, unknown>>(MEDIA, "subscribe", { mediaId }, (msg) => {
+    onRaw?.(Object.keys(msg).join(","));
+    // Tolerante a variantes de firmware: sourceInfo directo o anidado.
+    const src = msg.sourceInfo ?? (msg as { payload?: SourceInfoMsg["sourceInfo"] }).payload;
+    const prog = src?.programInfo?.[0];
     if (!prog) return;
     const audio: EmbeddedTrack[] = (prog.audioTrackInfo ?? [])
       .slice(0, prog.numAudioTracks ?? undefined)

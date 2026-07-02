@@ -35,20 +35,31 @@ function trackLabel(t: { label?: string; language?: string }, i: number, kind: s
 }
 
 /** Panel lateral de pistas: Calidad (HLS) / Audio / Subtítulos. Soporta HLS y video nativo (VOD mp4/mkv). */
-export function TrackMenu({ hls, video, onClose }: { hls: Hls | null; video?: HTMLVideoElement | null; onClose: () => void }) {
+export function TrackMenu({ hls, video, onClose, embedded, embeddedMediaId, lunaDiag }: {
+  hls: Hls | null;
+  video?: HTMLVideoElement | null;
+  onClose: () => void;
+  /** Pistas embebidas ya observadas por el Player (suscripto desde el arranque). */
+  embedded?: EmbeddedTrackInfo | null;
+  embeddedMediaId?: string | null;
+  lunaDiag?: string;
+}) {
   const [, setTick] = useState(0);
   const refresh = () => setTick((t) => t + 1);
 
   // Pistas embebidas vía el pipeline de webOS (luna://com.webos.media): es lo
   // que ve el decodificador de la TV, aunque textTracks/audioTracks estén vacíos.
-  const [emb, setEmb] = useState<EmbeddedTrackInfo | null>(null);
+  // Preferimos lo que ya observó el Player (suscripto a tiempo); si no, miramos acá.
+  const [internalEmb, setInternalEmb] = useState<EmbeddedTrackInfo | null>(null);
   const [embSub, setEmbSub] = useState(-1);   // índice elegido (-1 = desactivado)
   const [embAud, setEmbAud] = useState(0);
-  const mediaId = !hls && video ? getMediaId(video) : null;
+  const internalMediaId = !hls && video ? getMediaId(video) : null;
+  const mediaId = embeddedMediaId ?? internalMediaId;
+  const emb = embedded ?? internalEmb;
   useEffect(() => {
-    if (!mediaId) return;
-    return watchEmbeddedTracks(mediaId, setEmb);
-  }, [mediaId]);
+    if (embedded !== undefined || !internalMediaId) return;
+    return watchEmbeddedTracks(internalMediaId, setInternalEmb);
+  }, [embedded, internalMediaId]);
   const pickEmbSub = (i: number) => {
     if (!mediaId) return;
     if (i < 0) setSubtitleEnable(mediaId, false);
@@ -122,7 +133,8 @@ export function TrackMenu({ hls, video, onClose }: { hls: Hls | null; video?: HT
   const subDiag = (rawSubs.length
     ? rawSubs.map((t, i) => `${i}:${t.kind || "?"}/${t.language || t.label || "?"}`).join("  ")
     : "ninguna")
-    + ` · pipeline(${mediaId ? "ok" : "sin id"}): ${emb ? `${emb.audio.length}a/${emb.subs.length}s` : "—"}`;
+    + ` · pipeline(${mediaId ? "ok" : "sin id"}): ${emb ? `${emb.audio.length}a/${emb.subs.length}s` : "—"}`
+    + (lunaDiag ? ` · luna: ${lunaDiag}` : "");
   const activeAudio = audio.findIndex((t) => t.enabled);
   const activeSub = subs.findIndex((t) => t.mode === "showing");
 

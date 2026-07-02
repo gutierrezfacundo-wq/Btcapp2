@@ -9,6 +9,7 @@ import { TrackMenu } from "../components/TrackMenu";
 import { useAppStore, type FavoriteItem } from "../store/useAppStore";
 import { getSubtitleService, SubtitleError, type SubtitleResult, type SubtitleSearchRequest } from "../services/subtitles";
 import { decodeB64Url } from "../data/b64url";
+import { getMediaId, watchEmbeddedTracks, type EmbeddedTrackInfo } from "../webos/embeddedTracks";
 import { isBackKey, isPlayPauseKey, RemoteKey } from "../webos/remote-keys";
 
 /** Estado que viaja DENTRO de la URL (?st=): location.state se pierde en webOS. */
@@ -113,6 +114,32 @@ export function Player() {
   const [tracksOpen, setTracksOpen] = useState(false);
   const tracksRef = useRef(false); tracksRef.current = tracksOpen;
   const overlayTimer = useRef<number | null>(null);
+
+  // Pistas embebidas (pipeline webOS): suscribirse APENAS arranca el video,
+  // porque el pipeline anuncia sourceInfo una sola vez al cargar.
+  const [embTracks, setEmbTracks] = useState<EmbeddedTrackInfo | null>(null);
+  const [lunaDiag, setLunaDiag] = useState("");
+  const [embMediaId, setEmbMediaId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!IS_WEBOS) return;
+    let cancel: (() => void) | undefined;
+    let tries = 0;
+    // El mediaId aparece asincrónicamente al montar el pipeline: sondeamos.
+    const timer = window.setInterval(() => {
+      tries += 1;
+      const id = getMediaId(videoRef.current);
+      if (id) {
+        window.clearInterval(timer);
+        setEmbMediaId(id);
+        cancel = watchEmbeddedTracks(id, setEmbTracks, (keys) => setLunaDiag(keys));
+      } else if (tries > 40) {
+        window.clearInterval(timer);
+        setLunaDiag("sin mediaId");
+      }
+    }, 250);
+    return () => { window.clearInterval(timer); cancel?.(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [url, reloadKey]);
 
   // ===== Subtítulos (vía SubtitleService, agnóstico del proveedor) =====
   const subtitlesApiKey = useAppStore((s) => s.subtitlesApiKey);
@@ -436,7 +463,7 @@ export function Player() {
               ) : null}
             </div>
           </div>
-          {tracksOpen ? <TrackMenu hls={hls} video={videoRef.current} onClose={() => { setTracksOpen(false); setFocus("PL_TRACKS"); }} /> : null}
+          {tracksOpen ? <TrackMenu hls={hls} video={videoRef.current} embedded={embTracks} embeddedMediaId={embMediaId} lunaDiag={lunaDiag} onClose={() => { setTracksOpen(false); setFocus("PL_TRACKS"); }} /> : null}
           {subsOpen ? (
             <div className="a-trk">
               <div className="a-trk-h"><Icon name="subtitles" /> Subtítulos</div>
