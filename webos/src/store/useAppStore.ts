@@ -22,6 +22,7 @@ const CATPREFS_KEY = "iptv.catPrefs.v1";     // + ":<sourceKey>": ocultar/reorde
 const KIDSMODE_KEY = "iptv.kidsMode.v1";     // modo Félix activo (sobrevive al reinicio)
 const PIN_KEY = "iptv.parentalPin.v1";       // PIN parental (protege la salida del modo Félix)
 const KIDSPREFS_KEY = "iptv.kidsPrefs.v1";   // + ":<sourceKey>": contenido apto para niños
+const KIDSTIMER_KEY = "iptv.kidsTimer.v1";   // fin del temporizador del modo Félix (ms epoch)
 
 function genId(): string {
   return `src-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`;
@@ -251,6 +252,8 @@ interface AppState {
   parentalPin: string;
   /** Contenido apto para niños de la lista activa. */
   kidsPrefs: KidsPrefs;
+  /** Temporizador del modo Félix: momento de apagado (ms epoch), null = sin límite. */
+  kidsTimerEndsAt: number | null;
   /** Cola de reproducción (episodios de la temporada en curso) para "siguiente episodio". */
   playQueue: { route: string; label: string; url: string }[];
   epgByChannel: Map<string, EpgProgram[]>;
@@ -290,6 +293,8 @@ interface AppState {
   setParentalPin: (pin: string) => void;
   toggleKidsCategory: (section: CatSection, name: string) => void;
   toggleKidsItem: (id: string) => void;
+  /** Arranca el temporizador del modo Félix (minutos) o lo apaga (null). */
+  setKidsTimer: (minutes: number | null) => void;
   setPlayQueue: (q: { route: string; label: string; url: string }[]) => void;
 }
 
@@ -325,6 +330,15 @@ export const useAppStore = create<AppState>((set, get) => ({
   kidsMode: (() => { try { return localStorage.getItem(KIDSMODE_KEY) === "1"; } catch { return false; } })(),
   parentalPin: (() => { try { return localStorage.getItem(PIN_KEY) ?? ""; } catch { return ""; } })(),
   kidsPrefs: loadKidsPrefs(initial.sources.find((s) => s.id === initial.activeId)?.config ?? null),
+  // Un temporizador vencido de una sesión anterior no se arrastra: se limpia.
+  kidsTimerEndsAt: (() => {
+    try {
+      const v = Number(localStorage.getItem(KIDSTIMER_KEY));
+      if (Number.isFinite(v) && v > Date.now()) return v;
+      localStorage.removeItem(KIDSTIMER_KEY);
+    } catch { /* ignore */ }
+    return null;
+  })(),
   epgByChannel: new Map(),
   loadedSections: { movies: false, series: false },
   ui: (() => {
@@ -586,7 +600,22 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setKidsMode: (on) => {
     try { localStorage.setItem(KIDSMODE_KEY, on ? "1" : "0"); } catch { /* ignore */ }
+    // Al salir del modo se apaga también el temporizador.
+    if (!on) {
+      try { localStorage.removeItem(KIDSTIMER_KEY); } catch { /* ignore */ }
+      set({ kidsMode: on, kidsTimerEndsAt: null });
+      return;
+    }
     set({ kidsMode: on });
+  },
+
+  setKidsTimer: (minutes) => {
+    const endsAt = minutes ? Date.now() + minutes * 60000 : null;
+    try {
+      if (endsAt) localStorage.setItem(KIDSTIMER_KEY, String(endsAt));
+      else localStorage.removeItem(KIDSTIMER_KEY);
+    } catch { /* ignore */ }
+    set({ kidsTimerEndsAt: endsAt });
   },
 
   setParentalPin: (pin) => {

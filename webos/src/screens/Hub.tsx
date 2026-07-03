@@ -43,7 +43,18 @@ export function Hub() {
   const setKidsMode = useAppStore((s) => s.setKidsMode);
   const parentalPin = useAppStore((s) => s.parentalPin);
   const kidsPrefs = useAppStore((s) => s.kidsPrefs);
+  const kidsTimerEndsAt = useAppStore((s) => s.kidsTimerEndsAt);
+  const setKidsTimer = useAppStore((s) => s.setKidsTimer);
   const [pinOpen, setPinOpen] = useState(false);
+
+  // Refrescar "quedan X min" del temporizador cada 30 s.
+  const [, timerTick] = useState(0);
+  useEffect(() => {
+    if (!kidsMode || !kidsTimerEndsAt) return;
+    const t = window.setInterval(() => timerTick((x) => x + 1), 30000);
+    return () => window.clearInterval(t);
+  }, [kidsMode, kidsTimerEndsAt]);
+  const remainMin = kidsTimerEndsAt ? Math.max(0, Math.ceil((kidsTimerEndsAt - Date.now()) / 60000)) : null;
 
   useEffect(() => {
     if (!source) navigate("/setup");
@@ -181,6 +192,20 @@ export function Hub() {
                     </FocusableButton>
                   )}
                 </FocusZone>
+                {kidsMode ? (
+                  <div className="hub-cont">
+                    <div className="hub-cont-h">Temporizador</div>
+                    <FocusZone zone="hub:timer" className="gsr-kinds hub-timer">
+                      {[{ m: 30, l: "30 min" }, { m: 60, l: "1 hora" }, { m: 90, l: "1 hora y media" }].map(({ m, l }) => (
+                        <FocusableButton key={m} className="chip" onEnterPress={() => setKidsTimer(m)}>{l}</FocusableButton>
+                      ))}
+                      <FocusableButton className={`chip ${!kidsTimerEndsAt ? "on" : ""}`} onEnterPress={() => setKidsTimer(null)}>Sin límite</FocusableButton>
+                      {remainMin !== null ? (
+                        <span className="hub-timer-left"><Icon name="schedule" /> quedan {remainMin} min</span>
+                      ) : null}
+                    </FocusZone>
+                  </div>
+                ) : null}
                 {shownHistory.length ? (
                   <div className="hub-cont">
                     <div className="hub-cont-h">Seguir viendo</div>

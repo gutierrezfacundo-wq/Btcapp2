@@ -582,3 +582,13 @@ body.kids .hub-greet{color:#ffd166;font-size:26px;font-weight:700}
 body.kids .a-ch,body.kids .a-cat,body.kids .chip,body.kids .a-btn,body.kids .btn{border-radius:20px}
 body.kids .poster-img{border-radius:22px}
 body.kids .a-ch.focused,body.kids .a-cat.focused{background:var(--soft)}
+
+/* ===== Temporizador del modo Felix ===== */
+.hub-timer{align-items:center;margin-top:10px}
+.hub-timer-left{display:flex;align-items:center;gap:8px;font-size:19px;color:var(--accent);font-weight:600;margin-left:10px}
+.sleep-ov{position:fixed;inset:0;z-index:70;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;background:radial-gradient(120% 90% at 50% -10%,#1b2452 0%,#0d1230 60%,#070a1e 100%)}
+.sleep-moon{font-size:120px;line-height:1;animation:sleepfloat 3.4s ease-in-out infinite}
+@keyframes sleepfloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-16px)}}
+.sleep-t{font-family:'Schibsted Grotesk',sans-serif;font-size:52px;font-weight:800;color:#fff}
+.sleep-s{font-size:24px;color:#aab4d4}
+.sleep-btn{margin-top:26px}
