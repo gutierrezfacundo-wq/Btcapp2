@@ -189,6 +189,13 @@ export function Setup() {
                           {s.channelCount != null ? <><span className="sep">·</span><span>{s.channelCount} canales</span></> : null}
                           <span className="sep">·</span><span>{relTime(s.lastUpdated)}</span>
                         </div>
+                        {active && acct?.expDate ? (
+                          <div className={`src-exp ${acct.expDate - Date.now() < 7 * 86400000 ? "soon" : ""}`}>
+                            <Icon name="event" /> Vence el {new Date(acct.expDate).toLocaleDateString([], { day: "2-digit", month: "2-digit", year: "numeric" })}
+                            {" "}({Math.max(0, Math.ceil((acct.expDate - Date.now()) / 86400000))} días)
+                            {acct.maxCons ? <> · {acct.activeCons ?? 0}/{acct.maxCons} conexiones</> : null}
+                          </div>
+                        ) : null}
                       </FocusableButton>
                     );
                   })}

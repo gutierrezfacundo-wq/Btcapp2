@@ -596,3 +596,8 @@ body.kids .a-ch.focused,body.kids .a-cat.focused{background:var(--soft)}
 /* ===== Acciones del preview solo con iconos ===== */
 .a-ctrls-ic .a-btn{padding:14px 0;flex:1}
 .a-ctrls-hint{margin-top:10px;text-align:center;font-size:17px;color:var(--muted);min-height:22px}
+
+/* ===== Vencimiento de la lista activa (tarjeta en Mis Listas) ===== */
+.src-exp{display:flex;align-items:center;gap:8px;font-size:17px;color:var(--accent);font-weight:600;padding-top:10px;border-top:1px solid var(--line)}
+.src-exp .ms{font-size:20px}
+.src-exp.soon{color:var(--err)}
