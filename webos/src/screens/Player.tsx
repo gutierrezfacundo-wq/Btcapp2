@@ -45,6 +45,22 @@ function fmt(t: number): string {
     : `${m}:${String(s).padStart(2, "0")}`;
 }
 
+/** bits/s → "8.4 Mbps" / "820 kbps". */
+function fmtRate(bps: number): string {
+  if (bps >= 1e6) return `${(bps / 1e6).toFixed(bps >= 1e7 ? 0 : 1)} Mbps`;
+  return `${Math.round(bps / 1e3)} kbps`;
+}
+/** Alto de video → etiqueta estándar (1080p, 720p, 4K…). */
+function resLabel(w: number, h: number): string {
+  if (h >= 2000 || w >= 3800) return "4K";
+  if (h >= 1400) return "1440p";
+  if (h >= 1000) return "1080p";
+  if (h >= 700) return "720p";
+  if (h >= 540) return "576p";
+  if (h > 0) return `${h}p`;
+  return "";
+}
+
 export function Player() {
   const [params] = useSearchParams();
   const url = params.get("url") ?? "";
@@ -77,6 +93,10 @@ export function Player() {
   const [dur, setDur] = useState(0);
   const [hls, setHls] = useState<Hls | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  // Resolución real y bitrate del contenido (info en el overlay).
+  const [res, setRes] = useState<{ w: number; h: number } | null>(null);
+  const [bitrate, setBitrate] = useState(0);
+  const fileRateDone = useRef(false);
   const [tracksOpen, setTracksOpen] = useState(false);
   const tracksRef = useRef(false); tracksRef.current = tracksOpen;
   const overlayTimer = useRef<number | null>(null);
@@ -198,6 +218,15 @@ export function Player() {
       hlsInst.loadSource(url);
       hlsInst.attachMedia(video);
       hlsInst.on(Hls.Events.ERROR, (_e, d) => { if (d.fatal) setError(`Error de reproducción (${d.type})`); });
+      // Bitrate del nivel HLS activo + medición real por fragmento.
+      const inst = hlsInst;
+      const reportLevel = (level: number) => { const lv = inst.levels?.[level]; if (lv?.bitrate) setBitrate(lv.bitrate); };
+      inst.on(Hls.Events.MANIFEST_PARSED, () => reportLevel(inst.currentLevel >= 0 ? inst.currentLevel : inst.firstLevel));
+      inst.on(Hls.Events.LEVEL_SWITCHED, (_e, d) => reportLevel(d.level));
+      inst.on(Hls.Events.FRAG_BUFFERED, (_e, d) => {
+        const bytes = d.frag?.stats?.total; const fd = d.frag?.duration;
+        if (bytes && fd) setBitrate(Math.round((bytes * 8) / fd));
+      });
       setHls(hlsInst);
     } else if (useNativeSource) {
       // El <source> declarativo (con MIME) maneja la fuente; solo cargamos.
@@ -224,8 +253,39 @@ export function Player() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url, reloadKey]);
 
-  // Reintentar el modo nativo cuando cambia el contenido.
-  useEffect(() => { setNativeSrcFailed(false); }, [url]);
+  // Reintentar el modo nativo cuando cambia el contenido; resetear info.
+  useEffect(() => { setNativeSrcFailed(false); setRes(null); setBitrate(0); fileRateDone.current = false; }, [url]);
+
+  // Resolución real del video (sirve para HLS y archivos nativos).
+  useEffect(() => {
+    const v = videoRef.current; if (!v) return;
+    const onMeta = () => { if (v.videoWidth > 0) setRes({ w: v.videoWidth, h: v.videoHeight }); };
+    v.addEventListener("loadedmetadata", onMeta);
+    v.addEventListener("resize", onMeta);
+    return () => { v.removeEventListener("loadedmetadata", onMeta); v.removeEventListener("resize", onMeta); };
+  }, [reloadKey]);
+
+  // Bitrate promedio de archivos directos (pelis/series mp4/mkv): hls.js no
+  // aplica, así que lo estimamos con el tamaño total (Range) sobre la duración.
+  useEffect(() => {
+    if (isHls || !url || dur <= 0 || fileRateDone.current) return;
+    fileRateDone.current = true;
+    const ctrl = new AbortController();
+    const timer = window.setTimeout(() => ctrl.abort(), 8000);
+    fetch(url, { headers: { Range: "bytes=0-0" }, signal: ctrl.signal })
+      .then((r) => {
+        let total = 0;
+        const cr = r.headers.get("Content-Range");
+        const m = cr?.match(/\/(\d+)\s*$/);
+        if (m) total = Number(m[1]);
+        else if (r.status !== 206) { const cl = r.headers.get("Content-Length"); if (cl) total = Number(cl); }
+        if (total > 0 && dur > 0) setBitrate(Math.round((total * 8) / dur));
+      })
+      .catch(() => { fileRateDone.current = false; })
+      .finally(() => window.clearTimeout(timer));
+    return () => { window.clearTimeout(timer); ctrl.abort(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [url, dur, isHls]);
 
   // Si el <source> nativo falló, caemos a video.src (reproducción segura).
   useEffect(() => {
@@ -323,6 +383,13 @@ export function Player() {
               <div className="ply-tit">{title}</div>
               {meta ? <div className="ply-sub">{meta}</div> : null}
               {resumed && resumeAt.current > 5 ? <div className="ply-sub" style={{ color: "var(--accent)" }}>Continuando desde {fmt(resumeAt.current)}</div> : null}
+              {res || bitrate ? (
+                <div className="ply-stat">
+                  {res ? <span className="ply-stat-c">{resLabel(res.w, res.h)}</span> : null}
+                  {res ? <span className="ply-stat-d">{res.w}×{res.h}</span> : null}
+                  {bitrate ? <span className="ply-stat-c">{fmtRate(bitrate)}</span> : null}
+                </div>
+              ) : null}
             </div>
           </div>
 

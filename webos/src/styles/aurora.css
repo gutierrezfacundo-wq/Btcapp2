@@ -514,3 +514,8 @@ video::cue{background:rgba(0,0,0,.65);color:#fff}
 .cm-eye{display:flex;align-items:center;color:var(--muted);flex-shrink:0}
 .cm-row.off .cm-name{color:var(--muted);opacity:.55;text-decoration:line-through}
 .cm-row.off .cm-grip,.cm-row.off .cm-count{opacity:.4}
+
+/* ===== Info de resolucion/bitrate en el reproductor ===== */
+.ply-stat{display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-top:12px}
+.ply-stat-c{font-family:'Space Grotesk',monospace;font-size:17px;font-weight:600;color:var(--text);background:rgba(20,20,24,.72);border:1px solid var(--line);border-radius:8px;padding:5px 12px;letter-spacing:.3px}
+.ply-stat-d{font-family:'Space Grotesk',monospace;font-size:16px;color:var(--muted)}
