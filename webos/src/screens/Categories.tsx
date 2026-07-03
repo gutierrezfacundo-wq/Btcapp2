@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { FocusContext, useFocusable } from "@noriginmedia/norigin-spatial-navigation";
 import { useAppStore, applyCatPrefs, type CatSection } from "../store/useAppStore";
 import { FocusableButton } from "../components/FocusableButton";
@@ -33,9 +33,11 @@ export function Categories() {
   const kidsPrefs = useAppStore((s) => s.kidsPrefs);
   const toggleKidsCategory = useAppStore((s) => s.toggleKidsCategory);
 
+  const [params] = useSearchParams();
   const [section, setSection] = useState<CatSection>("live");
   // "vis": ocultar/ordenar · "kids": marcar categorías aptas para el modo Felix.
-  const [view, setView] = useState<"vis" | "kids">("vis");
+  // ?view=kids abre directo en la vista de Felix (atajo desde Mis Listas).
+  const [view, setView] = useState<"vis" | "kids">(params.get("view") === "kids" ? "kids" : "vis");
   const prefs = catPrefs[section];
 
   // Esta pantalla no existe dentro del modo Felix.

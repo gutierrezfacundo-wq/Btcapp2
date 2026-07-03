@@ -307,7 +307,10 @@ export function Setup() {
 
                   <div className="fld" style={{ marginTop: 18 }}>
                     <label className="fld-l"><Icon name="child_care" /> Modo Felix (niños)</label>
-                    <div style={{ display: "flex", gap: 12 }}>
+                    <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                      <FocusableButton className="btn primary" onEnterPress={() => navigate("/categories?view=kids")}>
+                        <Icon name="child_care" /> Elegir contenido apto
+                      </FocusableButton>
                       <FocusableButton className="btn" onEnterPress={() => setPinOpen(true)}>
                         <Icon name="lock" /> {parentalPin ? "Cambiar PIN" : "Establecer PIN"}
                       </FocusableButton>
