@@ -64,10 +64,18 @@ export function Search() {
 
   useBack(() => { navigate("/hub"); });
 
+  // Modo Félix: el buscador solo devuelve contenido apto.
+  const kidsMode = useAppStore((s) => s.kidsMode);
+  const kidsPrefs = useAppStore((s) => s.kidsPrefs);
+  const kItems = useMemo(() => new Set(kidsMode ? kidsPrefs.items : []), [kidsMode, kidsPrefs]);
+  const kLive = useMemo(() => new Set(kidsMode ? kidsPrefs.live : []), [kidsMode, kidsPrefs]);
+  const kMov = useMemo(() => new Set(kidsMode ? kidsPrefs.movies : []), [kidsMode, kidsPrefs]);
+  const kSer = useMemo(() => new Set(kidsMode ? kidsPrefs.series : []), [kidsMode, kidsPrefs]);
+
   const cap = kind === "all" ? MAX_PER_GROUP : MAX_FILTERED;
-  const channels = useMemo(() => (q.length < 2 || (kind !== "all" && kind !== "live") ? [] : catalog.liveChannels.filter((c) => c.name.toLowerCase().includes(q)).slice(0, cap)), [catalog.liveChannels, q, kind, cap]);
-  const movies = useMemo(() => (q.length < 2 || (kind !== "all" && kind !== "movie") ? [] : catalog.movies.filter((m) => m.name.toLowerCase().includes(q)).slice(0, cap)), [catalog.movies, q, kind, cap]);
-  const series = useMemo(() => (q.length < 2 || (kind !== "all" && kind !== "series") ? [] : catalog.series.filter((s) => s.name.toLowerCase().includes(q)).slice(0, cap)), [catalog.series, q, kind, cap]);
+  const channels = useMemo(() => (q.length < 2 || (kind !== "all" && kind !== "live") ? [] : catalog.liveChannels.filter((c) => (!kidsMode || kLive.has(c.groupTitle ?? "") || kItems.has(c.id)) && c.name.toLowerCase().includes(q)).slice(0, cap)), [catalog.liveChannels, q, kind, cap, kidsMode, kLive, kItems]);
+  const movies = useMemo(() => (q.length < 2 || (kind !== "all" && kind !== "movie") ? [] : catalog.movies.filter((m) => (!kidsMode || kMov.has(m.category ?? "") || kItems.has(m.id)) && m.name.toLowerCase().includes(q)).slice(0, cap)), [catalog.movies, q, kind, cap, kidsMode, kMov, kItems]);
+  const series = useMemo(() => (q.length < 2 || (kind !== "all" && kind !== "series") ? [] : catalog.series.filter((s) => (!kidsMode || kSer.has(s.category ?? "") || kItems.has(s.id)) && s.name.toLowerCase().includes(q)).slice(0, cap)), [catalog.series, q, kind, cap, kidsMode, kSer, kItems]);
   const empty = q.length >= 2 && !channels.length && !movies.length && !series.length;
 
   const openChannel = (id: string) => {

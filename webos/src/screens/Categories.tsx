@@ -29,9 +29,17 @@ export function Categories() {
   const loadedSections = useAppStore((s) => s.loadedSections);
   const ensureMovies = useAppStore((s) => s.ensureMovies);
   const ensureSeries = useAppStore((s) => s.ensureSeries);
+  const kidsMode = useAppStore((s) => s.kidsMode);
+  const kidsPrefs = useAppStore((s) => s.kidsPrefs);
+  const toggleKidsCategory = useAppStore((s) => s.toggleKidsCategory);
 
   const [section, setSection] = useState<CatSection>("live");
+  // "vis": ocultar/ordenar · "kids": marcar categorías aptas para el modo Félix.
+  const [view, setView] = useState<"vis" | "kids">("vis");
   const prefs = catPrefs[section];
+
+  // Esta pantalla no existe dentro del modo Félix.
+  useEffect(() => { if (kidsMode) navigate("/hub"); }, [kidsMode, navigate]);
 
   const { ref, focusKey } = useFocusable({ trackChildren: true, focusKey: "CATMGR" });
 
@@ -51,6 +59,7 @@ export function Categories() {
   // Lista completa (ocultas incluidas, atenuadas) en el orden guardado.
   const ordered = useMemo(() => applyCatPrefs(rawCats, prefs, true), [rawCats, prefs]);
   const hiddenSet = useMemo(() => new Set(prefs.hidden), [prefs.hidden]);
+  const kidsSet = useMemo(() => new Set(kidsPrefs[section]), [kidsPrefs, section]);
 
   const counts = useMemo(() => {
     const m = new Map<string, number>();
@@ -65,7 +74,7 @@ export function Categories() {
     if (sectionLoading) return;
     if (ordered.length) focusWhenReady(`CMR_${ordered[0].id}`);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [section, sectionLoading, ordered.length]);
+  }, [section, view, sectionLoading, ordered.length]);
 
   const toggleHidden = (name: string) => {
     const hidden = hiddenSet.has(name) ? prefs.hidden.filter((n) => n !== name) : [...prefs.hidden, name];
@@ -101,8 +110,15 @@ export function Categories() {
                       {s.label}
                     </FocusableButton>
                   ))}
+                  <span className="cm-sep" />
+                  <FocusableButton className={`chip ${view === "vis" ? "on" : ""}`} onEnterPress={() => setView("vis")}>
+                    <Icon name="visibility" /> Visibilidad
+                  </FocusableButton>
+                  <FocusableButton className={`chip ${view === "kids" ? "on" : ""}`} onEnterPress={() => setView("kids")}>
+                    <Icon name="child_care" /> Aptas para Félix
+                  </FocusableButton>
                 </FocusZone>
-                {dirty ? (
+                {view === "vis" && dirty ? (
                   <FocusableButton className="btn ghost" style={{ marginLeft: "auto" }} onEnterPress={reset}>
                     <Icon name="restart_alt" /> Restablecer
                   </FocusableButton>
@@ -116,7 +132,7 @@ export function Categories() {
                   <div className="ld-step">Esta sección no tiene categorías.</div>
                 </div>
               ) : (
-                <FocusZone key={`catmgr:${section}`} zone={`catmgr:${section}`} className="cm-list">
+                <FocusZone key={`catmgr:${section}:${view}`} zone={`catmgr:${section}:${view}`} className="cm-list">
                   <VirtualList
                     className="cm-vp scroll"
                     items={ordered}
@@ -124,6 +140,21 @@ export function Categories() {
                     overscan={12}
                     getKey={(c) => c.id}
                     renderRow={(c, i) => {
+                      if (view === "kids") {
+                        const ok = kidsSet.has(c.name);
+                        return (
+                          <FocusableButton
+                            focusKey={`CMR_${c.id}`}
+                            className={`cm-row ${ok ? "kid-on" : ""}`}
+                            onEnterPress={() => toggleKidsCategory(section, c.name)}
+                          >
+                            <span className="cm-grip"><Icon name="child_care" /></span>
+                            <span className="cm-name">{c.name}</span>
+                            <span className="cm-count">{counts.get(c.name) ?? 0}</span>
+                            <span className="cm-eye"><Icon name={ok ? "check_circle" : "radio_button_unchecked"} /></span>
+                          </FocusableButton>
+                        );
+                      }
                       const off = hiddenSet.has(c.name);
                       return (
                         <FocusableButton
@@ -149,12 +180,18 @@ export function Categories() {
             </div>
           </div>
         </div>
-        <Hints items={[
-          { k: "OK", label: "Ocultar / mostrar" },
-          { k: "←→", label: "Mover arriba / abajo" },
-          { k: "↕", label: "Navegar" },
-          { k: "Esc", label: "Volver" },
-        ]} />
+        <Hints items={view === "kids"
+          ? [
+              { k: "OK", label: "Apta / no apta para Félix" },
+              { k: "↕", label: "Navegar" },
+              { k: "Esc", label: "Volver" },
+            ]
+          : [
+              { k: "OK", label: "Ocultar / mostrar" },
+              { k: "←→", label: "Mover arriba / abajo" },
+              { k: "↕", label: "Navegar" },
+              { k: "Esc", label: "Volver" },
+            ]} />
       </div>
     </FocusContext.Provider>
   );

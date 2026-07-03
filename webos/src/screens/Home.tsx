@@ -157,17 +157,31 @@ export function Home() {
 
   // Preferencias del usuario: categorías ocultas y orden propio (por lista).
   const catPrefs = useAppStore((s) => s.catPrefs);
+  // Modo Félix: solo categorías/contenido marcados como aptos.
+  const kidsMode = useAppStore((s) => s.kidsMode);
+  const kidsPrefs = useAppStore((s) => s.kidsPrefs);
+  const kidsCats = useMemo(() => new Set(!kidsMode ? []
+    : tab === "live" ? kidsPrefs.live
+    : tab === "movies" ? kidsPrefs.movies
+    : tab === "series" ? kidsPrefs.series : []), [kidsMode, kidsPrefs, tab]);
+  const kidsItems = useMemo(() => new Set(kidsMode ? kidsPrefs.items : []), [kidsMode, kidsPrefs]);
   const sectionPrefs = tab === "live" ? catPrefs.live
     : tab === "movies" ? catPrefs.movies
     : tab === "series" ? catPrefs.series : null;
   const rawCategories = tab === "live" ? catalog.liveCategories
     : tab === "movies" ? catalog.movieCategories
     : tab === "series" ? catalog.seriesCategories : [];
-  const categories = useMemo(
-    () => (sectionPrefs ? applyCatPrefs(rawCategories, sectionPrefs) : rawCategories),
-    [rawCategories, sectionPrefs],
-  );
+  const categories = useMemo(() => {
+    const base = kidsMode ? rawCategories.filter((c) => kidsCats.has(c.name)) : rawCategories;
+    return sectionPrefs ? applyCatPrefs(base, sectionPrefs) : base;
+  }, [rawCategories, sectionPrefs, kidsMode, kidsCats]);
   const hiddenCats = useMemo(() => new Set(sectionPrefs?.hidden ?? []), [sectionPrefs]);
+
+  // En modo Félix no hay pestaña Favoritos.
+  useEffect(() => {
+    if (kidsMode && tab === "favorites") { setTabState("live"); setUi({ tab: "live" }); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kidsMode, tab]);
 
   const counts = useMemo(() => {
     const m = new Map<string, number>();
@@ -195,24 +209,34 @@ export function Home() {
     return out;
   }, [sortMode, collator]);
   // En "Todas" también se excluye el contenido de las categorías ocultas.
+  // En modo Félix solo pasa lo apto (categoría apta o título marcado).
   const liveFiltered = useMemo(() => {
     if (tab !== "live") return [];
-    const byCat = category ? catalog.liveChannels.filter((c) => c.groupTitle === category)
-      : hiddenCats.size ? catalog.liveChannels.filter((c) => !hiddenCats.has(c.groupTitle ?? "")) : catalog.liveChannels;
+    const all = kidsMode
+      ? catalog.liveChannels.filter((c) => kidsCats.has(c.groupTitle ?? "") || kidsItems.has(c.id))
+      : catalog.liveChannels;
+    const byCat = category ? all.filter((c) => c.groupTitle === category)
+      : hiddenCats.size ? all.filter((c) => !hiddenCats.has(c.groupTitle ?? "")) : all;
     return q ? byCat.filter((c) => c.name.toLowerCase().includes(q)) : byCat;
-  }, [tab, catalog.liveChannels, category, q, hiddenCats]);
+  }, [tab, catalog.liveChannels, category, q, hiddenCats, kidsMode, kidsCats, kidsItems]);
   const moviesFiltered = useMemo(() => {
     if (tab !== "movies") return [];
-    const byCat = category ? catalog.movies.filter((m) => m.category === category)
-      : hiddenCats.size ? catalog.movies.filter((m) => !hiddenCats.has(m.category ?? "")) : catalog.movies;
+    const all = kidsMode
+      ? catalog.movies.filter((m) => kidsCats.has(m.category ?? "") || kidsItems.has(m.id))
+      : catalog.movies;
+    const byCat = category ? all.filter((m) => m.category === category)
+      : hiddenCats.size ? all.filter((m) => !hiddenCats.has(m.category ?? "")) : all;
     return applySort(q ? byCat.filter((m) => m.name.toLowerCase().includes(q)) : byCat);
-  }, [tab, catalog.movies, category, q, applySort, hiddenCats]);
+  }, [tab, catalog.movies, category, q, applySort, hiddenCats, kidsMode, kidsCats, kidsItems]);
   const seriesFiltered = useMemo(() => {
     if (tab !== "series") return [];
-    const byCat = category ? catalog.series.filter((s) => s.category === category)
-      : hiddenCats.size ? catalog.series.filter((s) => !hiddenCats.has(s.category ?? "")) : catalog.series;
+    const all = kidsMode
+      ? catalog.series.filter((s) => kidsCats.has(s.category ?? "") || kidsItems.has(s.id))
+      : catalog.series;
+    const byCat = category ? all.filter((s) => s.category === category)
+      : hiddenCats.size ? all.filter((s) => !hiddenCats.has(s.category ?? "")) : all;
     return applySort(q ? byCat.filter((s) => s.name.toLowerCase().includes(q)) : byCat);
-  }, [tab, catalog.series, category, q, applySort, hiddenCats]);
+  }, [tab, catalog.series, category, q, applySort, hiddenCats, kidsMode, kidsCats, kidsItems]);
 
   const openSeries = (id: string, name: string) => {
     navigate(`/series/${id}?name=${encodeURIComponent(name)}`);
@@ -266,10 +290,11 @@ export function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const onZapToNumber = useCallback((n: number) => {
-    const c = catalog.liveChannels[n - 1];
+    // En modo Félix el número refiere a la lista apta, no al catálogo completo.
+    const c = kidsMode ? liveFilteredRef.current[n - 1] : catalog.liveChannels[n - 1];
     if (c) setSelectedChannelId(c.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [catalog.liveChannels]);
+  }, [catalog.liveChannels, kidsMode]);
 
   const onRowFav = useCallback((c: Channel) => {
     const n = channelNumbers.get(c.id);
@@ -461,6 +486,11 @@ function PreviewPanel({
   const favorites = useAppStore((s) => s.favorites);
   const isFav = !!channel && favorites.some((f) => f.id === channel.id);
   const toggleFav = () => { if (channel) toggleFavorite({ id: channel.id, name: channel.name, streamUrl: channel.streamUrl, logoUrl: channel.logoUrl, kind: "live", meta: [channelNumber ? `Nº ${channelNumber}` : null, ql].filter(Boolean).join(" · ") || undefined }); };
+  // Marcar el canal como apto para el modo Félix (solo visible fuera del modo).
+  const kidsMode = useAppStore((s) => s.kidsMode);
+  const kidsItemIds = useAppStore((s) => s.kidsPrefs.items);
+  const toggleKidsItem = useAppStore((s) => s.toggleKidsItem);
+  const isKidsOk = !!channel && kidsItemIds.includes(channel.id);
 
   useEffect(() => { setPaused(false); setTracksOpen(false); setBitrate(0); setRes(null); }, [channel?.id]);
   const togglePause = () => { const v = videoElRef.current; if (!v) return; if (v.paused) { v.play().catch(() => undefined); setPaused(false); } else { v.pause(); setPaused(true); } };
@@ -594,6 +624,11 @@ function PreviewPanel({
                 <FocusableButton className="a-btn primary" onEnterPress={onEnterFullscreen}><Icon name="fullscreen" /> Pantalla completa</FocusableButton>
                 <FocusableButton className="a-btn" onEnterPress={toggleFav}><Icon name={isFav ? "star" : "star_border"} /> {isFav ? "Quitar" : "Favorito"}</FocusableButton>
                 <FocusableButton className="a-btn" onEnterPress={onCatchup}><Icon name="calendar_month" /> Guía</FocusableButton>
+                {!kidsMode && channel ? (
+                  <FocusableButton className={`a-btn ${isKidsOk ? "kids-on" : ""}`} onEnterPress={() => toggleKidsItem(channel.id)}>
+                    <Icon name="child_care" /> {isKidsOk ? "Apto ✓" : "Félix"}
+                  </FocusableButton>
+                ) : null}
               </div>
             </>
           ) : null}

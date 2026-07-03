@@ -19,6 +19,9 @@ const SUBSCALE_KEY = "iptv.subtitleScale.v1"; // tamaño de subtítulos (s/m/l)
 const EPGOFF_KEY = "iptv.epgOffset.v1";      // corrección horaria de la guía (horas)
 const UI_KEY = "iptv.ui.v1";                  // navegación del Home (canal/categoría/tab): sobrevive al reinicio
 const CATPREFS_KEY = "iptv.catPrefs.v1";     // + ":<sourceKey>": ocultar/reordenar categorías por lista
+const KIDSMODE_KEY = "iptv.kidsMode.v1";     // modo Félix activo (sobrevive al reinicio)
+const PIN_KEY = "iptv.parentalPin.v1";       // PIN parental (protege la salida del modo Félix)
+const KIDSPREFS_KEY = "iptv.kidsPrefs.v1";   // + ":<sourceKey>": contenido apto para niños
 
 function genId(): string {
   return `src-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`;
@@ -152,6 +155,28 @@ export function applyCatPrefs<T extends { name: string }>(cats: T[], prefs: Sect
     .map((x) => x.c);
 }
 
+// ===== Modo Félix (niños): contenido apto, por lista =====
+export interface KidsPrefs {
+  /** Nombres de categorías aptas, por sección. */
+  live: string[];
+  movies: string[];
+  series: string[];
+  /** Ids de contenido suelto marcado como apto (canal, película o serie). */
+  items: string[];
+}
+const emptyKidsPrefs = (): KidsPrefs => ({ live: [], movies: [], series: [], items: [] });
+
+function loadKidsPrefs(s: SourceConfig | null): KidsPrefs {
+  if (!s) return emptyKidsPrefs();
+  try {
+    const raw = localStorage.getItem(`${KIDSPREFS_KEY}:${sourceKeyOf(s)}`);
+    if (raw) return { ...emptyKidsPrefs(), ...(JSON.parse(raw) as Partial<KidsPrefs>) };
+  } catch {
+    /* ignore */
+  }
+  return emptyKidsPrefs();
+}
+
 export interface FavoriteItem {
   id: string;
   name: string;
@@ -220,6 +245,12 @@ interface AppState {
   epgOffsetH: number;
   /** Ocultar/reordenar categorías de la lista activa. */
   catPrefs: CatPrefs;
+  /** Modo Félix (niños) activo: toda la app queda restringida a lo apto. */
+  kidsMode: boolean;
+  /** PIN parental (4 dígitos, "" = sin PIN). */
+  parentalPin: string;
+  /** Contenido apto para niños de la lista activa. */
+  kidsPrefs: KidsPrefs;
   /** Cola de reproducción (episodios de la temporada en curso) para "siguiente episodio". */
   playQueue: { route: string; label: string; url: string }[];
   epgByChannel: Map<string, EpgProgram[]>;
@@ -255,6 +286,10 @@ interface AppState {
   setSubtitleScale: (s: "s" | "m" | "l") => void;
   setEpgOffsetH: (h: number) => void;
   setCatPrefs: (section: CatSection, prefs: SectionCatPrefs) => void;
+  setKidsMode: (on: boolean) => void;
+  setParentalPin: (pin: string) => void;
+  toggleKidsCategory: (section: CatSection, name: string) => void;
+  toggleKidsItem: (id: string) => void;
   setPlayQueue: (q: { route: string; label: string; url: string }[]) => void;
 }
 
@@ -287,6 +322,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   playQueue: [],
   epgOffsetH: (() => { try { const v = Number(localStorage.getItem(EPGOFF_KEY)); return Number.isFinite(v) ? Math.max(-12, Math.min(12, v)) : 0; } catch { return 0; } })(),
   catPrefs: loadCatPrefs(initial.sources.find((s) => s.id === initial.activeId)?.config ?? null),
+  kidsMode: (() => { try { return localStorage.getItem(KIDSMODE_KEY) === "1"; } catch { return false; } })(),
+  parentalPin: (() => { try { return localStorage.getItem(PIN_KEY) ?? ""; } catch { return ""; } })(),
+  kidsPrefs: loadKidsPrefs(initial.sources.find((s) => s.id === initial.activeId)?.config ?? null),
   epgByChannel: new Map(),
   loadedSections: { movies: false, series: false },
   ui: (() => {
@@ -330,6 +368,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       activeSourceId: activeId,
       source: nextConfig,
       catPrefs: loadCatPrefs(nextConfig),
+      kidsPrefs: loadKidsPrefs(nextConfig),
     });
     if (activeId) void get().reload();
     else set({ catalog: emptyCatalog, epgByChannel: new Map() });
@@ -346,6 +385,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       loadedSections: { movies: false, series: false },
       ui: { tab: "live", category: null, selectedChannelId: null },
       catPrefs: loadCatPrefs(src.config),
+      kidsPrefs: loadKidsPrefs(src.config),
     });
     try { localStorage.setItem(UI_KEY, JSON.stringify({ tab: "live", category: null, selectedChannelId: null })); } catch { /* ignore */ }
     await get().reload();
@@ -542,6 +582,40 @@ export const useAppStore = create<AppState>((set, get) => ({
       try { localStorage.setItem(`${CATPREFS_KEY}:${sourceKeyOf(src)}`, JSON.stringify(next)); } catch { /* ignore */ }
     }
     set({ catPrefs: next });
+  },
+
+  setKidsMode: (on) => {
+    try { localStorage.setItem(KIDSMODE_KEY, on ? "1" : "0"); } catch { /* ignore */ }
+    set({ kidsMode: on });
+  },
+
+  setParentalPin: (pin) => {
+    try { localStorage.setItem(PIN_KEY, pin); } catch { /* ignore */ }
+    set({ parentalPin: pin });
+  },
+
+  toggleKidsCategory: (section, name) => {
+    const prefs = get().kidsPrefs;
+    const list = prefs[section].includes(name)
+      ? prefs[section].filter((n) => n !== name)
+      : [...prefs[section], name];
+    const next = { ...prefs, [section]: list };
+    const src = get().source;
+    if (src) {
+      try { localStorage.setItem(`${KIDSPREFS_KEY}:${sourceKeyOf(src)}`, JSON.stringify(next)); } catch { /* ignore */ }
+    }
+    set({ kidsPrefs: next });
+  },
+
+  toggleKidsItem: (id) => {
+    const prefs = get().kidsPrefs;
+    const items = prefs.items.includes(id) ? prefs.items.filter((i) => i !== id) : [...prefs.items, id];
+    const next = { ...prefs, items };
+    const src = get().source;
+    if (src) {
+      try { localStorage.setItem(`${KIDSPREFS_KEY}:${sourceKeyOf(src)}`, JSON.stringify(next)); } catch { /* ignore */ }
+    }
+    set({ kidsPrefs: next });
   },
 }));
 

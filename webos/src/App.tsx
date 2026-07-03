@@ -26,6 +26,12 @@ function KeyedPlayer() {
 export default function App() {
   const source = useAppStore((s) => s.source);
   const reload = useAppStore((s) => s.reload);
+  const kidsMode = useAppStore((s) => s.kidsMode);
+
+  // Tema del modo Félix: colores vivos y formas redondas vía body.kids.
+  useEffect(() => {
+    document.body.classList.toggle("kids", kidsMode);
+  }, [kidsMode]);
 
   useEffect(() => {
     if (source) reload();

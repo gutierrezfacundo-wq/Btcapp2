@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { FocusContext, useFocusable, setFocus } from "@noriginmedia/norigin-spatial-navigation";
 import { FocusableButton } from "../components/FocusableButton";
 import { FocusableInput } from "../components/FocusableInput";
+import { PinDialog } from "../components/PinDialog";
 import { Icon } from "../components/Icon";
 import { Rail } from "../components/Rail";
 import { TopBar } from "../components/TopBar";
@@ -42,6 +43,13 @@ export function Setup() {
   const setNativeSubs = useAppStore((s) => s.setNativeSubs);
   const epgOffsetH = useAppStore((s) => s.epgOffsetH);
   const setEpgOffsetH = useAppStore((s) => s.setEpgOffsetH);
+  const kidsMode = useAppStore((s) => s.kidsMode);
+  const parentalPin = useAppStore((s) => s.parentalPin);
+  const setParentalPin = useAppStore((s) => s.setParentalPin);
+  const [pinOpen, setPinOpen] = useState(false);
+
+  // La configuración no es accesible dentro del modo Félix.
+  useEffect(() => { if (kidsMode) navigate("/hub"); }, [kidsMode, navigate]);
 
   // Info de la cuenta Xtream activa (vencimiento/conexiones), mejor esfuerzo.
   const [acct, setAcct] = useState<AccountInfo | null>(null);
@@ -291,7 +299,27 @@ export function Setup() {
                     <FocusableButton className="btn" onEnterPress={() => navigate("/categories")}>
                       <Icon name="tune" /> Gestionar categorías
                     </FocusableButton>
-                    <div className="a-pdesc" style={{ marginTop: 6 }}>Ocultá las categorías que no usás y cambiales el orden. Se guarda por lista y afecta En vivo, Películas y Series.</div>
+                    <div className="a-pdesc" style={{ marginTop: 6 }}>Ocultá las categorías que no usás y cambiales el orden. Se guarda por lista y afecta En vivo, Películas y Series. Ahí también marcás las categorías aptas para el modo Félix.</div>
+                  </div>
+
+                  <div className="fld" style={{ marginTop: 18 }}>
+                    <label className="fld-l"><Icon name="child_care" /> Modo Félix (niños)</label>
+                    <div style={{ display: "flex", gap: 12 }}>
+                      <FocusableButton className="btn" onEnterPress={() => setPinOpen(true)}>
+                        <Icon name="lock" /> {parentalPin ? "Cambiar PIN" : "Establecer PIN"}
+                      </FocusableButton>
+                      {parentalPin ? (
+                        <FocusableButton className="btn danger" onEnterPress={() => setParentalPin("")}>
+                          <Icon name="lock_open" /> Quitar PIN
+                        </FocusableButton>
+                      ) : null}
+                    </div>
+                    <div className="a-pdesc" style={{ marginTop: 6 }}>
+                      {parentalPin
+                        ? "PIN configurado: salir del modo Félix pide el PIN."
+                        : "Sin PIN, cualquiera puede salir del modo Félix. Configuralo para protegerlo."}
+                      {" "}El modo se activa desde la caja “Félix” del Inicio.
+                    </div>
                   </div>
 
                   {acct ? (
@@ -327,6 +355,14 @@ export function Setup() {
             </div>
           </div>
         </div>
+        {pinOpen ? (
+          <PinDialog
+            mode="set"
+            title="Nuevo PIN parental"
+            onSuccess={(p) => { setParentalPin(p); setPinOpen(false); }}
+            onClose={() => setPinOpen(false)}
+          />
+        ) : null}
         <Hints items={[{ k: "↕↔", label: "Navegar" }, { k: "OK", label: "Seleccionar" }, { k: "Esc", label: "Volver" }]} />
       </div>
     </FocusContext.Provider>

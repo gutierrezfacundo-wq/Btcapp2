@@ -519,3 +519,66 @@ video::cue{background:rgba(0,0,0,.65);color:#fff}
 .ply-stat{display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-top:12px}
 .ply-stat-c{font-family:'Space Grotesk',monospace;font-size:17px;font-weight:600;color:var(--text);background:rgba(20,20,24,.72);border:1px solid var(--line);border-radius:8px;padding:5px 12px;letter-spacing:.3px}
 .ply-stat-d{font-family:'Space Grotesk',monospace;font-size:16px;color:var(--muted)}
+
+/* ===== Modo Felix: dialogo de PIN ===== */
+.pin-ov{position:fixed;inset:0;background:rgba(0,0,0,.74);display:flex;align-items:center;justify-content:center;z-index:80}
+.pin-card{background:var(--surface);border:1px solid var(--line);border-radius:26px;padding:46px 70px;display:flex;flex-direction:column;align-items:center;gap:12px;min-width:520px}
+.pin-ic{color:var(--accent)}
+.pin-t{font-family:'Schibsted Grotesk',sans-serif;font-size:30px;font-weight:700}
+.pin-sub{font-size:19px;color:var(--muted);text-align:center}
+.pin-dots{display:flex;gap:20px;margin:14px 0 4px}
+.pin-dot{width:24px;height:24px;border-radius:50%;border:2px solid var(--muted)}
+.pin-dot.on{background:var(--accent);border-color:var(--accent)}
+.pin-err{color:var(--err);font-size:19px;font-weight:600}
+.pin-hint{font-size:15px;color:var(--muted);margin-top:6px}
+
+/* ===== Boton "apto ninos" marcado ===== */
+.kids-on{border-color:#6fc4ff !important;color:#8ed2ff}
+.kids-on .ms{color:#8ed2ff}
+.cm-row.kid-on .cm-name{color:#8ed2ff;font-weight:600}
+.cm-row.kid-on .cm-eye,.cm-row.kid-on .cm-grip{color:#8ed2ff}
+.cm-sep{width:1px;height:34px;background:var(--line);margin:0 6px;align-self:center}
+
+/* ===== Tile Felix en el Hub (fuera del modo) ===== */
+.hub-felix .hub-tile-ic{background:linear-gradient(135deg,#4cc9f0,#5be3a2)}
+.hub-felix .hub-tile-ic .ms{color:#0b2530}
+.hub-felix .hub-tile-t{color:#8ee7ff}
+
+/* ============================================================
+   MODO FELIX (2 anos): colores vivos, formas grandes y redondas.
+   Se activa con body.kids (App.tsx). Solo cambia variables + Hub.
+   ============================================================ */
+body.kids{
+  --accent:#ffd166;            /* amarillo sol */
+  --accent-2:#ffe29a;
+  --soft:rgba(255,209,102,.16);
+  --ring:rgba(255,209,102,.85);
+  --muted:#aab4d4;
+  --surface:#1c2450;
+  --surface-2:#273163;
+  --line:rgba(255,255,255,.14);
+  background:radial-gradient(130% 90% at 78% -10%,#2a3a7e 0%,#17204c 55%,#0e1433 100%);
+}
+body.kids .ascreen{background:transparent}
+body.kids .focusable.focused{transform:scale(1.06)}
+body.kids .a-rail{background:rgba(10,14,40,.4)}
+body.kids .a-railbtn{border-radius:50%}
+
+/* Hub infantil: cada caja de un color primario, iconos gigantes */
+body.kids .hub-tile{border-radius:36px;border-width:2px}
+body.kids .hub-tile-ic{width:110px;height:110px;border-radius:50%}
+body.kids .hub-tile-ic .ms{font-size:62px;color:#12132b}
+body.kids .hub-grid .hub-tile:nth-child(1) .hub-tile-ic{background:#ff6b6b}   /* Tele: coral */
+body.kids .hub-grid .hub-tile:nth-child(2) .hub-tile-ic{background:#4cc9f0}   /* Pelis: celeste */
+body.kids .hub-grid .hub-tile:nth-child(3) .hub-tile-ic{background:#80ed99}   /* Dibujitos: verde */
+body.kids .hub-grid .hub-tile:nth-child(4) .hub-tile-ic{background:#c9b6ff}   /* Grandes: lila */
+body.kids .hub-tile-t{font-size:34px}
+body.kids .hub-tile-s{color:#c6cdea}
+body.kids .hub-title{color:#fff}
+body.kids .hub-title span{color:#ffd166}
+body.kids .hub-greet{color:#ffd166;font-size:26px;font-weight:700}
+
+/* Listas y grillas: foco bien visible y redondeado */
+body.kids .a-ch,body.kids .a-cat,body.kids .chip,body.kids .a-btn,body.kids .btn{border-radius:20px}
+body.kids .poster-img{border-radius:22px}
+body.kids .a-ch.focused,body.kids .a-cat.focused{background:var(--soft)}

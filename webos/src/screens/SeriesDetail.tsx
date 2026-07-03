@@ -75,6 +75,10 @@ export function SeriesDetail() {
   const favorites = useAppStore((s) => s.favorites);
   const favId = `series:${id}`;
   const isFav = favorites.some((f) => f.id === favId);
+  const kidsMode = useAppStore((s) => s.kidsMode);
+  const kidsItemIds = useAppStore((s) => s.kidsPrefs.items);
+  const toggleKidsItem = useAppStore((s) => s.toggleKidsItem);
+  const isKidsOk = kidsItemIds.includes(id);
   const favMeta = [meta?.year, meta?.genre, meta?.rating ? `${meta.rating} ★` : null].filter(Boolean).join(" · ") || undefined;
   const toggleFav = () => toggleFavorite({ id: favId, name: title, streamUrl: seasonEpisodes[0]?.streamUrl ?? episodes?.[0]?.streamUrl ?? "", logoUrl: info?.posterUrl ?? meta?.posterUrl, kind: "series-episode", meta: favMeta });
   // Ruta del reproductor con todo el contexto DENTRO de la URL (?st=):
@@ -139,6 +143,11 @@ export function SeriesDetail() {
                       <FocusableButton className="btn" onEnterPress={toggleFav}>
                         <Icon name={isFav ? "star" : "star_border"} /> {isFav ? "En favoritos" : "Favorito"}
                       </FocusableButton>
+                      {!kidsMode ? (
+                        <FocusableButton className={`btn ${isKidsOk ? "kids-on" : ""}`} onEnterPress={() => toggleKidsItem(id)}>
+                          <Icon name="child_care" /> {isKidsOk ? "Apto para Félix ✓" : "Apto para Félix"}
+                        </FocusableButton>
+                      ) : null}
                     </div>
                   </div>
                 </div>

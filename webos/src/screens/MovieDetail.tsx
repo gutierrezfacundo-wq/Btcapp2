@@ -42,6 +42,10 @@ export function MovieDetail() {
   const toggleFavorite = useAppStore((s) => s.toggleFavorite);
   const favorites = useAppStore((s) => s.favorites);
   const clearProgress = useAppStore((s) => s.clearProgress);
+  const kidsMode = useAppStore((s) => s.kidsMode);
+  const kidsItemIds = useAppStore((s) => s.kidsPrefs.items);
+  const toggleKidsItem = useAppStore((s) => s.toggleKidsItem);
+  const isKidsOk = kidsItemIds.includes(id);
 
   const catMovie = useMemo(() => movies.find((m) => m.id === id), [movies, id]);
   const [details, setDetails] = useState<MovieDetails | null>(detailsCache.get(id) ?? null);
@@ -176,6 +180,11 @@ export function MovieDetail() {
                       <FocusableButton className="btn" onEnterPress={toggleFav}>
                         <Icon name={isFav ? "star" : "star_border"} /> {isFav ? "En favoritos" : "Favorito"}
                       </FocusableButton>
+                      {!kidsMode ? (
+                        <FocusableButton className={`btn ${isKidsOk ? "kids-on" : ""}`} onEnterPress={() => toggleKidsItem(id)}>
+                          <Icon name="child_care" /> {isKidsOk ? "Apto para Félix ✓" : "Apto para Félix"}
+                        </FocusableButton>
+                      ) : null}
                     </FocusZone>
                   </div>
                 </div>
