@@ -23,6 +23,7 @@ export function SeriesDetail() {
   const { id = "" } = useParams();
   const [params] = useSearchParams();
   const title = params.get("name") ?? params.get("title") ?? "Serie";
+  const fromSearch = params.get("from") === "search";
   const navigate = useNavigate();
   const railNav = useRailNav();
   const source = useAppStore((s) => s.source);
@@ -49,10 +50,12 @@ export function SeriesDetail() {
 
   useEffect(() => { if (episodes) focusWhenReady("SER_PLAY"); }, [episodes]);
 
+  // Abierta desde el buscador: Volver regresa a los resultados de búsqueda.
   const goBack = () => {
-    navigate("/home?tab=series");
+    const dest = fromSearch ? "/search" : "/home?tab=series";
+    navigate(dest);
     window.setTimeout(() => {
-      if (window.location.hash.replace(/^#/, "").startsWith("/series")) window.location.hash = "#/home?tab=series";
+      if (window.location.hash.replace(/^#/, "").startsWith("/series")) window.location.hash = `#${dest}`;
     }, 60);
   };
   useBack(() => { goBack(); });
@@ -80,7 +83,7 @@ export function SeriesDetail() {
     const ft = `${title} · T${ep.seasonNumber} · E${ep.episodeNumber}`;
     const epMeta = `T${ep.seasonNumber} · E${ep.episodeNumber}${ep.duration ? ` · ${ep.duration}` : ""}`;
     const st = encodeB64Url({
-      from: `/series/${id}?name=${encodeURIComponent(title)}`,
+      from: `/series/${id}?name=${encodeURIComponent(title)}${fromSearch ? "&from=search" : ""}`,
       cid: ep.id,
       fav: { id: `series:${id}`, name: title, streamUrl: ep.streamUrl, logoUrl: info?.posterUrl, kind: "series-episode", meta: favMeta },
     });
@@ -111,7 +114,7 @@ export function SeriesDetail() {
               <div className="det">
                 <div className="det-top">
                   <FocusableButton className="det-back" onEnterPress={goBack}>
-                    <Icon name="arrow_back" /> Volver a Series
+                    <Icon name="arrow_back" /> {fromSearch ? "Volver a Buscar" : "Volver a Series"}
                   </FocusableButton>
                 </div>
                 <div className="det-hero">

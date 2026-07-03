@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { FocusContext, useFocusable } from "@noriginmedia/norigin-spatial-navigation";
 import { useAppStore } from "../store/useAppStore";
 import { loadMovieInfo, type MovieDetails } from "../data/xtream";
@@ -29,6 +29,8 @@ function fmtPos(t: number): string {
 /** Pantalla dedicada de película: info + sinopsis + continuar/reiniciar. */
 export function MovieDetail() {
   const { id = "" } = useParams();
+  const [params] = useSearchParams();
+  const fromSearch = params.get("from") === "search";
   const navigate = useNavigate();
   const railNav = useRailNav();
   const source = useAppStore((s) => s.source);
@@ -77,10 +79,12 @@ export function MovieDetail() {
   const { ref, focusKey } = useFocusable({ trackChildren: true, focusKey: "MOVIE" });
   useEffect(() => { focusWhenReady("MOV_PLAY"); }, [movie?.id]);
 
+  // Abierta desde el buscador: Volver regresa a los resultados de búsqueda.
   const goBack = () => {
-    navigate("/home?tab=movies");
+    const dest = fromSearch ? "/search" : "/home?tab=movies";
+    navigate(dest);
     window.setTimeout(() => {
-      if (window.location.hash.replace(/^#/, "").startsWith("/movie")) window.location.hash = "#/home?tab=movies";
+      if (window.location.hash.replace(/^#/, "").startsWith("/movie")) window.location.hash = `#${dest}`;
     }, 60);
   };
   useBack(() => { goBack(); });
@@ -100,7 +104,7 @@ export function MovieDetail() {
     if (fromStart) clearProgress(movie.id);
     const sub = [year, genre].filter(Boolean).join(" · ") || undefined;
     const fav = { id: movie.id, name: movie.name, streamUrl: movie.streamUrl, logoUrl: poster, kind: "movie" as const, meta: sub };
-    const st = encodeB64Url({ from: `/movie/${movie.id}`, cid: movie.id, fav });
+    const st = encodeB64Url({ from: `/movie/${movie.id}${fromSearch ? "?from=search" : ""}`, cid: movie.id, fav });
     const route = `/player?url=${encodeURIComponent(movie.streamUrl)}&title=${encodeURIComponent(movie.name)}${sub ? `&meta=${encodeURIComponent(sub)}` : ""}&st=${st}`;
     pushHistory({ id: movie.id, name: movie.name, route, posterUrl: poster, sub, kind: "movie" });
     navigate(route);
@@ -125,7 +129,7 @@ export function MovieDetail() {
                   <>
                     <Icon name="movie" className="eo-ic" />
                     <div className="ld-step">No se encontró la película.</div>
-                    <FocusableButton focusKey="MOV_PLAY" className="btn primary" onEnterPress={goBack}>Volver a Películas</FocusableButton>
+                    <FocusableButton focusKey="MOV_PLAY" className="btn primary" onEnterPress={goBack}>{fromSearch ? "Volver a Buscar" : "Volver a Películas"}</FocusableButton>
                   </>
                 ) : (
                   <>
@@ -138,7 +142,7 @@ export function MovieDetail() {
               <div className="det">
                 <div className="det-top">
                   <FocusableButton className="det-back" onEnterPress={goBack}>
-                    <Icon name="arrow_back" /> Volver a Películas
+                    <Icon name="arrow_back" /> {fromSearch ? "Volver a Buscar" : "Volver a Películas"}
                   </FocusableButton>
                 </div>
                 <div className="det-hero">

@@ -109,11 +109,13 @@ export function Home() {
 
   useEffect(() => { if (!source) navigate("/setup"); }, [source, navigate]);
 
-  // Back: buscador abierto lo cierra; si no, vuelve al Inicio.
+  // Back: buscador abierto lo cierra; si no, vuelve al Inicio (o a los
+  // resultados de búsqueda si se llegó desde el buscador global).
   // (El fullscreen del preview registra su propia capa más profunda.)
+  const fromSearch = search.get("from") === "search";
   useBack(() => {
     if (searchOpen) { setSearchOpen(false); return; }
-    navigate("/hub");
+    navigate(fromSearch ? "/search" : "/hub");
   }, !fullscreen);
 
   useEffect(() => {

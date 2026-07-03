@@ -1,7 +1,7 @@
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FocusContext, useFocusable } from "@noriginmedia/norigin-spatial-navigation";
-import { focusWhenReady } from "../navigation/focusMemory";
+import { focusWhenReady, restoreFocus } from "../navigation/focusMemory";
 import { useAppStore } from "../store/useAppStore";
 import { FocusableButton } from "../components/FocusableButton";
 import { FocusableInput } from "../components/FocusableInput";
@@ -24,6 +24,10 @@ const KINDS = [
 ] as const;
 type Kind = (typeof KINDS)[number]["id"];
 
+// La última búsqueda sobrevive al abrir un contenido: al volver con Back se
+// restauran query, ficha y resultados (webOS no conserva location.state).
+let lastSearch: { query: string; kind: Kind } = { query: "", kind: "all" };
+
 function initials(s: string) {
   return s.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
 }
@@ -38,13 +42,18 @@ export function Search() {
   const ensureSeries = useAppStore((s) => s.ensureSeries);
   const setUi = useAppStore((s) => s.setUi);
 
-  const [query, setQuery] = useState("");
-  const [kind, setKind] = useState<Kind>("all");
+  const [query, setQuery] = useState(lastSearch.query);
+  const [kind, setKind] = useState<Kind>(lastSearch.kind);
   const deferred = useDeferredValue(query);
   const q = deferred.trim().toLowerCase();
+  useEffect(() => { lastSearch = { query, kind }; }, [query, kind]);
 
   const { ref, focusKey } = useFocusable({ trackChildren: true, focusKey: "SEARCH" });
-  useEffect(() => { focusWhenReady("SEARCH_IN"); }, []);
+  // Al volver de un contenido con búsqueda previa: foco al último resultado.
+  useEffect(() => {
+    if (lastSearch.query.trim().length >= 2) restoreFocus("search:results", "SEARCH_IN");
+    else focusWhenReady("SEARCH_IN");
+  }, []);
 
   // Cargar las secciones VOD en segundo plano para poder buscar en todo.
   useEffect(() => {
@@ -63,9 +72,9 @@ export function Search() {
 
   const openChannel = (id: string) => {
     setUi({ tab: "live", selectedChannelId: id });
-    navigate("/home?tab=live");
+    navigate("/home?tab=live&from=search");
   };
-  const openMovie = (id: string) => navigate(`/movie/${id}`);
+  const openMovie = (id: string) => navigate(`/movie/${id}?from=search`);
 
   return (
     <FocusContext.Provider value={focusKey}>
@@ -96,7 +105,7 @@ export function Search() {
                   <>
                     {kind === "all" && channels.length ? <div className="gsr-h">Canales</div> : null}
                     {channels.map((c) => (
-                      <FocusableButton key={c.id} className="fav-row" onEnterPress={() => openChannel(c.id)}>
+                      <FocusableButton key={c.id} focusKey={`SR_C_${c.id}`} className="fav-row" onEnterPress={() => openChannel(c.id)}>
                         <span className="fav-badge live">EN VIVO</span>
                         <span className="fav-thumb">{c.logoUrl ? <img src={c.logoUrl} alt="" loading="lazy" decoding="async" style={{ width: "100%", height: "100%", objectFit: "contain", borderRadius: 10 }} /> : initials(c.name)}</span>
                         <span className="fav-mid"><div className="fav-name">{c.name}</div>{c.groupTitle ? <div className="fav-meta">{c.groupTitle}</div> : null}</span>
@@ -105,7 +114,7 @@ export function Search() {
                     ))}
                     {kind === "all" && movies.length ? <div className="gsr-h">Películas</div> : null}
                     {movies.map((m) => (
-                      <FocusableButton key={m.id} className="fav-row" onEnterPress={() => openMovie(m.id)}>
+                      <FocusableButton key={m.id} focusKey={`SR_M_${m.id}`} className="fav-row" onEnterPress={() => openMovie(m.id)}>
                         <span className="fav-badge movie">PELÍCULA</span>
                         <span className="fav-thumb">{m.posterUrl ? <img src={m.posterUrl} alt="" loading="lazy" decoding="async" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 10 }} /> : initials(m.name)}</span>
                         <span className="fav-mid"><div className="fav-name">{m.name}</div><div className="fav-meta">{[m.year?.slice(0, 4), m.category].filter(Boolean).join(" · ")}</div></span>
@@ -114,7 +123,7 @@ export function Search() {
                     ))}
                     {kind === "all" && series.length ? <div className="gsr-h">Series</div> : null}
                     {series.map((s) => (
-                      <FocusableButton key={s.id} className="fav-row" onEnterPress={() => navigate(`/series/${s.id}?name=${encodeURIComponent(s.name)}`)}>
+                      <FocusableButton key={s.id} focusKey={`SR_S_${s.id}`} className="fav-row" onEnterPress={() => navigate(`/series/${s.id}?name=${encodeURIComponent(s.name)}&from=search`)}>
                         <span className="fav-badge series">SERIE</span>
                         <span className="fav-thumb">{s.posterUrl ? <img src={s.posterUrl} alt="" loading="lazy" decoding="async" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 10 }} /> : initials(s.name)}</span>
                         <span className="fav-mid"><div className="fav-name">{s.name}</div><div className="fav-meta">{[s.year, s.category].filter(Boolean).join(" · ")}</div></span>
