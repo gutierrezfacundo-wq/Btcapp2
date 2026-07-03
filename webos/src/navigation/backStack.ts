@@ -35,6 +35,17 @@ export function useBack(handler: BackHandler, active = true): void {
 }
 
 /**
+ * Recorre la pila como si se hubiera apretado Back (lo usa también el
+ * control remoto por celular). Devuelve true si alguna capa lo consumió.
+ */
+export function dispatchBack(): boolean {
+  for (let i = stack.length - 1; i >= 0; i--) {
+    if (stack[i]() !== false) return true; // consumido
+  }
+  return false;
+}
+
+/**
  * Instalar UNA sola vez en App. `onRootBack` corre cuando ninguna capa
  * consumió el Back (caso raíz: salir de la app en /hub).
  */
@@ -46,10 +57,7 @@ export function installBackHandler(onRootBack: () => void): () => void {
     if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
     e.preventDefault();
     e.stopPropagation();
-    for (let i = stack.length - 1; i >= 0; i--) {
-      if (stack[i]() !== false) return; // consumido
-    }
-    onRootBack();
+    if (!dispatchBack()) onRootBack();
   };
   window.addEventListener("keydown", onKey, true);
   return () => window.removeEventListener("keydown", onKey, true);

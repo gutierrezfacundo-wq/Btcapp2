@@ -347,14 +347,22 @@ export function Setup() {
                       <FocusableInput value={companionUrl} onChange={setCompanionUrl} placeholder="URL de tu companion, ej. https://tu-proyecto.pages.dev" />
                     </div>
                     <div className="a-pdesc" style={{ marginTop: 6 }}>Pegá la URL de la app web que desplegaste (Cloudflare Pages). Después tocá “Vincular” para mostrar el QR.</div>
-                    <FocusableButton
-                      className="btn primary"
-                      style={{ marginTop: 10 }}
-                      disabled={!companionUrl}
-                      onEnterPress={() => navigate("/pair", { state: { prefill: { name, source: config } } })}
-                    >
-                      <Icon name="qr_code_2" /> Vincular con el celular
-                    </FocusableButton>
+                    <div style={{ display: "flex", gap: 12, marginTop: 10, flexWrap: "wrap" }}>
+                      <FocusableButton
+                        className="btn primary"
+                        disabled={!companionUrl}
+                        onEnterPress={() => navigate("/pair", { state: { prefill: { name, source: config } } })}
+                      >
+                        <Icon name="qr_code_2" /> Configurar lista desde el celular
+                      </FocusableButton>
+                      <FocusableButton
+                        className="btn"
+                        disabled={!companionUrl}
+                        onEnterPress={() => navigate("/remote")}
+                      >
+                        <Icon name="settings_remote" /> Control remoto (celular)
+                      </FocusableButton>
+                    </div>
                   </div>
                 </div>
               </div>

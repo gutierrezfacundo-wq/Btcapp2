@@ -296,6 +296,17 @@ export function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [catalog.liveChannels, kidsMode]);
 
+  // Zapping pedido desde el celular (RemoteBridge emite potri-remote).
+  useEffect(() => {
+    const onRemote = (e: Event) => {
+      const d = (e as CustomEvent).detail as { action?: string; dir?: number; num?: number };
+      if (d?.action === "zap") onZap(d.dir === -1 ? -1 : 1);
+      else if (d?.action === "zapTo" && d.num) onZapToNumber(d.num);
+    };
+    window.addEventListener("potri-remote", onRemote);
+    return () => window.removeEventListener("potri-remote", onRemote);
+  }, [onZap, onZapToNumber]);
+
   const onRowFav = useCallback((c: Channel) => {
     const n = channelNumbers.get(c.id);
     const meta = [n ? `Nº ${n}` : null, quality(c.name)].filter(Boolean).join(" · ") || undefined;

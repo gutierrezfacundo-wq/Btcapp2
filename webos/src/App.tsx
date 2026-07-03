@@ -11,10 +11,12 @@ import { SeriesDetail } from "./screens/SeriesDetail";
 import { MovieDetail } from "./screens/MovieDetail";
 import { Player } from "./screens/Player";
 import { Pair } from "./screens/Pair";
+import { RemotePair } from "./screens/RemotePair";
 import { Search } from "./screens/Search";
 import { Catchup } from "./screens/Catchup";
 import { Categories } from "./screens/Categories";
 import { KidsSleepGuard } from "./components/KidsSleepGuard";
+import { RemoteBridge } from "./components/RemoteBridge";
 import { useAppStore } from "./store/useAppStore";
 import { installBackHandler } from "./navigation/backStack";
 
@@ -75,6 +77,7 @@ export default function App() {
   return (
     <>
     <KidsSleepGuard />
+    <RemoteBridge />
     <Routes>
       <Route path="/" element={<Navigate to={source ? "/hub" : "/setup"} replace />} />
       <Route path="/setup" element={<Setup />} />
@@ -87,6 +90,7 @@ export default function App() {
       <Route path="/catchup/:id" element={<Catchup />} />
       <Route path="/categories" element={<Categories />} />
       <Route path="/pair" element={<Pair />} />
+      <Route path="/remote" element={<RemotePair />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
     </>

@@ -23,9 +23,18 @@ const KIDSMODE_KEY = "iptv.kidsMode.v1";     // modo Felix activo (sobrevive al 
 const PIN_KEY = "iptv.parentalPin.v1";       // PIN parental (protege la salida del modo Felix)
 const KIDSPREFS_KEY = "iptv.kidsPrefs.v1";   // + ":<sourceKey>": contenido apto para niños
 const KIDSTIMER_KEY = "iptv.kidsTimer.v1";   // fin del temporizador del modo Felix (ms epoch)
+const REMOTECODE_KEY = "iptv.remoteCode.v1"; // código fijo del control remoto por celular
 
 function genId(): string {
   return `src-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`;
+}
+
+/** Código corto legible (sin O/0/I/1) para vincular el control remoto. */
+function genRemoteCode(): string {
+  const abc = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let s = "";
+  for (let i = 0; i < 6; i++) s += abc[Math.floor(Math.random() * abc.length)];
+  return s;
 }
 
 /** Carga las listas guardadas, migrando la fuente unica vieja si hace falta. */
@@ -254,6 +263,8 @@ interface AppState {
   kidsPrefs: KidsPrefs;
   /** Temporizador del modo Felix: momento de apagado (ms epoch), null = sin límite. */
   kidsTimerEndsAt: number | null;
+  /** Código fijo del control remoto por celular (se genera una sola vez). */
+  remoteCode: string;
   /** Cola de reproducción (episodios de la temporada en curso) para "siguiente episodio". */
   playQueue: { route: string; label: string; url: string }[];
   epgByChannel: Map<string, EpgProgram[]>;
@@ -338,6 +349,13 @@ export const useAppStore = create<AppState>((set, get) => ({
       localStorage.removeItem(KIDSTIMER_KEY);
     } catch { /* ignore */ }
     return null;
+  })(),
+  remoteCode: (() => {
+    try {
+      let c = localStorage.getItem(REMOTECODE_KEY);
+      if (!c) { c = genRemoteCode(); localStorage.setItem(REMOTECODE_KEY, c); }
+      return c;
+    } catch { return genRemoteCode(); }
   })(),
   epgByChannel: new Map(),
   loadedSections: { movies: false, series: false },
