@@ -508,6 +508,9 @@ export const useAppStore = create<AppState>((set, get) => ({
           loadedSections: { movies: false, series: false },
         });
         saveCatalogCache(source, partial);
+        // Precargar Películas y Series en segundo plano (secuencial, para no
+        // castigar al proveedor): entrar a esas secciones queda instantáneo.
+        void get().ensureMovies().then(() => get().ensureSeries());
       }
       const catalogForEpg = get().catalog;
       void catalogForEpg;

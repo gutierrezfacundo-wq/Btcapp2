@@ -160,6 +160,9 @@ export function Setup() {
                 <div className="src-h">
                   <div className="src-h-t">Mis Listas</div>
                   <div className="src-h-c">{sources.length} listas</div>
+                  <div className="src-h-c mono">
+                    build {new Date(__BUILD_TIME__).toLocaleString([], { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                  </div>
                 </div>
                 <div className="src-list scroll">
                   {sources.map((s, i) => {

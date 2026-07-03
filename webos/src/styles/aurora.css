@@ -592,3 +592,7 @@ body.kids .a-ch.focused,body.kids .a-cat.focused{background:var(--soft)}
 .sleep-t{font-family:'Schibsted Grotesk',sans-serif;font-size:52px;font-weight:800;color:#fff}
 .sleep-s{font-size:24px;color:#aab4d4}
 .sleep-btn{margin-top:26px}
+
+/* ===== Acciones del preview solo con iconos ===== */
+.a-ctrls-ic .a-btn{padding:14px 0;flex:1}
+.a-ctrls-hint{margin-top:10px;text-align:center;font-size:17px;color:var(--muted);min-height:22px}

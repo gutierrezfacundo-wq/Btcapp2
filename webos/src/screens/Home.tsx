@@ -478,6 +478,8 @@ function PreviewPanel({
   const [bitrate, setBitrate] = useState(0);
   const [tracksOpen, setTracksOpen] = useState(false);
   const [fsOverlay, setFsOverlay] = useState(true);
+  // Etiqueta del botón de acción enfocado (los botones son solo íconos).
+  const [ctrlHint, setCtrlHint] = useState<string | null>(null);
   const fsTimer = useRef<number | null>(null);
   const prevFs = useRef(false);
   const tracksRef = useRef(false); tracksRef.current = tracksOpen;
@@ -493,7 +495,7 @@ function PreviewPanel({
   const isKidsOk = !!channel && kidsItemIds.includes(channel.id);
 
   useEffect(() => { setPaused(false); setTracksOpen(false); setBitrate(0); setRes(null); }, [channel?.id]);
-  const togglePause = () => { const v = videoElRef.current; if (!v) return; if (v.paused) { v.play().catch(() => undefined); setPaused(false); } else { v.pause(); setPaused(true); } };
+  const togglePause = () => { const v = videoElRef.current; if (!v) return; if (v.paused) { v.play().catch(() => undefined); setPaused(false); setCtrlHint("Pausa"); } else { v.pause(); setPaused(true); setCtrlHint("Reproducir"); } };
   const poke = () => { setFsOverlay(true); if (fsTimer.current) window.clearTimeout(fsTimer.current); fsTimer.current = window.setTimeout(() => { if (!tracksRef.current) setFsOverlay(false); }, 5000); };
 
   // Back en fullscreen: si la hoja de pistas está abierta, su propio useBack
@@ -619,17 +621,19 @@ function PreviewPanel({
                   <div className="a-pnext"><span className="a-pnext-t">{fmtClock(next.startMs)} · DESPUÉS</span><span className="a-pnext-n">{next.title}</span></div>
                 ) : null}
               </div>
-              <div className="a-ctrls">
-                <FocusableButton focusKey="PV_PAUSE" className="a-btn" onEnterPress={togglePause}><Icon name={paused ? "play_arrow" : "pause"} /> {paused ? "Reproducir" : "Pausa"}</FocusableButton>
-                <FocusableButton className="a-btn primary" onEnterPress={onEnterFullscreen}><Icon name="fullscreen" /> Pantalla completa</FocusableButton>
-                <FocusableButton className="a-btn" onEnterPress={toggleFav}><Icon name={isFav ? "star" : "star_border"} /> {isFav ? "Quitar" : "Favorito"}</FocusableButton>
-                <FocusableButton className="a-btn" onEnterPress={onCatchup}><Icon name="calendar_month" /> Guía</FocusableButton>
+              {/* Solo íconos: la etiqueta del botón enfocado se muestra debajo. */}
+              <div className="a-ctrls a-ctrls-ic">
+                <FocusableButton focusKey="PV_PAUSE" className="a-btn" onFocus={() => setCtrlHint(paused ? "Reproducir" : "Pausa")} onEnterPress={togglePause}><Icon name={paused ? "play_arrow" : "pause"} size={30} /></FocusableButton>
+                <FocusableButton className="a-btn primary" onFocus={() => setCtrlHint("Pantalla completa")} onEnterPress={onEnterFullscreen}><Icon name="fullscreen" size={30} /></FocusableButton>
+                <FocusableButton className="a-btn" onFocus={() => setCtrlHint(isFav ? "Quitar de favoritos" : "Agregar a favoritos")} onEnterPress={toggleFav}><Icon name={isFav ? "star" : "star_border"} size={30} /></FocusableButton>
+                <FocusableButton className="a-btn" onFocus={() => setCtrlHint("Guía del canal")} onEnterPress={onCatchup}><Icon name="calendar_month" size={30} /></FocusableButton>
                 {!kidsMode && channel ? (
-                  <FocusableButton className={`a-btn ${isKidsOk ? "kids-on" : ""}`} onEnterPress={() => toggleKidsItem(channel.id)}>
-                    <Icon name="child_care" /> {isKidsOk ? "Apto ✓" : "Felix"}
+                  <FocusableButton className={`a-btn ${isKidsOk ? "kids-on" : ""}`} onFocus={() => setCtrlHint(isKidsOk ? "Apto para Felix ✓" : "Marcar apto para Felix")} onEnterPress={() => toggleKidsItem(channel.id)}>
+                    <Icon name="child_care" size={30} />
                   </FocusableButton>
                 ) : null}
               </div>
+              {ctrlHint ? <div className="a-ctrls-hint">{ctrlHint}</div> : null}
             </>
           ) : null}
         </>
