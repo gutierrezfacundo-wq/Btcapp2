@@ -144,6 +144,7 @@ export function MovieDetail() {
               </div>
             ) : (
               <div className="det">
+                {details?.backdropUrl ? <div className="det-bg" style={{ backgroundImage: `url(${details.backdropUrl})` }} /> : null}
                 <div className="det-top">
                   <FocusableButton className="det-back" onEnterPress={goBack}>
                     <Icon name="arrow_back" /> {fromSearch ? "Volver a Buscar" : "Volver a Películas"}

@@ -43,6 +43,8 @@ export interface SeriesMeta {
   genre?: string;
   plot?: string;
   posterUrl?: string;
+  /** Imagen apaisada para el fondo del hero (backdrop). */
+  backdropUrl?: string;
   tmdbId?: string;
 }
 

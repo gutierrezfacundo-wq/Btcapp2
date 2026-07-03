@@ -132,6 +132,30 @@ export function Hub() {
     navigate(`/home?tab=${id}`);
   };
 
+  // Novedades: lo último que agregó el proveedor (pelis + series por addedAt).
+  const newest = useMemo(() => {
+    const items = new Set(kidsPrefs.items);
+    const mov = new Set(kidsPrefs.movies);
+    const ser = new Set(kidsPrefs.series);
+    const okM = (m: { id: string; category?: string | null }) => !kidsMode || mov.has(m.category ?? "") || items.has(m.id);
+    const okS = (s: { id: string; category?: string | null }) => !kidsMode || ser.has(s.category ?? "") || items.has(s.id);
+    const all = [
+      ...catalog.movies.filter(okM).map((m) => ({ id: m.id, name: m.name, posterUrl: m.posterUrl, at: m.addedAt ?? 0, kind: "movie" as const })),
+      ...catalog.series.filter(okS).map((s) => ({ id: s.id, name: s.name, posterUrl: s.posterUrl, at: s.addedAt ?? 0, kind: "series" as const })),
+    ].filter((x) => x.at > 0);
+    all.sort((a, b) => b.at - a.at);
+    return all.slice(0, 10);
+  }, [catalog, kidsMode, kidsPrefs]);
+
+  const newTag = (at: number): string => {
+    const d = Math.floor((Date.now() / 1000 - at) / 86400);
+    return d <= 0 ? "Hoy" : d === 1 ? "Ayer" : `Hace ${d} días`;
+  };
+  const openNew = (n: { id: string; name: string; kind: "movie" | "series" }) => {
+    if (n.kind === "movie") navigate(`/movie/${n.id}`);
+    else navigate(`/series/${n.id}?name=${encodeURIComponent(n.name)}`);
+  };
+
   const enterKids = () => { setKidsMode(true); focusWhenReady("HUB_T_0"); };
   const exitKids = () => {
     if (parentalPin) setPinOpen(true);
@@ -203,6 +227,22 @@ export function Hub() {
                       {remainMin !== null ? (
                         <span className="hub-timer-left"><Icon name="schedule" /> quedan {remainMin} min</span>
                       ) : null}
+                    </FocusZone>
+                  </div>
+                ) : null}
+                {newest.length ? (
+                  <div className="hub-cont">
+                    <div className="hub-cont-h">Novedades</div>
+                    <FocusZone zone="hub:new" className="hub-rowscroll scroll">
+                      {newest.map((n, i) => (
+                        <FocusableButton key={`${n.kind}-${n.id}`} focusKey={`HUB_N_${i}`} className="hub-mini" onEnterPress={() => openNew(n)}>
+                          <div className="hub-mini-p">
+                            {n.posterUrl ? <img src={n.posterUrl} alt="" loading="lazy" decoding="async" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} /> : null}
+                            <span className="hub-mini-tag">{newTag(n.at)}</span>
+                          </div>
+                          <div className="hub-mini-t">{n.name}</div>
+                        </FocusableButton>
+                      ))}
                     </FocusZone>
                   </div>
                 ) : null}

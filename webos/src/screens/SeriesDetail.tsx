@@ -116,6 +116,7 @@ export function SeriesDetail() {
               <div className="ld"><div className="ld-spin spinner" /><div className="ld-step">Cargando episodios…</div></div>
             ) : (
               <div className="det">
+                {meta?.backdropUrl ? <div className="det-bg" style={{ backgroundImage: `url(${meta.backdropUrl})` }} /> : null}
                 <div className="det-top">
                   <FocusableButton className="det-back" onEnterPress={goBack}>
                     <Icon name="arrow_back" /> {fromSearch ? "Volver a Buscar" : "Volver a Series"}

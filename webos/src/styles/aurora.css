@@ -601,3 +601,8 @@ body.kids .a-ch.focused,body.kids .a-cat.focused{background:var(--soft)}
 .src-exp{display:flex;align-items:center;gap:8px;font-size:17px;color:var(--accent);font-weight:600;padding-top:10px;border-top:1px solid var(--line)}
 .src-exp .ms{font-size:20px}
 .src-exp.soon{color:var(--err)}
+
+/* ===== Backdrop del proveedor como fondo del hero en fichas ===== */
+.det{position:relative}
+.det-bg{position:absolute;top:0;left:0;right:0;height:70%;background-size:cover;background-position:center top;opacity:.2;pointer-events:none;-webkit-mask-image:linear-gradient(to bottom,#000 0%,transparent 100%);mask-image:linear-gradient(to bottom,#000 0%,transparent 100%)}
+.det>*:not(.det-bg){position:relative;z-index:1}

@@ -3,6 +3,8 @@ import Hls from "hls.js";
 import { focusWhenReady } from "../navigation/focusMemory";
 import { FocusableButton } from "./FocusableButton";
 import { Icon } from "./Icon";
+import { useAppStore } from "../store/useAppStore";
+import { diagnoseStreamError } from "../data/xtream";
 
 interface Props {
   url: string | null;
@@ -24,12 +26,23 @@ export function VideoPreview({ url, muted = true, onVideoEl, onHls, onResolution
     "idle",
   );
   const [reloadKey, setReloadKey] = useState(0);
-  const retry = () => { setStatus("loading"); setReloadKey((k) => k + 1); };
+  const retry = () => { setStatus("loading"); setErrDetail(null); setReloadKey((k) => k + 1); };
 
-  // Al fallar, llevamos el foco al botón Reintentar para que se pueda usar con el control.
+  // Formatos de vivo que declara el proveedor (evita probar m3u8 si no lo permite).
+  const allowedFormats = useAppStore((s) => s.allowedFormats);
+  const source = useAppStore((s) => s.source);
+  const [errDetail, setErrDetail] = useState<string | null>(null);
+
+  // Al fallar: foco al Reintentar + diagnóstico real (¿conexiones al límite?).
   useEffect(() => {
-    if (status === "error") focusWhenReady("PV_RETRY");
-  }, [status]);
+    if (status !== "error") { setErrDetail(null); return; }
+    focusWhenReady("PV_RETRY");
+    if (source?.kind === "xtream") {
+      let alive = true;
+      diagnoseStreamError(source).then((d) => { if (alive && d) setErrDetail(d); });
+      return () => { alive = false; };
+    }
+  }, [status]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     onVideoEl?.(videoRef.current);
@@ -67,7 +80,10 @@ export function VideoPreview({ url, muted = true, onVideoEl, onHls, onResolution
     // bitrate. Probamos la variante .m3u8 con hls.js (anda en PC y TV, y da bitrate);
     // si falla, volvemos al .ts nativo (lo reproduce el player de webOS).
     const isTs = /\.ts(\?|$)/i.test(url);
-    const hlsUrl = isTs ? url.replace(/\.ts(\?|$)/i, ".m3u8$1") : url;
+    // Si el proveedor declara sus formatos y NO permite m3u8, no probamos la
+    // variante HLS para streams .ts: directo al reproductor nativo.
+    const m3u8Allowed = allowedFormats == null || allowedFormats.includes("m3u8");
+    const hlsUrl = isTs && m3u8Allowed ? url.replace(/\.ts(\?|$)/i, ".m3u8$1") : url;
     const canHls = /\.m3u8(\?|$)/i.test(hlsUrl) && Hls.isSupported();
 
     const playNative = (src: string) => {
@@ -164,7 +180,7 @@ export function VideoPreview({ url, muted = true, onVideoEl, onHls, onResolution
       {status === "error" ? (
         <div className="video-preview-overlay error">
           <Icon name="error_outline" size={44} />
-          <div>No se pudo cargar el stream</div>
+          <div>{errDetail ?? "No se pudo cargar el stream"}</div>
           <FocusableButton focusKey="PV_RETRY" className="btn primary" onEnterPress={retry}>
             <Icon name="refresh" /> Reintentar
           </FocusableButton>

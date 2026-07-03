@@ -43,6 +43,9 @@ export function Setup() {
   const setNativeSubs = useAppStore((s) => s.setNativeSubs);
   const epgOffsetH = useAppStore((s) => s.epgOffsetH);
   const setEpgOffsetH = useAppStore((s) => s.setEpgOffsetH);
+  const epgAutoOn = useAppStore((s) => s.epgAutoOn);
+  const setEpgAutoOn = useAppStore((s) => s.setEpgAutoOn);
+  const epgAutoMs = useAppStore((s) => s.epgAutoMs);
   const kidsMode = useAppStore((s) => s.kidsMode);
   const parentalPin = useAppStore((s) => s.parentalPin);
   const setParentalPin = useAppStore((s) => s.setParentalPin);
@@ -296,12 +299,15 @@ export function Setup() {
 
                   <div className="fld" style={{ marginTop: 18 }}>
                     <label className="fld-l"><Icon name="schedule" /> Corrección horaria de la guía (EPG)</label>
-                    <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                    <FocusableButton className={`btn ${epgAutoOn ? "primary" : ""}`} onEnterPress={() => setEpgAutoOn(!epgAutoOn)}>
+                      <Icon name={epgAutoOn ? "toggle_on" : "toggle_off"} /> Automática {epgAutoOn && epgAutoMs !== 0 ? `· ${epgAutoMs > 0 ? "+" : "−"}${Math.abs(epgAutoMs) % 3600000 === 0 ? `${Math.abs(epgAutoMs) / 3600000} h` : `${Math.round(Math.abs(epgAutoMs) / 60000)} min`} detectados` : epgAutoOn ? "· sin desfasaje detectado" : ""}
+                    </FocusableButton>
+                    <div style={{ display: "flex", gap: 12, alignItems: "center", marginTop: 10 }}>
                       <FocusableButton className="btn" onEnterPress={() => setEpgOffsetH(epgOffsetH - 1)}><Icon name="remove" /></FocusableButton>
                       <span className="mono" style={{ fontSize: 24, minWidth: 90, textAlign: "center" }}>{epgOffsetH > 0 ? `+${epgOffsetH}` : epgOffsetH} h</span>
                       <FocusableButton className="btn" onEnterPress={() => setEpgOffsetH(epgOffsetH + 1)}><Icon name="add" /></FocusableButton>
                     </div>
-                    <div className="a-pdesc" style={{ marginTop: 6 }}>Si los programas de la guía aparecen corridos (empiezan antes/después de lo real), ajustá acá las horas de diferencia.</div>
+                    <div className="a-pdesc" style={{ marginTop: 6 }}>La corrección automática compara el reloj del proveedor con el de la TV y endereza la guía sola. El ±h queda como ajuste fino manual (se suma a la automática).</div>
                   </div>
 
                   <div className="fld" style={{ marginTop: 18 }}>

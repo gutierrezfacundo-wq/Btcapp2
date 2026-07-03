@@ -62,6 +62,7 @@ interface XtSeriesInfoDto {
     genre?: string;
     plot?: string;
     cover?: string;
+    backdrop_path?: string[] | string;
     tmdb?: string | number;
     tmdb_id?: string | number;
   };
@@ -93,13 +94,21 @@ function categoryName(list: Category[], id: string | undefined): string | undefi
   return list.find((c) => c.id === id)?.name;
 }
 
-/** Estado de la cuenta Xtream (player_api user_info). */
+/** Estado de la cuenta Xtream (player_api user_info + server_info). */
 export interface AccountInfo {
   status?: string;
   expDate?: number;        // ms
   activeCons?: number;
   maxCons?: number;
   trial?: boolean;
+  /** Formatos de salida que permite el proveedor para en vivo (m3u8/ts/rtmp). */
+  allowedFormats?: string[];
+  /**
+   * Desfasaje detectado entre el reloj del proveedor y el de la TV (ms).
+   * Positivo = la guía del proveedor viene "adelantada" respecto de acá.
+   * Redondeado a 15 min; 0 si la diferencia es menor a 5 min.
+   */
+  epgAutoOffsetMs?: number;
 }
 
 interface XtUserInfoDto {
@@ -109,7 +118,30 @@ interface XtUserInfoDto {
     active_cons?: string | number;
     max_connections?: string | number;
     is_trial?: string | number;
+    allowed_output_formats?: string[];
   };
+  server_info?: {
+    time_now?: string;       // "YYYY-MM-DD HH:MM:SS" en hora local del servidor
+    timestamp_now?: string | number;
+    timezone?: string;
+  };
+}
+
+/**
+ * El XMLTV de muchos proveedores viene en hora local del servidor etiquetada
+ * como UTC: comparando time_now (parseado como UTC) contra el reloj real de
+ * la TV sale la corrección que hay que aplicarle a la guía.
+ */
+function computeEpgAutoOffset(timeNow: string | undefined): number | undefined {
+  if (!timeNow) return undefined;
+  const m = timeNow.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
+  if (!m) return undefined;
+  const asUtc = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5]));
+  const deltaMs = Date.now() - asUtc; // cuánto hay que correr la guía
+  if (Math.abs(deltaMs) < 5 * 60000) return 0;
+  if (Math.abs(deltaMs) > 14 * 3600000) return undefined; // reloj roto: no confiar
+  const q = 15 * 60000;
+  return Math.round(deltaMs / q) * q;
 }
 
 export async function loadAccountInfo(
@@ -117,13 +149,42 @@ export async function loadAccountInfo(
 ): Promise<AccountInfo> {
   const dto = await getJson<XtUserInfoDto>(xtreamPlayerApi(source));
   const u = dto.user_info ?? {};
+  const s = dto.server_info ?? {};
   return {
     status: u.status || undefined,
     expDate: u.exp_date ? Number(u.exp_date) * 1000 || undefined : undefined,
     activeCons: u.active_cons != null ? Number(u.active_cons) : undefined,
     maxCons: u.max_connections != null ? Number(u.max_connections) : undefined,
     trial: Number(u.is_trial) === 1,
+    allowedFormats: Array.isArray(u.allowed_output_formats)
+      ? u.allowed_output_formats.map((f) => String(f).toLowerCase())
+      : undefined,
+    epgAutoOffsetMs: computeEpgAutoOffset(s.time_now),
   };
+}
+
+/**
+ * Diagnóstico al fallar un stream: si la cuenta está al límite de conexiones
+ * (o vencida), devuelve un mensaje claro; si no, null.
+ */
+export async function diagnoseStreamError(
+  source: Extract<SourceConfig, { kind: "xtream" }>,
+): Promise<string | null> {
+  try {
+    const a = await loadAccountInfo(source);
+    if (a.status && a.status.toLowerCase() !== "active") {
+      return `La cuenta figura "${a.status}" en el proveedor.`;
+    }
+    if (a.expDate && a.expDate < Date.now()) {
+      return "La lista está vencida: renovala con tu proveedor.";
+    }
+    if (a.maxCons && a.activeCons != null && a.activeCons >= a.maxCons) {
+      return `Estás usando todas las conexiones de la cuenta (${a.activeCons}/${a.maxCons}). Cerrá la reproducción en otro dispositivo y reintentá.`;
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 export type LoadProgress = (step: string, current: number, total: number) => void;
@@ -239,6 +300,8 @@ export interface MovieDetails {
   year?: string;
   duration?: string;
   posterUrl?: string;
+  /** Imagen apaisada para el fondo del hero (backdrop). */
+  backdropUrl?: string;
   director?: string;
   cast?: string;
 }
@@ -258,10 +321,17 @@ interface XtVodInfoDto {
     duration?: string;
     movie_image?: string;
     cover_big?: string;
+    backdrop_path?: string[] | string;
     director?: string;
     cast?: string;
     actors?: string;
   };
+}
+
+/** backdrop_path puede venir como array o string; devolvemos la primera URL válida. */
+function firstBackdrop(b: string[] | string | undefined): string | undefined {
+  const v = Array.isArray(b) ? b[0] : b;
+  return v && /^https?:\/\//.test(v) ? v : undefined;
 }
 
 export async function loadMovieInfo(
@@ -283,6 +353,7 @@ export async function loadMovieInfo(
     year: yearRaw ? String(yearRaw).slice(0, 4) : undefined,
     duration: i.duration || undefined,
     posterUrl: i.movie_image || i.cover_big || undefined,
+    backdropUrl: firstBackdrop(i.backdrop_path),
     director: i.director || undefined,
     cast: i.cast || i.actors || undefined,
   };
@@ -345,6 +416,35 @@ export async function loadChannelGuide(
   return out;
 }
 
+/** Programa "ahora / después" de get_short_epg (respaldo cuando no hay XMLTV). */
+export interface ShortEpgProgram {
+  title: string;
+  startMs: number;
+  stopMs: number;
+}
+
+/**
+ * EPG corto de un canal directo del proveedor. Respaldo del preview cuando el
+ * XMLTV no trae ese canal (o todavía no cargó).
+ */
+export async function loadShortEpg(
+  source: Extract<SourceConfig, { kind: "xtream" }>,
+  streamId: string,
+  limit = 2,
+): Promise<ShortEpgProgram[]> {
+  const url = `${xtreamPlayerApi(source)}&action=get_short_epg&stream_id=${streamId}&limit=${limit}`;
+  const dto = await getJson<XtEpgDto>(url);
+  const out: ShortEpgProgram[] = [];
+  for (const e of dto.epg_listings ?? []) {
+    const startTs = Number(e.start_timestamp) || 0;
+    const stopTs = Number(e.stop_timestamp) || 0;
+    if (!startTs || !stopTs) continue;
+    out.push({ title: b64Title(e.title), startMs: startTs * 1000, stopMs: stopTs * 1000 });
+  }
+  out.sort((a, b) => a.startMs - b.startMs);
+  return out;
+}
+
 export async function loadSeriesEpisodes(
   source: Extract<SourceConfig, { kind: "xtream" }>,
   seriesId: string,
@@ -360,6 +460,7 @@ export async function loadSeriesEpisodes(
     genre: info.info?.genre || undefined,
     plot: info.info?.plot || undefined,
     posterUrl: info.info?.cover || undefined,
+    backdropUrl: firstBackdrop(info.info?.backdrop_path),
     tmdbId: tmdbRaw != null && String(tmdbRaw).trim() ? String(tmdbRaw).trim() : undefined,
   };
   const episodes: Episode[] = [];

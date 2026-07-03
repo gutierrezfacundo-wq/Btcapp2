@@ -2,7 +2,7 @@ import { create } from "zustand";
 import type { Catalog, EpgProgram, MediaKind, SavedSource, SourceConfig } from "../data/types";
 import { xtreamXmltvUrl } from "../data/types";
 import { loadM3uCatalog } from "../data/m3uCatalog";
-import { loadXtreamLive, loadXtreamMovies, loadXtreamSeries } from "../data/xtream";
+import { loadAccountInfo, loadXtreamLive, loadXtreamMovies, loadXtreamSeries } from "../data/xtream";
 import { groupByChannel, parseXmltv } from "../data/xmltv";
 import { fetchText } from "../data/http";
 
@@ -24,6 +24,7 @@ const PIN_KEY = "iptv.parentalPin.v1";       // PIN parental (protege la salida 
 const KIDSPREFS_KEY = "iptv.kidsPrefs.v1";   // + ":<sourceKey>": contenido apto para niños
 const KIDSTIMER_KEY = "iptv.kidsTimer.v1";   // fin del temporizador del modo Felix (ms epoch)
 const REMOTECODE_KEY = "iptv.remoteCode.v1"; // código fijo del control remoto por celular
+const EPGAUTO_KEY = "iptv.epgAuto.v1";       // corrección horaria automática de la guía (on/off)
 
 function genId(): string {
   return `src-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`;
@@ -251,8 +252,14 @@ interface AppState {
   nativeSubs: boolean;
   /** Tamaño de los subtítulos en el reproductor. */
   subtitleScale: "s" | "m" | "l";
-  /** Corrección horaria de la guía EPG, en horas (-12..12). */
+  /** Corrección horaria de la guía EPG, en horas (-12..12): ajuste fino manual. */
   epgOffsetH: number;
+  /** Corrección automática de la guía (comparando el reloj del proveedor). */
+  epgAutoOn: boolean;
+  /** Desfasaje detectado del proveedor (ms); 0 hasta que se consulta. */
+  epgAutoMs: number;
+  /** Formatos de vivo que permite el proveedor (null = desconocido). */
+  allowedFormats: string[] | null;
   /** Ocultar/reordenar categorías de la lista activa. */
   catPrefs: CatPrefs;
   /** Modo Felix (niños) activo: toda la app queda restringida a lo apto. */
@@ -299,6 +306,7 @@ interface AppState {
   setNativeSubs: (on: boolean) => void;
   setSubtitleScale: (s: "s" | "m" | "l") => void;
   setEpgOffsetH: (h: number) => void;
+  setEpgAutoOn: (on: boolean) => void;
   setCatPrefs: (section: CatSection, prefs: SectionCatPrefs) => void;
   setKidsMode: (on: boolean) => void;
   setParentalPin: (pin: string) => void;
@@ -337,6 +345,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   subtitleScale: (() => { try { return (localStorage.getItem(SUBSCALE_KEY) as "s" | "m" | "l") || "m"; } catch { return "m"; } })(),
   playQueue: [],
   epgOffsetH: (() => { try { const v = Number(localStorage.getItem(EPGOFF_KEY)); return Number.isFinite(v) ? Math.max(-12, Math.min(12, v)) : 0; } catch { return 0; } })(),
+  epgAutoOn: (() => { try { return localStorage.getItem(EPGAUTO_KEY) !== "0"; } catch { return true; } })(),
+  epgAutoMs: 0,
+  allowedFormats: null,
   catPrefs: loadCatPrefs(initial.sources.find((s) => s.id === initial.activeId)?.config ?? null),
   kidsMode: (() => { try { return localStorage.getItem(KIDSMODE_KEY) === "1"; } catch { return false; } })(),
   parentalPin: (() => { try { return localStorage.getItem(PIN_KEY) ?? ""; } catch { return ""; } })(),
@@ -529,6 +540,10 @@ export const useAppStore = create<AppState>((set, get) => ({
         // Precargar Películas y Series en segundo plano (secuencial, para no
         // castigar al proveedor): entrar a esas secciones queda instantáneo.
         void get().ensureMovies().then(() => get().ensureSeries());
+        // Capacidades del proveedor: desfasaje horario de la guía y formatos.
+        void loadAccountInfo(source)
+          .then((a) => set({ epgAutoMs: a.epgAutoOffsetMs ?? 0, allowedFormats: a.allowedFormats ?? null }))
+          .catch(() => undefined);
       }
       const catalogForEpg = get().catalog;
       void catalogForEpg;
@@ -608,6 +623,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     const v = Math.max(-12, Math.min(12, Math.round(h)));
     try { localStorage.setItem(EPGOFF_KEY, String(v)); } catch { /* ignore */ }
     set({ epgOffsetH: v });
+  },
+
+  setEpgAutoOn: (on) => {
+    try { localStorage.setItem(EPGAUTO_KEY, on ? "1" : "0"); } catch { /* ignore */ }
+    set({ epgAutoOn: on });
   },
 
   setCatPrefs: (section, prefs) => {

@@ -10,6 +10,7 @@ import { decodeB64Url } from "../data/b64url";
 import { useBack } from "../navigation/backStack";
 import { focusWhenReady } from "../navigation/focusMemory";
 import { getMediaId, watchEmbeddedTracks, type EmbeddedTrackInfo } from "../webos/embeddedTracks";
+import { diagnoseStreamError } from "../data/xtream";
 import { isPlayPauseKey, RemoteKey } from "../webos/remote-keys";
 
 /** Estado que viaja DENTRO de la URL (?st=): location.state se pierde en webOS. */
@@ -331,6 +332,18 @@ export function Player() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [error]);
 
+  // Diagnóstico real del fallo: ¿conexiones al límite? ¿cuenta vencida?
+  const source = useAppStore((s) => s.source);
+  const [errDetail, setErrDetail] = useState<string | null>(null);
+  useEffect(() => {
+    if (!error) { setErrDetail(null); return; }
+    if (source?.kind !== "xtream") return;
+    let alive = true;
+    diagnoseStreamError(source).then((d) => { if (alive && d) setErrDetail(d); });
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [error]);
+
   const togglePlay = () => {
     const v = videoRef.current; if (!v) return;
     if (v.paused) v.play().catch(() => undefined); else v.pause();
@@ -458,7 +471,7 @@ export function Player() {
           ) : null}
           {error ? (
             <div style={{ position: "absolute", bottom: 170, left: 0, right: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
-              <div className="eo-r" style={{ textAlign: "center", color: "var(--err)" }}>{error}</div>
+              <div className="eo-r" style={{ textAlign: "center", color: "var(--err)" }}>{errDetail ?? error}</div>
               <FocusableButton focusKey="PL_RETRY" className="btn primary" onEnterPress={() => { setError(null); setReloadKey((k) => k + 1); focusWhenReady("PL_PLAY"); }}>
                 <Icon name="refresh" /> Reintentar
               </FocusableButton>

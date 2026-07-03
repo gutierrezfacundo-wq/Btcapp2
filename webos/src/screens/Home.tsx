@@ -5,6 +5,7 @@ import { FocusContext, useFocusable } from "@noriginmedia/norigin-spatial-naviga
 import type Hls from "hls.js";
 import { useAppStore, applyCatPrefs } from "../store/useAppStore";
 import { findNextProgram, findNowPlaying } from "../data/xmltv";
+import { loadShortEpg, type ShortEpgProgram } from "../data/xtream";
 import { FocusableButton } from "../components/FocusableButton";
 import { FocusableInput } from "../components/FocusableInput";
 import { Icon } from "../components/Icon";
@@ -34,6 +35,9 @@ function quality(name: string): string | null {
 function fmtClock(ms: number) {
   return new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
+
+// Cache del EPG corto por canal (respaldo cuando el XMLTV no lo trae).
+const shortEpgCache = new Map<string, { at: number; list: ShortEpgProgram[] }>();
 
 /**
  * Fila de canal memoizada: al seleccionar/mover el foco solo se re-renderizan las
@@ -92,7 +96,8 @@ export function Home() {
   const loadedSections = useAppStore((s) => s.loadedSections);
   const toggleFavorite = useAppStore((s) => s.toggleFavorite);
   const epgByChannel = useAppStore((s) => s.epgByChannel);
-  const epgOffMs = useAppStore((s) => s.epgOffsetH) * 3600000;
+  // Corrección de la guía: automática (reloj del proveedor) + ajuste fino manual.
+  const epgOffMs = useAppStore((s) => (s.epgAutoOn ? s.epgAutoMs : 0) + s.epgOffsetH * 3600000);
   const ui = useAppStore((s) => s.ui);
   const setUi = useAppStore((s) => s.setUi);
 
@@ -479,9 +484,33 @@ function PreviewPanel({
   onZap: (dir: 1 | -1) => void;
   onZapToNumber: (n: number) => void;
 }) {
-  const epgOffMs = useAppStore((s) => s.epgOffsetH) * 3600000;
-  const now = channel ? findNowPlaying(epgByChannel as never, channel.tvgId, epgOffMs) : null;
-  const next = channel ? findNextProgram(epgByChannel as never, channel.tvgId, epgOffMs) : null;
+  const epgOffMs = useAppStore((s) => (s.epgAutoOn ? s.epgAutoMs : 0) + s.epgOffsetH * 3600000);
+  const xmltvNow = channel ? findNowPlaying(epgByChannel as never, channel.tvgId, epgOffMs) : null;
+  const xmltvNext = channel ? findNextProgram(epgByChannel as never, channel.tvgId, epgOffMs) : null;
+
+  // Respaldo: si el XMLTV no trae este canal, pedimos get_short_epg al
+  // proveedor (cacheado 5 min por canal para no castigarlo al zappear).
+  const [shortList, setShortList] = useState<ShortEpgProgram[] | null>(null);
+  useEffect(() => {
+    setShortList(null);
+    if (xmltvNow || !channel) return;
+    const sid = channel.id.match(/^xt-live-(\d+)$/)?.[1];
+    const src = useAppStore.getState().source;
+    if (!sid || !src || src.kind !== "xtream") return;
+    const cached = shortEpgCache.get(sid);
+    if (cached && Date.now() - cached.at < 5 * 60000) { setShortList(cached.list); return; }
+    let alive = true;
+    loadShortEpg(src, sid, 2)
+      .then((list) => { shortEpgCache.set(sid, { at: Date.now(), list }); if (alive) setShortList(list); })
+      .catch(() => undefined);
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [channel?.id, xmltvNow == null]);
+
+  const nowMs = Date.now();
+  const shifted = (p: ShortEpgProgram) => ({ title: p.title, startMs: p.startMs + epgOffMs, stopMs: p.stopMs + epgOffMs, description: undefined as string | undefined });
+  const now = xmltvNow ?? (shortList ? shortList.map(shifted).find((p) => p.startMs <= nowMs && nowMs < p.stopMs) ?? null : null);
+  const next = xmltvNext ?? (shortList ? shortList.map(shifted).find((p) => p.startMs > nowMs) ?? null : null);
   const videoElRef = useRef<HTMLVideoElement | null>(null);
   const [paused, setPaused] = useState(false);
   const [hls, setHls] = useState<Hls | null>(null);
