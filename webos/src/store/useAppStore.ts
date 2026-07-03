@@ -19,10 +19,10 @@ const SUBSCALE_KEY = "iptv.subtitleScale.v1"; // tamaño de subtítulos (s/m/l)
 const EPGOFF_KEY = "iptv.epgOffset.v1";      // corrección horaria de la guía (horas)
 const UI_KEY = "iptv.ui.v1";                  // navegación del Home (canal/categoría/tab): sobrevive al reinicio
 const CATPREFS_KEY = "iptv.catPrefs.v1";     // + ":<sourceKey>": ocultar/reordenar categorías por lista
-const KIDSMODE_KEY = "iptv.kidsMode.v1";     // modo Félix activo (sobrevive al reinicio)
-const PIN_KEY = "iptv.parentalPin.v1";       // PIN parental (protege la salida del modo Félix)
+const KIDSMODE_KEY = "iptv.kidsMode.v1";     // modo Felix activo (sobrevive al reinicio)
+const PIN_KEY = "iptv.parentalPin.v1";       // PIN parental (protege la salida del modo Felix)
 const KIDSPREFS_KEY = "iptv.kidsPrefs.v1";   // + ":<sourceKey>": contenido apto para niños
-const KIDSTIMER_KEY = "iptv.kidsTimer.v1";   // fin del temporizador del modo Félix (ms epoch)
+const KIDSTIMER_KEY = "iptv.kidsTimer.v1";   // fin del temporizador del modo Felix (ms epoch)
 
 function genId(): string {
   return `src-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`;
@@ -156,7 +156,7 @@ export function applyCatPrefs<T extends { name: string }>(cats: T[], prefs: Sect
     .map((x) => x.c);
 }
 
-// ===== Modo Félix (niños): contenido apto, por lista =====
+// ===== Modo Felix (niños): contenido apto, por lista =====
 export interface KidsPrefs {
   /** Nombres de categorías aptas, por sección. */
   live: string[];
@@ -246,13 +246,13 @@ interface AppState {
   epgOffsetH: number;
   /** Ocultar/reordenar categorías de la lista activa. */
   catPrefs: CatPrefs;
-  /** Modo Félix (niños) activo: toda la app queda restringida a lo apto. */
+  /** Modo Felix (niños) activo: toda la app queda restringida a lo apto. */
   kidsMode: boolean;
   /** PIN parental (4 dígitos, "" = sin PIN). */
   parentalPin: string;
   /** Contenido apto para niños de la lista activa. */
   kidsPrefs: KidsPrefs;
-  /** Temporizador del modo Félix: momento de apagado (ms epoch), null = sin límite. */
+  /** Temporizador del modo Felix: momento de apagado (ms epoch), null = sin límite. */
   kidsTimerEndsAt: number | null;
   /** Cola de reproducción (episodios de la temporada en curso) para "siguiente episodio". */
   playQueue: { route: string; label: string; url: string }[];
@@ -293,7 +293,7 @@ interface AppState {
   setParentalPin: (pin: string) => void;
   toggleKidsCategory: (section: CatSection, name: string) => void;
   toggleKidsItem: (id: string) => void;
-  /** Arranca el temporizador del modo Félix (minutos) o lo apaga (null). */
+  /** Arranca el temporizador del modo Felix (minutos) o lo apaga (null). */
   setKidsTimer: (minutes: number | null) => void;
   setPlayQueue: (q: { route: string; label: string; url: string }[]) => void;
 }

@@ -157,7 +157,7 @@ export function Home() {
 
   // Preferencias del usuario: categorías ocultas y orden propio (por lista).
   const catPrefs = useAppStore((s) => s.catPrefs);
-  // Modo Félix: solo categorías/contenido marcados como aptos.
+  // Modo Felix: solo categorías/contenido marcados como aptos.
   const kidsMode = useAppStore((s) => s.kidsMode);
   const kidsPrefs = useAppStore((s) => s.kidsPrefs);
   const kidsCats = useMemo(() => new Set(!kidsMode ? []
@@ -177,7 +177,7 @@ export function Home() {
   }, [rawCategories, sectionPrefs, kidsMode, kidsCats]);
   const hiddenCats = useMemo(() => new Set(sectionPrefs?.hidden ?? []), [sectionPrefs]);
 
-  // En modo Félix no hay pestaña Favoritos.
+  // En modo Felix no hay pestaña Favoritos.
   useEffect(() => {
     if (kidsMode && tab === "favorites") { setTabState("live"); setUi({ tab: "live" }); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -209,7 +209,7 @@ export function Home() {
     return out;
   }, [sortMode, collator]);
   // En "Todas" también se excluye el contenido de las categorías ocultas.
-  // En modo Félix solo pasa lo apto (categoría apta o título marcado).
+  // En modo Felix solo pasa lo apto (categoría apta o título marcado).
   const liveFiltered = useMemo(() => {
     if (tab !== "live") return [];
     const all = kidsMode
@@ -290,7 +290,7 @@ export function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const onZapToNumber = useCallback((n: number) => {
-    // En modo Félix el número refiere a la lista apta, no al catálogo completo.
+    // En modo Felix el número refiere a la lista apta, no al catálogo completo.
     const c = kidsMode ? liveFilteredRef.current[n - 1] : catalog.liveChannels[n - 1];
     if (c) setSelectedChannelId(c.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -486,7 +486,7 @@ function PreviewPanel({
   const favorites = useAppStore((s) => s.favorites);
   const isFav = !!channel && favorites.some((f) => f.id === channel.id);
   const toggleFav = () => { if (channel) toggleFavorite({ id: channel.id, name: channel.name, streamUrl: channel.streamUrl, logoUrl: channel.logoUrl, kind: "live", meta: [channelNumber ? `Nº ${channelNumber}` : null, ql].filter(Boolean).join(" · ") || undefined }); };
-  // Marcar el canal como apto para el modo Félix (solo visible fuera del modo).
+  // Marcar el canal como apto para el modo Felix (solo visible fuera del modo).
   const kidsMode = useAppStore((s) => s.kidsMode);
   const kidsItemIds = useAppStore((s) => s.kidsPrefs.items);
   const toggleKidsItem = useAppStore((s) => s.toggleKidsItem);
@@ -626,7 +626,7 @@ function PreviewPanel({
                 <FocusableButton className="a-btn" onEnterPress={onCatchup}><Icon name="calendar_month" /> Guía</FocusableButton>
                 {!kidsMode && channel ? (
                   <FocusableButton className={`a-btn ${isKidsOk ? "kids-on" : ""}`} onEnterPress={() => toggleKidsItem(channel.id)}>
-                    <Icon name="child_care" /> {isKidsOk ? "Apto ✓" : "Félix"}
+                    <Icon name="child_care" /> {isKidsOk ? "Apto ✓" : "Felix"}
                   </FocusableButton>
                 ) : null}
               </div>

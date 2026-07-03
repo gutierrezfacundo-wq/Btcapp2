@@ -145,7 +145,7 @@ export function SeriesDetail() {
                       </FocusableButton>
                       {!kidsMode ? (
                         <FocusableButton className={`btn ${isKidsOk ? "kids-on" : ""}`} onEnterPress={() => toggleKidsItem(id)}>
-                          <Icon name="child_care" /> {isKidsOk ? "Apto para Félix ✓" : "Apto para Félix"}
+                          <Icon name="child_care" /> {isKidsOk ? "Apto para Felix ✓" : "Apto para Felix"}
                         </FocusableButton>
                       ) : null}
                     </div>

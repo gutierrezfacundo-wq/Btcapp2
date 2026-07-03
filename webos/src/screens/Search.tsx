@@ -64,7 +64,7 @@ export function Search() {
 
   useBack(() => { navigate("/hub"); });
 
-  // Modo Félix: el buscador solo devuelve contenido apto.
+  // Modo Felix: el buscador solo devuelve contenido apto.
   const kidsMode = useAppStore((s) => s.kidsMode);
   const kidsPrefs = useAppStore((s) => s.kidsPrefs);
   const kItems = useMemo(() => new Set(kidsMode ? kidsPrefs.items : []), [kidsMode, kidsPrefs]);

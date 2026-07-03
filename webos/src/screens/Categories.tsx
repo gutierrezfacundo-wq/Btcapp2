@@ -34,11 +34,11 @@ export function Categories() {
   const toggleKidsCategory = useAppStore((s) => s.toggleKidsCategory);
 
   const [section, setSection] = useState<CatSection>("live");
-  // "vis": ocultar/ordenar · "kids": marcar categorías aptas para el modo Félix.
+  // "vis": ocultar/ordenar · "kids": marcar categorías aptas para el modo Felix.
   const [view, setView] = useState<"vis" | "kids">("vis");
   const prefs = catPrefs[section];
 
-  // Esta pantalla no existe dentro del modo Félix.
+  // Esta pantalla no existe dentro del modo Felix.
   useEffect(() => { if (kidsMode) navigate("/hub"); }, [kidsMode, navigate]);
 
   const { ref, focusKey } = useFocusable({ trackChildren: true, focusKey: "CATMGR" });
@@ -115,7 +115,7 @@ export function Categories() {
                     <Icon name="visibility" /> Visibilidad
                   </FocusableButton>
                   <FocusableButton className={`chip ${view === "kids" ? "on" : ""}`} onEnterPress={() => setView("kids")}>
-                    <Icon name="child_care" /> Aptas para Félix
+                    <Icon name="child_care" /> Aptas para Felix
                   </FocusableButton>
                 </FocusZone>
                 {view === "vis" && dirty ? (
@@ -182,7 +182,7 @@ export function Categories() {
         </div>
         <Hints items={view === "kids"
           ? [
-              { k: "OK", label: "Apta / no apta para Félix" },
+              { k: "OK", label: "Apta / no apta para Felix" },
               { k: "↕", label: "Navegar" },
               { k: "Esc", label: "Volver" },
             ]

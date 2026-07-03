@@ -20,7 +20,7 @@ const BOTTOM: { id: RailId; icon: string }[] = [
   { id: "settings", icon: "settings" },
 ];
 
-// En modo Félix no se muestran Favoritos ni Configuración (la salida del
+// En modo Felix no se muestran Favoritos ni Configuración (la salida del
 // modo está protegida por PIN desde el Inicio).
 const KIDS_HIDDEN: RailId[] = ["favorites", "settings"];
 

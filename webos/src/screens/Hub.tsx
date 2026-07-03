@@ -38,7 +38,7 @@ export function Hub() {
   const reload = useAppStore((s) => s.reload);
   const setUi = useAppStore((s) => s.setUi);
 
-  // Modo Félix (niños)
+  // Modo Felix (niños)
   const kidsMode = useAppStore((s) => s.kidsMode);
   const setKidsMode = useAppStore((s) => s.setKidsMode);
   const parentalPin = useAppStore((s) => s.parentalPin);
@@ -67,7 +67,7 @@ export function Hub() {
     if (!hubBlocked) restoreFocus("hub:tiles", "HUB_T_0");
   }, [hubBlocked, kidsMode]);
 
-  // ¿Un ítem del historial es apto para el modo Félix?
+  // ¿Un ítem del historial es apto para el modo Felix?
   const kidsAllowedHistory = useMemo(() => {
     const items = new Set(kidsPrefs.items);
     const live = new Set(kidsPrefs.live);
@@ -91,7 +91,7 @@ export function Hub() {
     };
   }, [kidsPrefs, catalog]);
 
-  // Conteo de contenido apto (para los tiles del modo Félix).
+  // Conteo de contenido apto (para los tiles del modo Felix).
   const kidsCounts = useMemo(() => {
     if (!kidsMode) return { live: 0, movies: 0, series: 0 };
     const items = new Set(kidsPrefs.items);
@@ -143,7 +143,7 @@ export function Hub() {
   return (
     <FocusContext.Provider value={focusKey}>
       <div className="ascreen" ref={ref}>
-        <TopBar title={kidsMode ? "Modo Félix" : "Inicio"} />
+        <TopBar title={kidsMode ? "Modo Felix" : "Inicio"} />
         <div className="a-body">
           <Rail active="hub" onSelect={railNav} reloading={loading} />
           <div className="a-screen">
@@ -160,7 +160,7 @@ export function Hub() {
               <div className="hub">
                 <div className="hub-hero">
                   <div>
-                    <div className="hub-greet">{kidsMode ? "¡Hola, Félix! 🦖" : greeting()}</div>
+                    <div className="hub-greet">{kidsMode ? "¡Hola, Felix! 🦖" : greeting()}</div>
                     <div className="hub-title">{kidsMode ? <>¿Qué vamos a <span>ver</span>?</> : <>¿Qué querés <span>ver</span> hoy?</>}</div>
                   </div>
                 </div>
@@ -179,14 +179,14 @@ export function Hub() {
                       <div className="hub-tile-ic"><Icon name="lock" /></div>
                       <div className="hub-tile-b">
                         <div className="hub-tile-t">Grandes</div>
-                        <div className="hub-tile-s">{parentalPin ? "Salir con PIN" : "Salir del modo Félix"}</div>
+                        <div className="hub-tile-s">{parentalPin ? "Salir con PIN" : "Salir del modo Felix"}</div>
                       </div>
                     </FocusableButton>
                   ) : (
                     <FocusableButton focusKey={`HUB_T_${tiles.length}`} className="hub-tile hub-felix" onEnterPress={enterKids}>
                       <div className="hub-tile-ic"><Icon name="child_care" /></div>
                       <div className="hub-tile-b">
-                        <div className="hub-tile-t">Félix</div>
+                        <div className="hub-tile-t">Felix</div>
                         <div className="hub-tile-s">Modo niños</div>
                       </div>
                     </FocusableButton>

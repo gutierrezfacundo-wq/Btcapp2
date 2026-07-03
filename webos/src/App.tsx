@@ -29,7 +29,7 @@ export default function App() {
   const reload = useAppStore((s) => s.reload);
   const kidsMode = useAppStore((s) => s.kidsMode);
 
-  // Tema del modo Félix: colores vivos y formas redondas vía body.kids.
+  // Tema del modo Felix: colores vivos y formas redondas vía body.kids.
   useEffect(() => {
     document.body.classList.toggle("kids", kidsMode);
   }, [kidsMode]);

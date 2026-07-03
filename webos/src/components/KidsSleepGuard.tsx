@@ -14,7 +14,7 @@ function closeApp() {
 }
 
 /**
- * Temporizador del modo Félix: cuando vence, pausa el video, tapa toda la
+ * Temporizador del modo Felix: cuando vence, pausa el video, tapa toda la
  * app con la pantalla "a dormir" y cierra la app tras una cuenta regresiva.
  * "Seguir usando" pide el PIN parental (si hay) y apaga el temporizador.
  */
@@ -72,7 +72,7 @@ export function KidsSleepGuard() {
   return (
     <div className="sleep-ov">
       <div className="sleep-moon">🌙</div>
-      <div className="sleep-t">¡Se terminó por hoy, Félix!</div>
+      <div className="sleep-t">¡Se terminó por hoy, Felix!</div>
       <div className="sleep-s">Hora de descansar. La app se cierra en {closeIn} s…</div>
       <FocusableButton focusKey="SLEEP_MORE" className="btn sleep-btn" onEnterPress={() => (parentalPin ? setPinOpen(true) : dismiss())}>
         <Icon name="lock" /> Soy grande: seguir usando

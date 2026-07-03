@@ -48,7 +48,7 @@ export function Setup() {
   const setParentalPin = useAppStore((s) => s.setParentalPin);
   const [pinOpen, setPinOpen] = useState(false);
 
-  // La configuración no es accesible dentro del modo Félix.
+  // La configuración no es accesible dentro del modo Felix.
   useEffect(() => { if (kidsMode) navigate("/hub"); }, [kidsMode, navigate]);
 
   // Info de la cuenta Xtream activa (vencimiento/conexiones), mejor esfuerzo.
@@ -299,11 +299,11 @@ export function Setup() {
                     <FocusableButton className="btn" onEnterPress={() => navigate("/categories")}>
                       <Icon name="tune" /> Gestionar categorías
                     </FocusableButton>
-                    <div className="a-pdesc" style={{ marginTop: 6 }}>Ocultá las categorías que no usás y cambiales el orden. Se guarda por lista y afecta En vivo, Películas y Series. Ahí también marcás las categorías aptas para el modo Félix.</div>
+                    <div className="a-pdesc" style={{ marginTop: 6 }}>Ocultá las categorías que no usás y cambiales el orden. Se guarda por lista y afecta En vivo, Películas y Series. Ahí también marcás las categorías aptas para el modo Felix.</div>
                   </div>
 
                   <div className="fld" style={{ marginTop: 18 }}>
-                    <label className="fld-l"><Icon name="child_care" /> Modo Félix (niños)</label>
+                    <label className="fld-l"><Icon name="child_care" /> Modo Felix (niños)</label>
                     <div style={{ display: "flex", gap: 12 }}>
                       <FocusableButton className="btn" onEnterPress={() => setPinOpen(true)}>
                         <Icon name="lock" /> {parentalPin ? "Cambiar PIN" : "Establecer PIN"}
@@ -316,9 +316,9 @@ export function Setup() {
                     </div>
                     <div className="a-pdesc" style={{ marginTop: 6 }}>
                       {parentalPin
-                        ? "PIN configurado: salir del modo Félix pide el PIN."
-                        : "Sin PIN, cualquiera puede salir del modo Félix. Configuralo para protegerlo."}
-                      {" "}El modo se activa desde la caja “Félix” del Inicio.
+                        ? "PIN configurado: salir del modo Felix pide el PIN."
+                        : "Sin PIN, cualquiera puede salir del modo Felix. Configuralo para protegerlo."}
+                      {" "}El modo se activa desde la caja “Felix” del Inicio.
                     </div>
                   </div>
 
