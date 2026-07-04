@@ -357,11 +357,16 @@ export function Player() {
   const pendingSeek = useRef<number | null>(null);
   const [pendingUi, setPendingUi] = useState<number | null>(null);
   const seekApply = useRef<number | null>(null);
-  const burst = useRef({ n: 0, at: 0 });
+  const burst = useRef({ n: 0, at: 0, dir: 0 });
 
   const queueSeek = (deltaS: number) => {
     const v = videoRef.current; if (!v) return;
-    const max = isFinite(v.duration) && v.duration > 0 ? Math.max(0, v.duration - 2) : Number.MAX_SAFE_INTEGER;
+    // Tope de avance: duración conocida, o el rango seekable real (el pipeline
+    // nativo de webOS reporta duration Infinity/NaN en MKV/TS — saltar más
+    // allá del final dispararía "ended" y el auto-siguiente-episodio).
+    let max = Number.MAX_SAFE_INTEGER;
+    if (isFinite(v.duration) && v.duration > 0) max = Math.max(0, v.duration - 2);
+    else if (v.seekable && v.seekable.length) max = Math.max(0, v.seekable.end(v.seekable.length - 1) - 2);
     const base = pendingSeek.current ?? v.currentTime;
     const target = Math.max(0, Math.min(max, base + deltaS));
     pendingSeek.current = target;
@@ -370,9 +375,15 @@ export function Player() {
     seekApply.current = window.setTimeout(() => {
       const t = pendingSeek.current;
       pendingSeek.current = null;
-      setPendingUi(null);
       const vv = videoRef.current;
-      if (t != null && vv) { vv.currentTime = t; lastPos.current = t; setCur(t); }
+      if (t == null || !vv) { setPendingUi(null); return; }
+      vv.currentTime = t; lastPos.current = t; setCur(t);
+      // Mantener el tiempo objetivo en pantalla hasta que el seek termine:
+      // si lo soltamos ya, timeupdate pisa la barra con la posición vieja
+      // mientras el pipeline todavía está saltando (la barra "rebota").
+      const clear = () => { setPendingUi(null); vv.removeEventListener("seeked", clear); };
+      vv.addEventListener("seeked", clear);
+      window.setTimeout(clear, 2500); // por si el pipeline nunca emite seeked
     }, 450);
     showOverlay();
   };
@@ -380,10 +391,12 @@ export function Player() {
   useEffect(() => () => { if (seekApply.current) window.clearTimeout(seekApply.current); }, []);
 
   // Flecha sostenida en la barra: el paso crece 10 → 30 → 60 → 120 s.
+  // Cambiar de dirección arranca la aceleración de cero (retroceder tras
+  // adelantar mucho no debe pegar saltos de 2 minutos).
   const accelSeek = (dir: 1 | -1) => {
     const nowT = Date.now();
-    if (nowT - burst.current.at > 700) burst.current.n = 0;
-    burst.current = { n: burst.current.n + 1, at: nowT };
+    if (nowT - burst.current.at > 700 || burst.current.dir !== dir) burst.current.n = 0;
+    burst.current = { n: burst.current.n + 1, at: nowT, dir };
     const n = burst.current.n;
     const step = n <= 3 ? 10 : n <= 8 ? 30 : n <= 14 ? 60 : 120;
     queueSeek(dir * step);
@@ -407,7 +420,7 @@ export function Player() {
         // 0–9: salto directo al 0%…90% de la duración (con la hoja de pistas cerrada).
         const k = e.keyCode;
         const digit = k >= 48 && k <= 57 ? k - 48 : k >= 96 && k <= 105 ? k - 96 : -1;
-        if (digit >= 0 && !tracksRef.current) {
+        if (digit >= 0 && !tracksRef.current && !showNextRef.current) {
           const v = videoRef.current;
           if (v && isFinite(v.duration) && v.duration > 0) {
             e.preventDefault();
