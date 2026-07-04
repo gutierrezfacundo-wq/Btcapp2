@@ -64,6 +64,23 @@ export function SeriesDetail() {
     () => (episodes ? [...new Set(episodes.map((e) => e.seasonNumber))].sort((a, b) => a - b) : []),
     [episodes],
   );
+
+  // "Continuar T2 · E5": el episodio a medio ver, o el siguiente al último visto.
+  const continueEp = useMemo(() => {
+    if (!episodes?.length) return null;
+    const halfway = episodes.find((e) => {
+      const p = progress[e.id];
+      return p && p.pos > 30 && (p.dur === 0 || p.pos <= p.dur - 60);
+    });
+    if (halfway) return halfway;
+    let lastWatched = -1;
+    episodes.forEach((e, i) => {
+      const p = progress[e.id];
+      if (p && p.dur > 0 && p.pos > p.dur - 60) lastWatched = i;
+    });
+    if (lastWatched >= 0 && lastWatched + 1 < episodes.length) return episodes[lastWatched + 1];
+    return null;
+  }, [episodes, progress]);
   const seasonEpisodes = useMemo(
     () => (episodes ?? []).filter((e) => e.seasonNumber === season),
     [episodes, season],
@@ -97,7 +114,7 @@ export function SeriesDetail() {
   const play = (ep: Episode) => {
     const route = routeFor(ep);
     const epMeta = `T${ep.seasonNumber} · E${ep.episodeNumber}${ep.duration ? ` · ${ep.duration}` : ""}`;
-    pushHistory({ id: `series:${id}`, name: title, route, posterUrl: info?.posterUrl, sub: epMeta, kind: "series-episode" });
+    pushHistory({ id: `series:${id}`, name: title, route, posterUrl: info?.posterUrl, sub: epMeta, kind: "series-episode", cid: ep.id });
     // Cola de la temporada: habilita "Siguiente episodio" al terminar cada uno.
     setPlayQueue(seasonEpisodes.map((e) => ({ route: routeFor(e), label: `T${e.seasonNumber} · E${e.episodeNumber}`, url: e.streamUrl })));
     navigate(route);
@@ -136,7 +153,11 @@ export function SeriesDetail() {
                     </div>
                     {info?.plot || meta?.plot ? <div className="det-syn">{info?.plot || meta?.plot}</div> : null}
                     <div style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
-                      {seasonEpisodes[0] ? (
+                      {continueEp ? (
+                        <FocusableButton focusKey="SER_PLAY" className="det-play" onEnterPress={() => { setSeason(continueEp.seasonNumber); play(continueEp); }}>
+                          <Icon name="play_arrow" /> Continuar T{continueEp.seasonNumber} · E{continueEp.episodeNumber}
+                        </FocusableButton>
+                      ) : seasonEpisodes[0] ? (
                         <FocusableButton focusKey="SER_PLAY" className="det-play" onEnterPress={() => play(seasonEpisodes[0])}>
                           <Icon name="play_arrow" /> Reproducir T{seasonEpisodes[0].seasonNumber} · E{seasonEpisodes[0].episodeNumber}
                         </FocusableButton>

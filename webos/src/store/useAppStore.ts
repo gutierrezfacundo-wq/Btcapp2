@@ -216,6 +216,8 @@ export interface HistoryItem {
   posterUrl?: string;
   sub?: string;
   kind: MediaKind;
+  /** Id del contenido cuyo progreso se guarda (ej. episodio de la serie). */
+  cid?: string;
   at: number;
 }
 
