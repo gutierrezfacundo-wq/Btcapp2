@@ -349,10 +349,44 @@ export function Player() {
     if (v.paused) v.play().catch(() => undefined); else v.pause();
     showOverlay();
   };
-  const seek = (d: number) => {
+
+  // ===== Seek acumulado con aceleración =====
+  // Cada escritura de currentTime rebuffera el pipeline de webOS: acumulamos
+  // el salto mientras se aprieta (la barra se mueve sola) y lo aplicamos UNA
+  // vez al soltar (450 ms sin pulsaciones).
+  const pendingSeek = useRef<number | null>(null);
+  const [pendingUi, setPendingUi] = useState<number | null>(null);
+  const seekApply = useRef<number | null>(null);
+  const burst = useRef({ n: 0, at: 0 });
+
+  const queueSeek = (deltaS: number) => {
     const v = videoRef.current; if (!v) return;
-    v.currentTime = Math.max(0, Math.min((v.duration || 0), v.currentTime + d));
+    const max = isFinite(v.duration) && v.duration > 0 ? Math.max(0, v.duration - 2) : Number.MAX_SAFE_INTEGER;
+    const base = pendingSeek.current ?? v.currentTime;
+    const target = Math.max(0, Math.min(max, base + deltaS));
+    pendingSeek.current = target;
+    setPendingUi(target);
+    if (seekApply.current) window.clearTimeout(seekApply.current);
+    seekApply.current = window.setTimeout(() => {
+      const t = pendingSeek.current;
+      pendingSeek.current = null;
+      setPendingUi(null);
+      const vv = videoRef.current;
+      if (t != null && vv) { vv.currentTime = t; lastPos.current = t; setCur(t); }
+    }, 450);
     showOverlay();
+  };
+  const seek = (d: number) => queueSeek(d);
+  useEffect(() => () => { if (seekApply.current) window.clearTimeout(seekApply.current); }, []);
+
+  // Flecha sostenida en la barra: el paso crece 10 → 30 → 60 → 120 s.
+  const accelSeek = (dir: 1 | -1) => {
+    const nowT = Date.now();
+    if (nowT - burst.current.at > 700) burst.current.n = 0;
+    burst.current = { n: burst.current.n + 1, at: nowT };
+    const n = burst.current.n;
+    const step = n <= 3 ? 10 : n <= 8 ? 30 : n <= 14 ? 60 : 120;
+    queueSeek(dir * step);
   };
 
   // Back: la hoja de pistas (si está abierta) lo consume con su propio useBack;
@@ -369,6 +403,18 @@ export function Player() {
       // solo navegan foco (el seek con flechas vive en la barra de tiempo).
       if (e.keyCode === RemoteKey.FastForward) { e.preventDefault(); seek(30); }
       else if (e.keyCode === RemoteKey.Rewind) { e.preventDefault(); seek(-30); }
+      else {
+        // 0–9: salto directo al 0%…90% de la duración (con la hoja de pistas cerrada).
+        const k = e.keyCode;
+        const digit = k >= 48 && k <= 57 ? k - 48 : k >= 96 && k <= 105 ? k - 96 : -1;
+        if (digit >= 0 && !tracksRef.current) {
+          const v = videoRef.current;
+          if (v && isFinite(v.duration) && v.duration > 0) {
+            e.preventDefault();
+            v.currentTime = (v.duration * digit) / 10;
+          }
+        }
+      }
       showOverlay();
     };
     window.addEventListener("keydown", onKey);
@@ -376,7 +422,8 @@ export function Player() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const pct = dur > 0 ? (cur / dur) * 100 : 0;
+  const shownCur = pendingUi ?? cur;
+  const pct = dur > 0 ? (shownCur / dur) * 100 : 0;
 
   return (
     <FocusContext.Provider value={focusKey}>
@@ -414,14 +461,14 @@ export function Player() {
 
           <div className="ply-bottom">
             <div className="ply-seek">
-              <span className="ply-time">{fmt(cur)}</span>
+              <span className={`ply-time ${pendingUi != null ? "pending" : ""}`}>{fmt(shownCur)}</span>
               <FocusableButton
                 focusKey="PL_SEEK"
                 className="ply-seekbar"
                 onEnterPress={togglePlay}
                 onArrowPress={(dir) => {
-                  if (dir === "left") { seek(-10); return false; }
-                  if (dir === "right") { seek(10); return false; }
+                  if (dir === "left") { accelSeek(-1); return false; }
+                  if (dir === "right") { accelSeek(1); return false; }
                   return true;
                 }}
               >
