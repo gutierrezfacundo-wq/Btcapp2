@@ -150,7 +150,7 @@ export function Home() {
     else if (id === "settings") navigate("/setup");
     else if (id === "reload") reload();
     else if (id === "search") navigate("/search");
-    else { setTab(id as Tab); setCategory(null); setQuery(""); }
+    else { setTab(id as Tab); setCategory(null); setQuery(""); setGenre(null); }
   };
 
   // ===== Datos =====
@@ -204,6 +204,27 @@ export function Home() {
   // Orden de la grilla VOD: por defecto (proveedor) / recientes / año / A-Z.
   type SortMode = "default" | "recent" | "year" | "az";
   const [sortMode, setSortMode] = useState<SortMode>("default");
+  // Filtro por género de metadata (Comedia, Familia…), si el proveedor lo manda.
+  const [genre, setGenre] = useState<string | null>(null);
+  const genres = useMemo(() => {
+    if (tab !== "movies" && tab !== "series") return [];
+    const src = tab === "movies" ? catalog.movies : catalog.series;
+    const count = new Map<string, { label: string; n: number }>();
+    for (const it of src) {
+      for (const raw of (it.genre ?? "").split(/[,/|]/)) {
+        const label = raw.trim();
+        if (label.length < 2) continue;
+        const k = label.toLowerCase();
+        const e = count.get(k);
+        if (e) e.n += 1; else count.set(k, { label, n: 1 });
+      }
+    }
+    return [...count.values()]
+      .filter((e) => e.n >= 3)          // géneros con contenido real
+      .sort((a, b) => b.n - a.n)
+      .slice(0, 24)
+      .map((e) => e.label);
+  }, [tab, catalog.movies, catalog.series]);
   const collator = useMemo(() => new Intl.Collator("es", { sensitivity: "base" }), []);
   const applySort = useCallback(<T extends { name: string; year?: string; addedAt?: number }>(list: T[]): T[] => {
     if (sortMode === "default") return list;
@@ -231,8 +252,10 @@ export function Home() {
       : catalog.movies;
     const byCat = category ? all.filter((m) => m.category === category)
       : hiddenCats.size ? all.filter((m) => !hiddenCats.has(m.category ?? "")) : all;
-    return applySort(q ? byCat.filter((m) => m.name.toLowerCase().includes(q)) : byCat);
-  }, [tab, catalog.movies, category, q, applySort, hiddenCats, kidsMode, kidsCats, kidsItems]);
+    const g = genre?.toLowerCase();
+    const byGenre = g ? byCat.filter((m) => (m.genre ?? "").toLowerCase().includes(g)) : byCat;
+    return applySort(q ? byGenre.filter((m) => m.name.toLowerCase().includes(q)) : byGenre);
+  }, [tab, catalog.movies, category, q, applySort, hiddenCats, kidsMode, kidsCats, kidsItems, genre]);
   const seriesFiltered = useMemo(() => {
     if (tab !== "series") return [];
     const all = kidsMode
@@ -240,8 +263,10 @@ export function Home() {
       : catalog.series;
     const byCat = category ? all.filter((s) => s.category === category)
       : hiddenCats.size ? all.filter((s) => !hiddenCats.has(s.category ?? "")) : all;
-    return applySort(q ? byCat.filter((s) => s.name.toLowerCase().includes(q)) : byCat);
-  }, [tab, catalog.series, category, q, applySort, hiddenCats, kidsMode, kidsCats, kidsItems]);
+    const g = genre?.toLowerCase();
+    const byGenre = g ? byCat.filter((s) => (s.genre ?? "").toLowerCase().includes(g)) : byCat;
+    return applySort(q ? byGenre.filter((s) => s.name.toLowerCase().includes(q)) : byGenre);
+  }, [tab, catalog.series, category, q, applySort, hiddenCats, kidsMode, kidsCats, kidsItems, genre]);
 
   const openSeries = (id: string, name: string) => {
     navigate(`/series/${id}?name=${encodeURIComponent(name)}`);
@@ -456,6 +481,9 @@ export function Home() {
                 onPick={onPickGrid}
                 sortMode={sortMode}
                 onSortChange={(m) => setSortMode(m as SortMode)}
+                genres={genres}
+                genre={genre}
+                onGenre={setGenre}
               />
             )}
           </FocusZone>
@@ -695,7 +723,7 @@ const SORT_OPTIONS = [
 const SORT_LABEL: Record<string, string> = { default: "Por defecto", recent: "Recientes", year: "Año", az: "A-Z" };
 
 function GridScreen({
-  title, count, categories, category, onCategory, query, onQuery, items, onPick, sortMode, onSortChange,
+  title, count, categories, category, onCategory, query, onQuery, items, onPick, sortMode, onSortChange, genres, genre, onGenre,
 }: {
   title: string;
   count: number;
@@ -708,18 +736,35 @@ function GridScreen({
   onPick: (index: number) => void;
   sortMode: string;
   onSortChange: (m: string) => void;
+  genres: string[];
+  genre: string | null;
+  onGenre: (g: string | null) => void;
 }) {
   // Menú de orden: lista desplegable (OK abre, ↑↓ elige, OK aplica, Back cierra).
   const [sortOpen, setSortOpen] = useState(false);
   useBack(() => { setSortOpen(false); focusWhenReady("GRD_SORT"); }, sortOpen);
   const openSort = () => {
     setSortOpen(true);
+    setGenreOpen(false);
     focusWhenReady(`SORT_${sortMode}`);
   };
   const pickSort = (m: string) => {
     onSortChange(m);
     setSortOpen(false);
     focusWhenReady("GRD_SORT");
+  };
+  // Menú de género (Comedia, Familia…): mismo patrón que el de orden.
+  const [genreOpen, setGenreOpen] = useState(false);
+  useBack(() => { setGenreOpen(false); focusWhenReady("GRD_GENRE"); }, genreOpen);
+  const openGenre = () => {
+    setGenreOpen(true);
+    setSortOpen(false);
+    focusWhenReady(genre ? `GEN_${genre}` : "GEN__all");
+  };
+  const pickGenre = (g: string | null) => {
+    onGenre(g);
+    setGenreOpen(false);
+    focusWhenReady("GRD_GENRE");
   };
   // Filas de a 6 para virtualizar la grilla (solo se montan las visibles).
   const rows = useMemo(() => {
@@ -731,6 +776,25 @@ function GridScreen({
     <div className="grd">
       <div className="grd-h">
         <div className="grd-htitle"><span className="grd-title">{title}</span><span className="grd-count">{count.toLocaleString()} títulos</span></div>
+        {genres.length ? (
+          <div className="grd-sortwrap">
+            <FocusableButton focusKey="GRD_GENRE" className={`grd-sort ${genre ? "onfilter" : ""}`} onEnterPress={openGenre}>
+              <Icon name="theater_comedy" /> {genre ?? "Género"}
+            </FocusableButton>
+            {genreOpen ? (
+              <FocusZone zone="grd:genre" className="sort-pop genres scroll">
+                <FocusableButton focusKey="GEN__all" className={`sort-item ${genre === null ? "on" : ""}`} onEnterPress={() => pickGenre(null)}>
+                  <span className="sort-check"><Icon name="check" /></span> Todos
+                </FocusableButton>
+                {genres.map((g) => (
+                  <FocusableButton key={g} focusKey={`GEN_${g}`} className={`sort-item ${genre === g ? "on" : ""}`} onEnterPress={() => pickGenre(g)}>
+                    <span className="sort-check"><Icon name="check" /></span> {g}
+                  </FocusableButton>
+                ))}
+              </FocusZone>
+            ) : null}
+          </div>
+        ) : null}
         <div className="grd-sortwrap">
           <FocusableButton focusKey="GRD_SORT" className="grd-sort" onEnterPress={openSort}>
             <Icon name="swap_vert" /> {SORT_LABEL[sortMode]}

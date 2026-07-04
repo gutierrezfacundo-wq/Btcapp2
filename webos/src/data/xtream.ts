@@ -41,6 +41,7 @@ interface XtMovieDto {
   plot?: string;
   releaseDate?: string;
   added?: string;
+  genre?: string;
 }
 
 interface XtSeriesDto {
@@ -51,6 +52,7 @@ interface XtSeriesDto {
   plot?: string;
   releaseDate?: string;
   last_modified?: string;
+  genre?: string;
 }
 
 interface XtSeriesInfoDto {
@@ -246,6 +248,7 @@ export async function loadXtreamMovies(
     rating: d.rating,
     year: d.releaseDate,
     addedAt: d.added ? Number(d.added) || undefined : undefined,
+    genre: d.genre || undefined,
   }));
   return { movies, movieCategories: vodCats };
 }
@@ -274,6 +277,7 @@ export async function loadXtreamSeries(
     plot: d.plot,
     year: d.releaseDate ? d.releaseDate.slice(0, 4) : undefined,
     addedAt: d.last_modified ? Number(d.last_modified) || undefined : undefined,
+    genre: d.genre || undefined,
   }));
   return { series, seriesCategories: seriesCats };
 }

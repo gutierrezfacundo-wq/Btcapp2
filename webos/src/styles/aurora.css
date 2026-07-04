@@ -606,3 +606,7 @@ body.kids .a-ch.focused,body.kids .a-cat.focused{background:var(--soft)}
 .det{position:relative}
 .det-bg{position:absolute;top:0;left:0;right:0;height:70%;background-size:cover;background-position:center top;opacity:.2;pointer-events:none;-webkit-mask-image:linear-gradient(to bottom,#000 0%,transparent 100%);mask-image:linear-gradient(to bottom,#000 0%,transparent 100%)}
 .det>*:not(.det-bg){position:relative;z-index:1}
+
+/* ===== Dropdown de genero en la grilla VOD ===== */
+.sort-pop.genres{max-height:560px;overflow-y:auto}
+.grd-sort.onfilter{color:var(--accent);border-color:var(--accent)}

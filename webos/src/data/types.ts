@@ -23,6 +23,8 @@ export interface Movie {
   year?: string;
   /** Unix (segundos) de cuando el proveedor agregó el título. */
   addedAt?: number;
+  /** Género de metadata ("Comedia, Familia"): distinto de la categoría del proveedor. */
+  genre?: string;
 }
 
 export interface SeriesInfo {
@@ -34,6 +36,8 @@ export interface SeriesInfo {
   year?: string;
   /** Unix (segundos) de última modificación en el proveedor. */
   addedAt?: number;
+  /** Género de metadata ("Comedia, Familia"): distinto de la categoría del proveedor. */
+  genre?: string;
 }
 
 /** Metadatos del detalle de serie (de get_series_info.info). */
