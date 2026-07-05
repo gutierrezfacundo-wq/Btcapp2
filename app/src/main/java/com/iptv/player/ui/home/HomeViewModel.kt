@@ -154,6 +154,44 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
 
     fun isFavorite(id: String): Boolean = favorites.value.any { it.id == id }
 
+    // --- Modo Felix (niños) ---
+    data class KidsState(
+        val on: Boolean = false,
+        val categories: Set<String> = emptySet(),
+        val items: Set<String> = emptySet(),
+    ) {
+        fun allowsChannel(ch: Channel): Boolean =
+            !on || (ch.groupTitle != null && ch.groupTitle in categories) || ch.id in items
+        fun allows(category: String?, id: String): Boolean =
+            !on || (category != null && category in categories) || id in items
+    }
+
+    val kidsState = combine(
+        container.preferencesStore.kidsMode,
+        container.preferencesStore.kidsCategories,
+        container.preferencesStore.kidsItems,
+    ) { on, cats, items -> KidsState(on, cats, items) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, KidsState())
+
+    val parentalPin = container.preferencesStore.parentalPin
+        .stateIn(viewModelScope, SharingStarted.Eagerly, "")
+
+    fun setKidsMode(on: Boolean) {
+        viewModelScope.launch { container.preferencesStore.setKidsMode(on) }
+    }
+
+    fun setParentalPin(pin: String) {
+        viewModelScope.launch { container.preferencesStore.setParentalPin(pin) }
+    }
+
+    fun toggleKidsCategory(name: String) {
+        viewModelScope.launch { container.preferencesStore.toggleKidsCategory(name) }
+    }
+
+    fun toggleKidsItem(id: String) {
+        viewModelScope.launch { container.preferencesStore.toggleKidsItem(id) }
+    }
+
     // --- Gestion de canales (ocultar / renombrar / numero) ---
     val channelPrefs = container.database.channelPrefDao().observeAll()
         .map { list -> list.associateBy { it.channelId } }
@@ -164,11 +202,12 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
 
     /** Canales en vivo con preferencias aplicadas: sin ocultos, renombrados y ordenados. */
-    val displayLiveChannels = combine(state, channelPrefs, hiddenCategories) { s, prefs, hiddenCats ->
+    val displayLiveChannels = combine(state, channelPrefs, hiddenCategories, kidsState) { s, prefs, hiddenCats, kids ->
         s.catalog.liveChannels
             .asSequence()
             .filter { ch -> prefs[ch.id]?.hidden != true }
             .filter { ch -> ch.groupTitle == null || ch.groupTitle !in hiddenCats }
+            .filter { ch -> kids.allowsChannel(ch) }
             .map { ch ->
                 val custom = prefs[ch.id]?.customName
                 if (custom.isNullOrBlank()) ch else ch.copy(name = custom)
@@ -177,8 +216,31 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
             .sortedWith(compareBy<Channel, Int?>(nullsLast()) { prefs[it.id]?.customNumber })
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    val displayLiveCategories = combine(state, hiddenCategories) { s, hiddenCats ->
-        s.catalog.liveCategories.filter { it.name !in hiddenCats }
+    val displayLiveCategories = combine(state, hiddenCategories, kidsState) { s, hiddenCats, kids ->
+        s.catalog.liveCategories
+            .filter { it.name !in hiddenCats }
+            .filter { !kids.on || it.name in kids.categories }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** Películas/series visibles (en modo Felix, solo lo apto). */
+    val displayMovies = combine(state, kidsState) { s, kids ->
+        if (!kids.on) s.catalog.movies
+        else s.catalog.movies.filter { kids.allows(it.category, it.id) }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    val displaySeries = combine(state, kidsState) { s, kids ->
+        if (!kids.on) s.catalog.series
+        else s.catalog.series.filter { kids.allows(it.category, it.id) }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    val displayMovieCategories = combine(state, kidsState) { s, kids ->
+        if (!kids.on) s.catalog.movieCategories
+        else s.catalog.movieCategories.filter { it.name in kids.categories }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    val displaySeriesCategories = combine(state, kidsState) { s, kids ->
+        if (!kids.on) s.catalog.seriesCategories
+        else s.catalog.seriesCategories.filter { it.name in kids.categories }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     fun setChannelHidden(channelId: String, hidden: Boolean) {

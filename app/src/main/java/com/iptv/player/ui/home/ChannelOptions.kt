@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ChildCare
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.LiveTv
 import androidx.compose.material.icons.outlined.PlaylistAdd
@@ -49,6 +50,8 @@ fun ChannelOptionsDialog(
     onHide: () -> Unit,
     onSetEpg: (String?) -> Unit,
     onDismiss: () -> Unit,
+    /** Abre el diálogo "Apto para Felix" (null oculta la opción). */
+    onKidsMark: (() -> Unit)? = null,
 ) {
     var view by remember { mutableStateOf(OptionView.Menu) }
 
@@ -73,6 +76,12 @@ fun ChannelOptionsDialog(
                     OptionRow(Icons.Outlined.VisibilityOff, "Ocultar canal") {
                         onHide()
                         onDismiss()
+                    }
+                    if (onKidsMark != null) {
+                        OptionRow(Icons.Outlined.ChildCare, "Apto para Felix…") {
+                            onKidsMark()
+                            onDismiss()
+                        }
                     }
                 }
             },

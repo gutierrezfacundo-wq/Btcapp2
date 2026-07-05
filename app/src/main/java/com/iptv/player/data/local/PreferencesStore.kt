@@ -2,9 +2,11 @@ package com.iptv.player.data.local
 
 import android.content.Context
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.iptv.player.data.model.SourceConfig
 import kotlinx.coroutines.flow.Flow
@@ -23,6 +25,47 @@ class PreferencesStore(private val context: Context) {
         val XUser = stringPreferencesKey("xtream_user")
         val XPass = stringPreferencesKey("xtream_pass")
         val ActivePlaylistId = longPreferencesKey("active_playlist_id")
+
+        // Modo Felix (niños)
+        val KidsMode = booleanPreferencesKey("kids_mode")
+        val ParentalPin = stringPreferencesKey("parental_pin")
+        val KidsCategories = stringSetPreferencesKey("kids_categories")
+        val KidsItems = stringSetPreferencesKey("kids_items")
+    }
+
+    // ===== Modo Felix (niños) =====
+    /** Modo niños activo: la app queda restringida al contenido apto. */
+    val kidsMode: Flow<Boolean> = context.dataStore.data.map { it[Keys.KidsMode] ?: false }
+
+    /** PIN parental (4 dígitos); "" = sin PIN. */
+    val parentalPin: Flow<String> = context.dataStore.data.map { it[Keys.ParentalPin].orEmpty() }
+
+    /** Nombres de categorías aptas para niños (en vivo, pelis y series). */
+    val kidsCategories: Flow<Set<String>> = context.dataStore.data.map { it[Keys.KidsCategories] ?: emptySet() }
+
+    /** Ids de contenido suelto marcado como apto. */
+    val kidsItems: Flow<Set<String>> = context.dataStore.data.map { it[Keys.KidsItems] ?: emptySet() }
+
+    suspend fun setKidsMode(on: Boolean) {
+        context.dataStore.edit { it[Keys.KidsMode] = on }
+    }
+
+    suspend fun setParentalPin(pin: String) {
+        context.dataStore.edit { it[Keys.ParentalPin] = pin }
+    }
+
+    suspend fun toggleKidsCategory(name: String) {
+        context.dataStore.edit { prefs ->
+            val cur = prefs[Keys.KidsCategories] ?: emptySet()
+            prefs[Keys.KidsCategories] = if (name in cur) cur - name else cur + name
+        }
+    }
+
+    suspend fun toggleKidsItem(id: String) {
+        context.dataStore.edit { prefs ->
+            val cur = prefs[Keys.KidsItems] ?: emptySet()
+            prefs[Keys.KidsItems] = if (id in cur) cur - id else cur + id
+        }
     }
 
     /** Id de la lista activa; null si no hay ninguna seleccionada. */

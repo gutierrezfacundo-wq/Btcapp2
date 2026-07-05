@@ -32,6 +32,8 @@ import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Favorite
 import androidx.compose.material.icons.outlined.LiveTv
+import androidx.compose.material.icons.outlined.ChildCare
+import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Refresh
@@ -51,6 +53,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -79,7 +82,9 @@ import com.iptv.player.di.AppContainer
 import androidx.media3.common.util.UnstableApi
 import com.iptv.player.ui.components.ChannelRow
 import com.iptv.player.ui.components.ChannelSearchBar
+import com.iptv.player.ui.components.KidsMarkDialog
 import com.iptv.player.ui.components.MiniPlayer
+import com.iptv.player.ui.components.PinDialog
 import com.iptv.player.ui.components.MultiSelectChipRow
 import com.iptv.player.ui.components.PosterCard
 
@@ -115,6 +120,21 @@ fun HomeScreen(
     var channelForOptions by remember { mutableStateOf<Channel?>(null) }
     var channelForCollection by remember { mutableStateOf<Channel?>(null) }
     var showHiddenManager by remember { mutableStateOf(false) }
+
+    // Modo Felix (niños)
+    val kids by vm.kidsState.collectAsState()
+    val parentalPin by vm.parentalPin.collectAsState()
+    val displayMovies by vm.displayMovies.collectAsState()
+    val displaySeries by vm.displaySeries.collectAsState()
+    val displayMovieCategories by vm.displayMovieCategories.collectAsState()
+    val displaySeriesCategories by vm.displaySeriesCategories.collectAsState()
+    var showPinSetup by remember { mutableStateOf(false) }
+    var showPinVerify by remember { mutableStateOf(false) }
+    var channelForKids by remember { mutableStateOf<Channel?>(null) }
+    var movieForKids by remember { mutableStateOf<Movie?>(null) }
+    var seriesForKids by remember { mutableStateOf<com.iptv.player.data.model.SeriesInfo?>(null) }
+    val visibleTabs = if (kids.on) listOf(HomeTab.Live, HomeTab.Movies, HomeTab.Series) else HomeTab.entries.toList()
+    LaunchedEffect(kids.on) { if (kids.on && tab == HomeTab.Favorites) tab = HomeTab.Live }
 
     if (showGuide) {
         val liveChannels = displayLiveChannels
@@ -159,11 +179,25 @@ fun HomeScreen(
                     IconButton(onClick = { showGuide = true }) {
                         Icon(Icons.Filled.DateRange, contentDescription = "Guía")
                     }
-                    IconButton(onClick = vm::refresh) {
-                        Icon(Icons.Outlined.Refresh, contentDescription = "Recargar")
-                    }
-                    IconButton(onClick = onOpenPlaylists) {
-                        Icon(Icons.AutoMirrored.Filled.List, contentDescription = "Mis listas")
+                    if (kids.on) {
+                        // Salir del modo Felix: pide el PIN (si hay).
+                        IconButton(onClick = {
+                            if (parentalPin.isEmpty()) vm.setKidsMode(false) else showPinVerify = true
+                        }) {
+                            Icon(Icons.Outlined.Lock, contentDescription = "Salir del modo Felix")
+                        }
+                    } else {
+                        IconButton(onClick = {
+                            if (parentalPin.isEmpty()) showPinSetup = true else vm.setKidsMode(true)
+                        }) {
+                            Icon(Icons.Outlined.ChildCare, contentDescription = "Modo Felix")
+                        }
+                        IconButton(onClick = vm::refresh) {
+                            Icon(Icons.Outlined.Refresh, contentDescription = "Recargar")
+                        }
+                        IconButton(onClick = onOpenPlaylists) {
+                            Icon(Icons.AutoMirrored.Filled.List, contentDescription = "Mis listas")
+                        }
                     }
                 },
             )
@@ -184,7 +218,7 @@ fun HomeScreen(
                 }
                 if (!isLandscape) {
                     NavigationBar {
-                        HomeTab.entries.forEach { entry ->
+                        visibleTabs.forEach { entry ->
                             NavigationBarItem(
                                 selected = tab == entry,
                                 onClick = { tab = entry },
@@ -200,7 +234,7 @@ fun HomeScreen(
         Row(modifier = Modifier.fillMaxSize().padding(padding)) {
             if (isLandscape) {
                 NavigationRail {
-                    HomeTab.entries.forEach { entry ->
+                    visibleTabs.forEach { entry ->
                         NavigationRailItem(
                             selected = tab == entry,
                             onClick = { tab = entry },
@@ -218,7 +252,7 @@ fun HomeScreen(
                     HomeTab.Live -> LiveTab(
                         channels = displayLiveChannels,
                         categories = displayLiveCategories,
-                        recents = recents,
+                        recents = if (kids.on) emptyList() else recents,
                         channelQuality = state.channelQuality,
                         availableQualities = state.availableQualities,
                         isFavorite = vm::isFavorite,
@@ -237,25 +271,27 @@ fun HomeScreen(
                             onPlay(item.streamUrl, item.title)
                         },
                         onRemoveRecent = vm::removeRecent,
-                        onLongPressChannel = { channelForOptions = it },
-                        onLongPressCategory = { vm.setCategoryHidden(it, true) },
-                        onOpenHidden = { showHiddenManager = true },
-                        hiddenCount = hiddenCategories.size +
+                        onLongPressChannel = { if (!kids.on) channelForOptions = it },
+                        onLongPressCategory = { if (!kids.on) vm.setCategoryHidden(it, true) },
+                        onOpenHidden = { if (!kids.on) showHiddenManager = true },
+                        hiddenCount = if (kids.on) 0 else hiddenCategories.size +
                             channelPrefs.values.count { it.hidden },
                         compactRecents = isLandscape,
                     )
                     HomeTab.Movies -> MoviesTab(
-                        movies = state.catalog.movies,
-                        categories = state.catalog.movieCategories,
+                        movies = displayMovies,
+                        categories = displayMovieCategories,
                         onPlay = { movie ->
                             vm.playSingle(movie.name, movie.streamUrl, movie.posterUrl)
                             onPlay(movie.streamUrl, movie.name)
                         },
+                        onLongPress = { if (!kids.on) movieForKids = it },
                     )
                     HomeTab.Series -> SeriesTab(
-                        series = state.catalog.series,
-                        categories = state.catalog.seriesCategories,
+                        series = displaySeries,
+                        categories = displaySeriesCategories,
                         onOpen = onOpenSeries,
+                        onLongPress = { if (!kids.on) seriesForKids = it },
                     )
                     HomeTab.Favorites -> FavoritesAndCollectionsTab(vm = vm, onPlay = onPlay)
                 }
@@ -282,6 +318,69 @@ fun HomeScreen(
             onHide = { vm.setChannelHidden(optionsChannel.id, true) },
             onSetEpg = { vm.setEpgMapping(optionsChannel.id, it) },
             onDismiss = { channelForOptions = null },
+            onKidsMark = { channelForKids = optionsChannel },
+        )
+    }
+
+    // ===== Modo Felix: PIN y marcado de contenido apto =====
+    if (showPinSetup) {
+        PinDialog(
+            mode = "set",
+            title = "PIN parental",
+            onSuccess = { pin ->
+                vm.setParentalPin(pin)
+                vm.setKidsMode(true)
+                showPinSetup = false
+            },
+            onDismiss = { showPinSetup = false },
+        )
+    }
+    if (showPinVerify) {
+        PinDialog(
+            mode = "verify",
+            expected = parentalPin,
+            title = "Salir del modo Felix",
+            onSuccess = {
+                vm.setKidsMode(false)
+                showPinVerify = false
+            },
+            onDismiss = { showPinVerify = false },
+        )
+    }
+    val kidsChannel = channelForKids
+    if (kidsChannel != null) {
+        KidsMarkDialog(
+            title = kidsChannel.name,
+            categoryName = kidsChannel.groupTitle,
+            itemAllowed = kidsChannel.id in kids.items,
+            categoryAllowed = kidsChannel.groupTitle != null && kidsChannel.groupTitle in kids.categories,
+            onToggleItem = { vm.toggleKidsItem(kidsChannel.id) },
+            onToggleCategory = { kidsChannel.groupTitle?.let { vm.toggleKidsCategory(it) } },
+            onDismiss = { channelForKids = null },
+        )
+    }
+    val kidsMovie = movieForKids
+    if (kidsMovie != null) {
+        KidsMarkDialog(
+            title = kidsMovie.name,
+            categoryName = kidsMovie.category,
+            itemAllowed = kidsMovie.id in kids.items,
+            categoryAllowed = kidsMovie.category != null && kidsMovie.category in kids.categories,
+            onToggleItem = { vm.toggleKidsItem(kidsMovie.id) },
+            onToggleCategory = { kidsMovie.category?.let { vm.toggleKidsCategory(it) } },
+            onDismiss = { movieForKids = null },
+        )
+    }
+    val kidsSeries = seriesForKids
+    if (kidsSeries != null) {
+        KidsMarkDialog(
+            title = kidsSeries.name,
+            categoryName = kidsSeries.category,
+            itemAllowed = kidsSeries.id in kids.items,
+            categoryAllowed = kidsSeries.category != null && kidsSeries.category in kids.categories,
+            onToggleItem = { vm.toggleKidsItem(kidsSeries.id) },
+            onToggleCategory = { kidsSeries.category?.let { vm.toggleKidsCategory(it) } },
+            onDismiss = { seriesForKids = null },
         )
     }
 
@@ -651,6 +750,7 @@ private fun MoviesTab(
     movies: List<Movie>,
     categories: List<Category>,
     onPlay: (Movie) -> Unit,
+    onLongPress: (Movie) -> Unit = {},
 ) {
     var selected by rememberSaveable { mutableStateOf<String?>(null) }
     var query by rememberSaveable { mutableStateOf("") }
@@ -674,6 +774,7 @@ private fun MoviesTab(
                     title = movie.name,
                     posterUrl = movie.posterUrl,
                     onClick = { onPlay(movie) },
+                    onLongClick = { onLongPress(movie) },
                 )
             }
         }
@@ -685,6 +786,7 @@ private fun SeriesTab(
     series: List<SeriesInfo>,
     categories: List<Category>,
     onOpen: (String, String) -> Unit,
+    onLongPress: (SeriesInfo) -> Unit = {},
 ) {
     var selected by rememberSaveable { mutableStateOf<String?>(null) }
     var query by rememberSaveable { mutableStateOf("") }
@@ -708,6 +810,7 @@ private fun SeriesTab(
                     title = s.name,
                     posterUrl = s.posterUrl,
                     onClick = { onOpen(s.id, s.name) },
+                    onLongClick = { onLongPress(s) },
                 )
             }
         }

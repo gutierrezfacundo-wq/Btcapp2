@@ -124,12 +124,14 @@ fun ChannelRow(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun PosterCard(
     title: String,
     posterUrl: String?,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    onLongClick: (() -> Unit)? = null,
 ) {
     val interaction = remember { MutableInteractionSource() }
     val isFocused by interaction.collectIsFocusedAsState()
@@ -144,10 +146,11 @@ fun PosterCard(
                     RoundedCornerShape(10.dp),
                 ) else Modifier
             )
-            .clickable(
+            .combinedClickable(
                 interactionSource = interaction,
                 indication = LocalIndication.current,
                 onClick = onClick,
+                onLongClick = onLongClick,
             ),
     ) {
         Box(
