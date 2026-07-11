@@ -14,6 +14,7 @@ import { useBack } from "../navigation/backStack";
 import { fetchJson, fetchText } from "../data/http";
 import { parseM3u } from "../data/m3u";
 import { loadAccountInfo, type AccountInfo } from "../data/xtream";
+import { AUDIO_LANG_OPTIONS, SUB_LANG_OPTIONS } from "../data/langs";
 import type { SavedSource, SourceConfig } from "../data/types";
 
 type Tab = "xtream" | "m3u";
@@ -46,6 +47,10 @@ export function Setup() {
   const epgAutoOn = useAppStore((s) => s.epgAutoOn);
   const setEpgAutoOn = useAppStore((s) => s.setEpgAutoOn);
   const epgAutoMs = useAppStore((s) => s.epgAutoMs);
+  const prefAudioLang = useAppStore((s) => s.prefAudioLang);
+  const setPrefAudioLang = useAppStore((s) => s.setPrefAudioLang);
+  const prefSubLang = useAppStore((s) => s.prefSubLang);
+  const setPrefSubLang = useAppStore((s) => s.setPrefSubLang);
   const kidsMode = useAppStore((s) => s.kidsMode);
   const parentalPin = useAppStore((s) => s.parentalPin);
   const setParentalPin = useAppStore((s) => s.setParentalPin);
@@ -308,6 +313,23 @@ export function Setup() {
                       <FocusableButton className="btn" onEnterPress={() => setEpgOffsetH(epgOffsetH + 1)}><Icon name="add" /></FocusableButton>
                     </div>
                     <div className="a-pdesc" style={{ marginTop: 6 }}>La corrección automática compara el reloj del proveedor con el de la TV y endereza la guía sola. El ±h queda como ajuste fino manual (se suma a la automática).</div>
+                  </div>
+
+                  <div className="fld" style={{ marginTop: 18 }}>
+                    <label className="fld-l"><Icon name="translate" /> Idioma preferido de las pistas</label>
+                    <div className="a-pdesc" style={{ margin: "2px 0 6px" }}>Audio</div>
+                    <div className="gsr-kinds">
+                      {AUDIO_LANG_OPTIONS.map((o) => (
+                        <FocusableButton key={o.id || "none"} className={`chip ${prefAudioLang === o.id ? "on" : ""}`} onEnterPress={() => setPrefAudioLang(o.id)}>{o.label}</FocusableButton>
+                      ))}
+                    </div>
+                    <div className="a-pdesc" style={{ margin: "10px 0 6px" }}>Subtítulos</div>
+                    <div className="gsr-kinds">
+                      {SUB_LANG_OPTIONS.map((o) => (
+                        <FocusableButton key={o.id || "none"} className={`chip ${prefSubLang === o.id ? "on" : ""}`} onEnterPress={() => setPrefSubLang(o.id)}>{o.label}</FocusableButton>
+                      ))}
+                    </div>
+                    <div className="a-pdesc" style={{ marginTop: 8 }}>Las pelis y series arrancan directo con estas pistas cuando el contenido las trae; si no, queda la que venga y podés cambiarla en "Audio y subtítulos".</div>
                   </div>
 
                   <div className="fld" style={{ marginTop: 18 }}>

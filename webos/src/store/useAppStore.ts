@@ -25,6 +25,8 @@ const KIDSPREFS_KEY = "iptv.kidsPrefs.v1";   // + ":<sourceKey>": contenido apto
 const KIDSTIMER_KEY = "iptv.kidsTimer.v1";   // fin del temporizador del modo Felix (ms epoch)
 const REMOTECODE_KEY = "iptv.remoteCode.v1"; // código fijo del control remoto por celular
 const EPGAUTO_KEY = "iptv.epgAuto.v1";       // corrección horaria automática de la guía (on/off)
+const PREFAUDIO_KEY = "iptv.prefAudio.v1";   // idioma preferido de audio ("" = sin preferencia)
+const PREFSUBS_KEY = "iptv.prefSubs.v1";     // subtítulos preferidos ("" | "off" | código de idioma)
 
 function genId(): string {
   return `src-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`;
@@ -262,6 +264,10 @@ interface AppState {
   epgAutoMs: number;
   /** Formatos de vivo que permite el proveedor (null = desconocido). */
   allowedFormats: string[] | null;
+  /** Idioma preferido de audio ("" = el que venga). */
+  prefAudioLang: string;
+  /** Subtítulos preferidos: "" sin preferencia, "off" apagados, o idioma. */
+  prefSubLang: string;
   /** Ocultar/reordenar categorías de la lista activa. */
   catPrefs: CatPrefs;
   /** Modo Felix (niños) activo: toda la app queda restringida a lo apto. */
@@ -309,6 +315,8 @@ interface AppState {
   setSubtitleScale: (s: "s" | "m" | "l") => void;
   setEpgOffsetH: (h: number) => void;
   setEpgAutoOn: (on: boolean) => void;
+  setPrefAudioLang: (lang: string) => void;
+  setPrefSubLang: (lang: string) => void;
   setCatPrefs: (section: CatSection, prefs: SectionCatPrefs) => void;
   setKidsMode: (on: boolean) => void;
   setParentalPin: (pin: string) => void;
@@ -350,6 +358,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   epgAutoOn: (() => { try { return localStorage.getItem(EPGAUTO_KEY) !== "0"; } catch { return true; } })(),
   epgAutoMs: 0,
   allowedFormats: null,
+  prefAudioLang: (() => { try { return localStorage.getItem(PREFAUDIO_KEY) ?? ""; } catch { return ""; } })(),
+  prefSubLang: (() => { try { return localStorage.getItem(PREFSUBS_KEY) ?? ""; } catch { return ""; } })(),
   catPrefs: loadCatPrefs(initial.sources.find((s) => s.id === initial.activeId)?.config ?? null),
   kidsMode: (() => { try { return localStorage.getItem(KIDSMODE_KEY) === "1"; } catch { return false; } })(),
   parentalPin: (() => { try { return localStorage.getItem(PIN_KEY) ?? ""; } catch { return ""; } })(),
@@ -630,6 +640,16 @@ export const useAppStore = create<AppState>((set, get) => ({
   setEpgAutoOn: (on) => {
     try { localStorage.setItem(EPGAUTO_KEY, on ? "1" : "0"); } catch { /* ignore */ }
     set({ epgAutoOn: on });
+  },
+
+  setPrefAudioLang: (lang) => {
+    try { localStorage.setItem(PREFAUDIO_KEY, lang); } catch { /* ignore */ }
+    set({ prefAudioLang: lang });
+  },
+
+  setPrefSubLang: (lang) => {
+    try { localStorage.setItem(PREFSUBS_KEY, lang); } catch { /* ignore */ }
+    set({ prefSubLang: lang });
   },
 
   setCatPrefs: (section, prefs) => {

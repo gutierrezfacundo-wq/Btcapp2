@@ -9,8 +9,9 @@ import { useAppStore, type FavoriteItem } from "../store/useAppStore";
 import { decodeB64Url } from "../data/b64url";
 import { useBack } from "../navigation/backStack";
 import { focusWhenReady } from "../navigation/focusMemory";
-import { getMediaId, watchEmbeddedTracks, type EmbeddedTrackInfo } from "../webos/embeddedTracks";
+import { getMediaId, watchEmbeddedTracks, selectTrack, setSubtitleEnable, type EmbeddedTrackInfo } from "../webos/embeddedTracks";
 import { diagnoseStreamError } from "../data/xtream";
+import { langMatches } from "../data/langs";
 import { isPlayPauseKey, RemoteKey } from "../webos/remote-keys";
 
 /** Estado que viaja DENTRO de la URL (?st=): location.state se pierde en webOS. */
@@ -110,6 +111,7 @@ export function Player() {
     if (!IS_WEBOS) return;
     let cancel: (() => void) | undefined;
     let tries = 0;
+    let langApplied = false;
     // El mediaId aparece asincrónicamente al montar el pipeline: sondeamos.
     const timer = window.setInterval(() => {
       tries += 1;
@@ -117,7 +119,25 @@ export function Player() {
       if (id) {
         window.clearInterval(timer);
         setEmbMediaId(id);
-        cancel = watchEmbeddedTracks(id, setEmbTracks, (keys) => console.info("[pipeline]", keys));
+        cancel = watchEmbeddedTracks(id, (t) => {
+          setEmbTracks(t);
+          // Idioma preferido: se aplica una sola vez, apenas el demuxer
+          // publica las pistas (con una pequeña espera para no glitchear).
+          if (langApplied) return;
+          langApplied = true;
+          const { prefAudioLang, prefSubLang } = useAppStore.getState();
+          window.setTimeout(() => {
+            if (prefAudioLang) {
+              const a = t.audio.find((x) => langMatches(x.language, prefAudioLang));
+              if (a) selectTrack(id, "audio", a.index);
+            }
+            if (prefSubLang === "off") setSubtitleEnable(id, false);
+            else if (prefSubLang) {
+              const s = t.subs.find((x) => langMatches(x.language, prefSubLang));
+              if (s) { selectTrack(id, "text", s.index); setSubtitleEnable(id, true); }
+            }
+          }, 600);
+        }, (keys) => console.info("[pipeline]", keys));
       } else if (tries > 40) {
         window.clearInterval(timer);
         console.info("[pipeline] sin mediaId");
@@ -219,8 +239,24 @@ export function Player() {
       hlsInst.loadSource(url);
       hlsInst.attachMedia(video);
       hlsInst.on(Hls.Events.ERROR, (_e, d) => { if (d.fatal) setError(`Error de reproducción (${d.type})`); });
+      // Idioma preferido de audio/subtítulos (si el stream trae variantes).
+      const applyLangPrefs = (h: Hls) => {
+        const { prefAudioLang, prefSubLang } = useAppStore.getState();
+        if (prefAudioLang) {
+          const i = h.audioTracks.findIndex((t) => langMatches(t.lang ?? t.name, prefAudioLang));
+          if (i >= 0 && h.audioTrack !== i) h.audioTrack = i;
+        }
+        if (prefSubLang === "off") h.subtitleTrack = -1;
+        else if (prefSubLang) {
+          const i = h.subtitleTracks.findIndex((t) => langMatches(t.lang ?? t.name, prefSubLang));
+          if (i >= 0) { h.subtitleTrack = i; h.subtitleDisplay = true; }
+        }
+      };
       // Bitrate del nivel HLS activo + medición real por fragmento.
       const inst = hlsInst;
+      inst.on(Hls.Events.MANIFEST_PARSED, () => applyLangPrefs(inst));
+      inst.on(Hls.Events.AUDIO_TRACKS_UPDATED, () => applyLangPrefs(inst));
+      inst.on(Hls.Events.SUBTITLE_TRACKS_UPDATED, () => applyLangPrefs(inst));
       const reportLevel = (level: number) => { const lv = inst.levels?.[level]; if (lv?.bitrate) setBitrate(lv.bitrate); };
       inst.on(Hls.Events.MANIFEST_PARSED, () => reportLevel(inst.currentLevel >= 0 ? inst.currentLevel : inst.firstLevel));
       inst.on(Hls.Events.LEVEL_SWITCHED, (_e, d) => reportLevel(d.level));

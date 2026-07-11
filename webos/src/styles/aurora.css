@@ -632,3 +632,17 @@ body.kids .a-ch.focused,body.kids .a-cat.focused{background:var(--soft)}
 .hub-mini-bar{position:absolute;left:0;right:0;bottom:0;height:6px;background:rgba(255,255,255,.18);z-index:1}
 .hub-mini-bar i{display:block;height:100%;background:var(--accent)}
 .hub-mini-tag.new{color:var(--accent);font-weight:700}
+
+/* ===== Lista de canales flotante en pantalla completa ===== */
+.fs-chlist{position:absolute;top:0;left:0;bottom:0;width:600px;z-index:6;display:flex;flex-direction:column;background:linear-gradient(90deg,rgba(8,8,10,.96) 0%,rgba(8,8,10,.88) 75%,transparent 100%);padding:36px 60px 20px 44px}
+.fs-chlist-h{font-size:16px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:14px}
+.fs-chlist-body{flex:1;min-height:0;display:flex;flex-direction:column}
+.fs-chlist-vp{flex:1;min-height:0;overflow-y:auto;padding-right:10px}
+.fs-ch{display:flex;align-items:center;gap:14px;padding:11px 16px;margin-bottom:4px;border-radius:12px;cursor:pointer}
+.fs-ch.focused{background:var(--soft);box-shadow:inset 0 0 0 2px var(--ring)}
+.fs-ch.sel .fs-ch-name{color:var(--accent);font-weight:700}
+.fs-ch-num{font-size:18px;color:var(--muted);width:52px;flex-shrink:0;text-align:right}
+.fs-ch-mid{flex:1;min-width:0}
+.fs-ch-name{font-size:20px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fs-ch-now{font-size:16px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.fs-chlist-hint{padding-top:12px;font-size:15px;color:var(--muted)}

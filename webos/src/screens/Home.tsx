@@ -442,6 +442,9 @@ export function Home() {
                   onCatchup={() => { if (selectedChannelId) navigate(`/catchup/${selectedChannelId}`); }}
                   onZap={onZap}
                   onZapToNumber={onZapToNumber}
+                  channels={liveFiltered}
+                  channelNumbers={channelNumbers}
+                  onSelectChannel={(id) => setSelectedChannelId(id)}
                 />
               </>
             ) : tab === "favorites" ? (
@@ -501,6 +504,7 @@ interface PreviewChannel { id: string; name: string; streamUrl: string; logoUrl?
 
 function PreviewPanel({
   channel, channelNumber, epgByChannel, fullscreen, onEnterFullscreen, onExitFullscreen, onCatchup, onZap, onZapToNumber,
+  channels, channelNumbers, onSelectChannel,
 }: {
   channel: PreviewChannel | null;
   channelNumber: number | null;
@@ -511,6 +515,10 @@ function PreviewPanel({
   onCatchup: () => void;
   onZap: (dir: 1 | -1) => void;
   onZapToNumber: (n: number) => void;
+  /** Lista actual de canales (para la lista flotante en pantalla completa). */
+  channels: Channel[];
+  channelNumbers: Map<string, number>;
+  onSelectChannel: (id: string) => void;
 }) {
   const epgOffMs = useAppStore((s) => (s.epgAutoOn ? s.epgAutoMs : 0) + s.epgOffsetH * 3600000);
   const xmltvNow = channel ? findNowPlaying(epgByChannel as never, channel.tvgId, epgOffMs) : null;
@@ -551,6 +559,11 @@ function PreviewPanel({
   const fsTimer = useRef<number | null>(null);
   const prevFs = useRef(false);
   const tracksRef = useRef(false); tracksRef.current = tracksOpen;
+  // Lista de canales flotante (estilo TiviMate): elegir sin dejar de mirar.
+  const [chListOpen, setChListOpen] = useState(false);
+  const chListRef = useRef(false); chListRef.current = chListOpen;
+  const fsOverlayRef = useRef(true); fsOverlayRef.current = fsOverlay;
+  const closeChList = () => { setChListOpen(false); focusWhenReady("FS_PAUSE"); };
   const ql = channel ? quality(channel.name) : null;
   const toggleFavorite = useAppStore((s) => s.toggleFavorite);
   const favorites = useAppStore((s) => s.favorites);
@@ -563,6 +576,7 @@ function PreviewPanel({
   const isKidsOk = !!channel && kidsItemIds.includes(channel.id);
 
   useEffect(() => { setPaused(false); setTracksOpen(false); setBitrate(0); setRes(null); }, [channel?.id]);
+  useEffect(() => { if (!fullscreen) setChListOpen(false); }, [fullscreen]);
   const togglePause = () => { const v = videoElRef.current; if (!v) return; if (v.paused) { v.play().catch(() => undefined); setPaused(false); setCtrlHint("Pausa"); } else { v.pause(); setPaused(true); setCtrlHint("Reproducir"); } };
   const poke = () => { setFsOverlay(true); if (fsTimer.current) window.clearTimeout(fsTimer.current); fsTimer.current = window.setTimeout(() => { if (!tracksRef.current) setFsOverlay(false); }, 5000); };
 
@@ -585,7 +599,7 @@ function PreviewPanel({
     if (!fullscreen) { if (prevFs.current) focusWhenReady(channel ? `CH_${channel.id}` : "PV_PAUSE"); prevFs.current = false; return; }
     prevFs.current = true; poke(); focusWhenReady("FS_PAUSE");
     const onKey = (e: KeyboardEvent) => {
-      if (!tracksRef.current) {
+      if (!tracksRef.current && !chListRef.current) {
         // ↑↓ y CH± cambian de canal sin salir de pantalla completa.
         if (e.key === "ArrowUp" || e.keyCode === 33) { e.preventDefault(); e.stopPropagation(); onZap(-1); }
         else if (e.key === "ArrowDown" || e.keyCode === 34) { e.preventDefault(); e.stopPropagation(); onZap(1); }
@@ -597,6 +611,9 @@ function PreviewPanel({
           zapTimer.current = window.setTimeout(commitZap, 1800);
         } else if (e.key === "Enter" && zapBufRef.current) {
           e.preventDefault(); e.stopPropagation(); commitZap();
+        } else if (e.key === "Enter" && !fsOverlayRef.current) {
+          // OK con los controles ocultos: abre la lista de canales flotante.
+          e.preventDefault(); e.stopPropagation(); setChListOpen(true);
         }
       }
       poke();
@@ -659,6 +676,7 @@ function PreviewPanel({
                     ) : null}
                     <div className="a-fs-ctrls">
                       <FocusableButton focusKey="FS_PAUSE" className="a-fs-btn" onEnterPress={togglePause}><Icon name={paused ? "play_arrow" : "pause"} /> {paused ? "Reproducir" : "Pausa"}</FocusableButton>
+                      <FocusableButton focusKey="FS_LIST" className="a-fs-btn" onEnterPress={() => setChListOpen(true)}><Icon name="list" /> Canales</FocusableButton>
                       <FocusableButton focusKey="FS_TRACKS" className="a-fs-btn" onEnterPress={() => { setTracksOpen((v) => !v); poke(); }}><Icon name="tune" /> Pistas</FocusableButton>
                       <FocusableButton className="a-fs-btn" onEnterPress={toggleFav}><Icon name={isFav ? "star" : "star_border"} /> {isFav ? "Quitar" : "Favorito"}</FocusableButton>
                       <FocusableButton className="a-fs-btn" onEnterPress={onCatchup}><Icon name="calendar_month" /> Guía</FocusableButton>
@@ -666,6 +684,17 @@ function PreviewPanel({
                     </div>
                   </div>
                   {tracksOpen ? <TrackSheet hls={hls} onClose={() => { setTracksOpen(false); focusWhenReady("FS_TRACKS"); }} /> : null}
+                  {chListOpen && channel ? (
+                    <ChannelListOverlay
+                      channels={channels}
+                      numbers={channelNumbers}
+                      selectedId={channel.id}
+                      epgByChannel={epgByChannel}
+                      epgOffMs={epgOffMs}
+                      onPick={(id) => { onSelectChannel(id); closeChList(); poke(); }}
+                      onClose={() => { closeChList(); poke(); }}
+                    />
+                  ) : null}
                 </div>
               </>
             )}
@@ -847,6 +876,59 @@ function GridScreen({
           )}
         />
       )}
+    </div>
+  );
+}
+
+/**
+ * Lista de canales flotante sobre la pantalla completa (estilo TiviMate):
+ * elegís otro canal mirando el actual. OK sintoniza, Back cierra.
+ */
+function ChannelListOverlay({
+  channels, numbers, selectedId, epgByChannel, epgOffMs, onPick, onClose,
+}: {
+  channels: Channel[];
+  numbers: Map<string, number>;
+  selectedId: string;
+  epgByChannel: unknown;
+  epgOffMs: number;
+  onPick: (id: string) => void;
+  onClose: () => void;
+}) {
+  useBack(() => { onClose(); });
+  const selIdx = useMemo(() => channels.findIndex((c) => c.id === selectedId), [channels, selectedId]);
+  useEffect(() => { focusWhenReady(`CHL_${selectedId}`, 30); }, [selectedId]);
+  return (
+    <div className="fs-chlist">
+      <div className="fs-chlist-h">Canales · {channels.length}</div>
+      <FocusZone zone="fs:chlist" className="fs-chlist-body">
+        <VirtualList
+          className="fs-chlist-vp scroll"
+          items={channels}
+          estRowHeight={64}
+          overscan={10}
+          scrollToIndex={selIdx}
+          getKey={(c) => c.id}
+          renderRow={(c) => {
+            const nowP = findNowPlaying(epgByChannel as never, c.tvgId, epgOffMs);
+            return (
+              <FocusableButton
+                focusKey={`CHL_${c.id}`}
+                className={`fs-ch ${c.id === selectedId ? "sel" : ""}`}
+                onEnterPress={() => onPick(c.id)}
+              >
+                <span className="fs-ch-num mono">{numbers.get(c.id) ?? "—"}</span>
+                <span className="fs-ch-mid">
+                  <div className="fs-ch-name">{c.name}</div>
+                  {nowP ? <div className="fs-ch-now">{nowP.title}</div> : null}
+                </span>
+                {c.id === selectedId ? <Icon name="play_arrow" /> : null}
+              </FocusableButton>
+            );
+          }}
+        />
+      </FocusZone>
+      <div className="fs-chlist-hint">OK sintoniza · Volver cierra</div>
     </div>
   );
 }
