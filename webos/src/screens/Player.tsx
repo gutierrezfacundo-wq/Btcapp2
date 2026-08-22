@@ -98,7 +98,6 @@ export function Player() {
   // Resolución real y bitrate del contenido (info en el overlay).
   const [res, setRes] = useState<{ w: number; h: number } | null>(null);
   const [bitrate, setBitrate] = useState(0);
-  const fileRateDone = useRef(false);
   const [tracksOpen, setTracksOpen] = useState(false);
   const tracksRef = useRef(false); tracksRef.current = tracksOpen;
   const overlayTimer = useRef<number | null>(null);
@@ -296,7 +295,7 @@ export function Player() {
   }, [url, reloadKey]);
 
   // Reintentar el modo nativo cuando cambia el contenido; resetear info.
-  useEffect(() => { setNativeSrcFailed(false); setRes(null); setBitrate(0); fileRateDone.current = false; }, [url]);
+  useEffect(() => { setNativeSrcFailed(false); setRes(null); setBitrate(0); }, [url]);
 
   // Resolución real del video (sirve para HLS y archivos nativos).
   useEffect(() => {
@@ -307,27 +306,31 @@ export function Player() {
     return () => { v.removeEventListener("loadedmetadata", onMeta); v.removeEventListener("resize", onMeta); };
   }, [reloadKey]);
 
-  // Bitrate promedio de archivos directos (pelis/series mp4/mkv): hls.js no
-  // aplica, así que lo estimamos con el tamaño total (Range) sobre la duración.
+  // Bitrate de archivos directos (pelis/series mp4/mkv), SIN tocar la red:
+  // se estima con los bytes decodificados por el propio reproductor.
+  // OJO: la versión anterior hacía un fetch(Range) al MISMO stream — una
+  // segunda conexión que los paneles Xtream con límite matan cortando la
+  // reproducción original (pantalla negra a los pocos segundos).
   useEffect(() => {
-    if (isHls || !url || dur <= 0 || fileRateDone.current) return;
-    fileRateDone.current = true;
-    const ctrl = new AbortController();
-    const timer = window.setTimeout(() => ctrl.abort(), 8000);
-    fetch(url, { headers: { Range: "bytes=0-0" }, signal: ctrl.signal })
-      .then((r) => {
-        let total = 0;
-        const cr = r.headers.get("Content-Range");
-        const m = cr?.match(/\/(\d+)\s*$/);
-        if (m) total = Number(m[1]);
-        else if (r.status !== 206) { const cl = r.headers.get("Content-Length"); if (cl) total = Number(cl); }
-        if (total > 0 && dur > 0) setBitrate(Math.round((total * 8) / dur));
-      })
-      .catch(() => { fileRateDone.current = false; })
-      .finally(() => window.clearTimeout(timer));
-    return () => { window.clearTimeout(timer); ctrl.abort(); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [url, dur, isHls]);
+    if (isHls) return;
+    const v = videoRef.current as (HTMLVideoElement & {
+      webkitVideoDecodedByteCount?: number;
+      webkitAudioDecodedByteCount?: number;
+    }) | null;
+    if (!v || typeof v.webkitVideoDecodedByteCount !== "number") return;
+    let prevBytes = 0;
+    let prevT = 0;
+    const timer = window.setInterval(() => {
+      const bytes = (v.webkitVideoDecodedByteCount ?? 0) + (v.webkitAudioDecodedByteCount ?? 0);
+      const t = v.currentTime;
+      if (prevT > 0 && t > prevT && bytes > prevBytes) {
+        setBitrate(Math.round(((bytes - prevBytes) * 8) / (t - prevT)));
+      }
+      prevBytes = bytes;
+      prevT = t;
+    }, 4000);
+    return () => window.clearInterval(timer);
+  }, [url, reloadKey, isHls]);
 
   // Si el <source> nativo falló, caemos a video.src (reproducción segura).
   useEffect(() => {
