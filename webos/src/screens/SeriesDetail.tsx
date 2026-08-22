@@ -44,8 +44,29 @@ export function SeriesDetail() {
       return;
     }
     loadSeriesEpisodes(source, id)
-      .then(({ episodes: eps, meta: m }) => { setEpisodes(eps); setMeta(m); if (eps.length) setSeason(eps[0].seasonNumber); })
+      .then(({ episodes: eps, meta: m }) => {
+        setEpisodes(eps);
+        setMeta(m);
+        if (!eps.length) return;
+        // Temporada inicial: la que venía en la URL (volviste de un episodio),
+        // si no la del episodio a continuar, si no la primera.
+        const wanted = Number(params.get("season"));
+        if (wanted && eps.some((e) => e.seasonNumber === wanted)) { setSeason(wanted); return; }
+        const prog = useAppStore.getState().progress;
+        const halfway = eps.find((e) => {
+          const p = prog[e.id];
+          return p && p.pos > 30 && (p.dur === 0 || p.pos <= p.dur - 60);
+        });
+        let pick = halfway;
+        if (!pick) {
+          let lastWatched = -1;
+          eps.forEach((e, i) => { const p = prog[e.id]; if (p && p.dur > 0 && p.pos > p.dur - 60) lastWatched = i; });
+          if (lastWatched >= 0 && lastWatched + 1 < eps.length) pick = eps[lastWatched + 1];
+        }
+        setSeason((pick ?? eps[0]).seasonNumber);
+      })
       .catch((e) => setError(e instanceof Error ? e.message : "Error"));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source, id]);
 
   useEffect(() => { if (episodes) focusWhenReady("SER_PLAY"); }, [episodes]);
@@ -104,7 +125,7 @@ export function SeriesDetail() {
     const ft = `${title} · T${ep.seasonNumber} · E${ep.episodeNumber}`;
     const epMeta = `T${ep.seasonNumber} · E${ep.episodeNumber}${ep.duration ? ` · ${ep.duration}` : ""}`;
     const st = encodeB64Url({
-      from: `/series/${id}?name=${encodeURIComponent(title)}${fromSearch ? "&from=search" : ""}`,
+      from: `/series/${id}?name=${encodeURIComponent(title)}&season=${ep.seasonNumber}${fromSearch ? "&from=search" : ""}`,
       cid: ep.id,
       fav: { id: `series:${id}`, name: title, streamUrl: ep.streamUrl, logoUrl: info?.posterUrl, kind: "series-episode", meta: favMeta },
     });

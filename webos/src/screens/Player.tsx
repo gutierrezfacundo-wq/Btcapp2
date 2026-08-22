@@ -122,20 +122,25 @@ export function Player() {
         cancel = watchEmbeddedTracks(id, (t) => {
           setEmbTracks(t);
           // Idioma preferido: se aplica una sola vez, apenas el demuxer
-          // publica las pistas (con una pequeña espera para no glitchear).
+          // publica las pistas. OJO: tocar el pipeline (selectTrack /
+          // setSubtitleEnable) lo puede dejar pausado — hay que "empujarlo"
+          // con play() después (igual que hace TrackSheet con nudgePlay).
           if (langApplied) return;
           langApplied = true;
           const { prefAudioLang, prefSubLang } = useAppStore.getState();
           window.setTimeout(() => {
+            let touched = false;
             if (prefAudioLang) {
               const a = t.audio.find((x) => langMatches(x.language, prefAudioLang));
-              if (a) selectTrack(id, "audio", a.index);
+              // index 0 suele ser la pista por defecto: no tocar de gusto.
+              if (a && a.index > 0) { selectTrack(id, "audio", a.index); touched = true; }
             }
-            if (prefSubLang === "off") setSubtitleEnable(id, false);
-            else if (prefSubLang) {
+            if (prefSubLang && prefSubLang !== "off") {
               const s = t.subs.find((x) => langMatches(x.language, prefSubLang));
-              if (s) { selectTrack(id, "text", s.index); setSubtitleEnable(id, true); }
+              if (s) { selectTrack(id, "text", s.index); setSubtitleEnable(id, true); touched = true; }
             }
+            // "off" no necesita acción: el pipeline arranca sin subtítulos.
+            if (touched) videoRef.current?.play().catch(() => undefined);
           }, 600);
         }, (keys) => console.info("[pipeline]", keys));
       } else if (tries > 40) {

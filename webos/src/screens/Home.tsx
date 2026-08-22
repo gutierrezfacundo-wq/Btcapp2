@@ -14,6 +14,7 @@ import { TopBar } from "../components/TopBar";
 import { Hints } from "../components/Hints";
 import { VideoPreview } from "../components/VideoPreview";
 import { VirtualList } from "../components/VirtualList";
+import { PosterImg } from "../components/PosterImg";
 import { TrackSheet } from "../components/TrackSheet";
 import { FocusZone } from "../components/FocusZone";
 import { useBack } from "../navigation/backStack";
@@ -863,7 +864,7 @@ function GridScreen({
               {row.map((it, j) => (
                 <FocusableButton key={it.id} className="poster" onEnterPress={() => onPick(i * 6 + j)}>
                   <div className="poster-img">
-                    {it.posterUrl ? <img src={it.posterUrl} alt="" loading="lazy" decoding="async" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} /> : <div className="poster-ph">{initials(it.name)}</div>}
+                    {it.posterUrl ? <PosterImg src={it.posterUrl} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} /> : <div className="poster-ph">{initials(it.name)}</div>}
                     {it.rating ? <div className="poster-rate"><Icon name="star" size={15} /> {it.rating}</div> : null}
                     <div className="poster-meta">
                       <div className="poster-name">{it.name}</div>

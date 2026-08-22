@@ -6,6 +6,7 @@ import { FocusableButton } from "../components/FocusableButton";
 import { FocusZone } from "../components/FocusZone";
 import { Icon } from "../components/Icon";
 import { PinDialog } from "../components/PinDialog";
+import { PosterImg } from "../components/PosterImg";
 import { Rail } from "../components/Rail";
 import { TopBar } from "../components/TopBar";
 import { Hints, HINTS_NAV } from "../components/Hints";
@@ -272,7 +273,7 @@ export function Hub() {
                 </div>
                 {bill ? (
                   <FocusableButton focusKey="HUB_BILL" className="hub-bill" onEnterPress={() => openNew(bill)}>
-                    {bill.posterUrl ? <img className="hub-bill-img" src={bill.posterUrl} alt="" /> : null}
+                    {bill.posterUrl ? <PosterImg className="hub-bill-img" src={bill.posterUrl} /> : null}
                     <div className="hub-bill-grad" />
                     <div className="hub-bill-c">
                       <div className="hub-bill-tag">NOVEDAD · {bill.kind === "movie" ? "PELÍCULA" : "SERIE"}</div>
@@ -337,7 +338,7 @@ export function Hub() {
                       {newest.map((n, i) => (
                         <FocusableButton key={`${n.kind}-${n.id}`} focusKey={`HUB_N_${i}`} className="hub-mini" onEnterPress={() => openNew(n)}>
                           <div className="hub-mini-p">
-                            {n.posterUrl ? <img src={n.posterUrl} alt="" loading="lazy" decoding="async" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} /> : null}
+                            {n.posterUrl ? <PosterImg src={n.posterUrl} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} /> : null}
                             <span className="hub-mini-tag">{newTag(n.at)}</span>
                           </div>
                           <div className="hub-mini-t">{n.name}</div>
@@ -360,7 +361,7 @@ export function Hub() {
                         return (
                           <FocusableButton key={h.id} focusKey={`HUB_C_${i}`} className="hub-mini" onEnterPress={() => openHistory(h)}>
                             <div className="hub-mini-p">
-                              {h.posterUrl ? <img src={h.posterUrl} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} /> : null}
+                              {h.posterUrl ? <PosterImg src={h.posterUrl} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} /> : null}
                               {hasNew ? <span className="hub-mini-tag new">NUEVO EPISODIO</span> : h.sub ? <span className="hub-mini-tag">{h.sub}</span> : null}
                               {pct !== null ? <span className="hub-mini-bar"><i style={{ width: `${pct}%` }} /></span> : null}
                             </div>
@@ -378,7 +379,7 @@ export function Hub() {
                       {row.items.map((n, i) => (
                         <FocusableButton key={`${n.kind}-${n.id}`} focusKey={`HUB_R${ri}_${i}`} className="hub-mini" onEnterPress={() => openNew(n)}>
                           <div className="hub-mini-p">
-                            {n.posterUrl ? <img src={n.posterUrl} alt="" loading="lazy" decoding="async" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} /> : null}
+                            {n.posterUrl ? <PosterImg src={n.posterUrl} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} /> : null}
                           </div>
                           <div className="hub-mini-t">{n.name}</div>
                         </FocusableButton>
