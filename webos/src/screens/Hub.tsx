@@ -134,16 +134,22 @@ export function Hub() {
     navigate(`/home?tab=${id}`);
   };
 
-  // Filtro de aptitud del modo Felix para títulos VOD (fuera del modo pasa todo).
+  // Filtro para títulos VOD en las filas del Inicio: excluye las categorías
+  // que el usuario ocultó (Gestionar categorías) y, en modo Felix, lo no apto.
+  const catPrefs = useAppStore((s) => s.catPrefs);
   const vodAllowed = useMemo(() => {
     const items = new Set(kidsPrefs.items);
     const mov = new Set(kidsPrefs.movies);
     const ser = new Set(kidsPrefs.series);
+    const hiddenMov = new Set(catPrefs.movies.hidden);
+    const hiddenSer = new Set(catPrefs.series.hidden);
     return {
-      movie: (m: { id: string; category?: string | null }) => !kidsMode || mov.has(m.category ?? "") || items.has(m.id),
-      series: (s: { id: string; category?: string | null }) => !kidsMode || ser.has(s.category ?? "") || items.has(s.id),
+      movie: (m: { id: string; category?: string | null }) =>
+        !hiddenMov.has(m.category ?? "") && (!kidsMode || mov.has(m.category ?? "") || items.has(m.id)),
+      series: (s: { id: string; category?: string | null }) =>
+        !hiddenSer.has(s.category ?? "") && (!kidsMode || ser.has(s.category ?? "") || items.has(s.id)),
     };
-  }, [kidsMode, kidsPrefs]);
+  }, [kidsMode, kidsPrefs, catPrefs]);
 
   // Novedades: lo último que agregó el proveedor (pelis + series por addedAt).
   const newest = useMemo(() => {
