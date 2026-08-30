@@ -1,0 +1,191 @@
+import { useEffect, useRef, useState } from "react";
+import Hls from "hls.js";
+import { focusWhenReady } from "../navigation/focusMemory";
+import { FocusableButton } from "./FocusableButton";
+import { Icon } from "./Icon";
+import { useAppStore } from "../store/useAppStore";
+import { diagnoseStreamError } from "../data/xtream";
+
+interface Props {
+  url: string | null;
+  muted?: boolean;
+  /** Da acceso al <video> al padre para controles (pausa/play). */
+  onVideoEl?: (el: HTMLVideoElement | null) => void;
+  /** Da acceso a la instancia Hls (null si el stream es nativo) para pistas. */
+  onHls?: (hls: Hls | null) => void;
+  /** Reporta la resolucion real del video cuando se conoce o cambia. */
+  onResolution?: (width: number, height: number) => void;
+  /** Reporta el bitrate (bits/s) del nivel HLS activo; 0 si no se conoce. */
+  onBitrate?: (bps: number) => void;
+}
+
+export function VideoPreview({ url, muted = true, onVideoEl, onHls, onResolution, onBitrate }: Props) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const hlsRef = useRef<Hls | null>(null);
+  const [status, setStatus] = useState<"idle" | "loading" | "playing" | "error">(
+    "idle",
+  );
+  const [reloadKey, setReloadKey] = useState(0);
+  const retry = () => { setStatus("loading"); setErrDetail(null); setReloadKey((k) => k + 1); };
+
+  // Formatos de vivo que declara el proveedor (evita probar m3u8 si no lo permite).
+  const allowedFormats = useAppStore((s) => s.allowedFormats);
+  const source = useAppStore((s) => s.source);
+  const [errDetail, setErrDetail] = useState<string | null>(null);
+
+  // Al fallar: foco al Reintentar + diagnóstico real (¿conexiones al límite?).
+  useEffect(() => {
+    if (status !== "error") { setErrDetail(null); return; }
+    focusWhenReady("PV_RETRY");
+    if (source?.kind === "xtream") {
+      let alive = true;
+      diagnoseStreamError(source).then((d) => { if (alive && d) setErrDetail(d); });
+      return () => { alive = false; };
+    }
+  }, [status]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    onVideoEl?.(videoRef.current);
+    return () => onVideoEl?.(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    // Limpiar instancia anterior
+    if (hlsRef.current) {
+      hlsRef.current.destroy();
+      hlsRef.current = null;
+    }
+    const video = videoRef.current;
+    if (!video || !url) {
+      setStatus("idle");
+      if (video) {
+        video.removeAttribute("src");
+        video.load();
+      }
+      return;
+    }
+
+    setStatus("loading");
+    onResolution?.(0, 0);
+    onBitrate?.(0);
+
+    const reportRes = () => {
+      if (video.videoWidth > 0) onResolution?.(video.videoWidth, video.videoHeight);
+    };
+    video.addEventListener("loadedmetadata", reportRes);
+    video.addEventListener("resize", reportRes);
+
+    // El live de Xtream viene como .ts (MPEG-TS): Chrome no lo reproduce y no expone
+    // bitrate. Probamos la variante .m3u8 con hls.js (anda en PC y TV, y da bitrate);
+    // si falla, volvemos al .ts nativo (lo reproduce el player de webOS).
+    const isTs = /\.ts(\?|$)/i.test(url);
+    // Si el proveedor declara sus formatos y NO permite m3u8, no probamos la
+    // variante HLS para streams .ts: directo al reproductor nativo.
+    const m3u8Allowed = allowedFormats == null || allowedFormats.includes("m3u8");
+    const hlsUrl = isTs && m3u8Allowed ? url.replace(/\.ts(\?|$)/i, ".m3u8$1") : url;
+    const canHls = /\.m3u8(\?|$)/i.test(hlsUrl) && Hls.isSupported();
+
+    const playNative = (src: string) => {
+      video.src = src;
+      video.oncanplay = () => setStatus("playing");
+      video.onerror = () => setStatus("error");
+      onHls?.(null);
+      video.play().catch(() => { /* autoplay blocked */ });
+    };
+
+    if (canHls) {
+      const hls = new Hls({
+        enableWorker: true,
+        lowLatencyMode: true,
+        // Preview: bajamos buffer para que cambiar de canal sea rapido
+        maxBufferLength: 6,
+        maxMaxBufferLength: 12,
+      });
+      hlsRef.current = hls;
+      hls.loadSource(hlsUrl);
+      hls.attachMedia(video);
+      const reportLevel = (level: number) => {
+        const lv = hls.levels?.[level];
+        if (lv?.bitrate) onBitrate?.(lv.bitrate);
+      };
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        setStatus("playing");
+        reportLevel(hls.currentLevel >= 0 ? hls.currentLevel : hls.firstLevel);
+      });
+      hls.on(Hls.Events.LEVEL_SWITCHED, (_e, d) => reportLevel(d.level));
+      // Bitrate real medido por fragmento (sirve para live sin BANDWIDTH declarado).
+      hls.on(Hls.Events.FRAG_BUFFERED, (_e, d) => {
+        const bytes = d.frag?.stats?.total;
+        const dur = d.frag?.duration;
+        if (bytes && dur) onBitrate?.(Math.round((bytes * 8) / dur));
+      });
+      let recover = 0;
+      hls.on(Hls.Events.ERROR, (_evt, data) => {
+        if (!data.fatal) return;
+        // Recuperacion automatica (corte de red / glitch de media) antes de rendirse.
+        if (recover < 3) {
+          recover += 1;
+          if (data.type === Hls.ErrorTypes.NETWORK_ERROR) { try { hls.startLoad(); return; } catch { /* sigue */ } }
+          else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) { try { hls.recoverMediaError(); return; } catch { /* sigue */ } }
+        }
+        if (isTs) {
+          // La variante m3u8 no anduvo: caemos al .ts nativo.
+          hls.destroy();
+          if (hlsRef.current === hls) hlsRef.current = null;
+          playNative(url);
+          return;
+        }
+        setStatus("error");
+      });
+      onHls?.(hls);
+      video.play().catch(() => { /* autoplay blocked */ });
+    } else {
+      playNative(url);
+    }
+
+    return () => {
+      video.removeEventListener("loadedmetadata", reportRes);
+      video.removeEventListener("resize", reportRes);
+      onHls?.(null);
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
+      video.removeAttribute("src");
+      video.load();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [url, reloadKey]);
+
+  return (
+    <div className="video-preview">
+      <video
+        ref={videoRef}
+        muted={muted}
+        playsInline
+        autoPlay
+        style={{ width: "100%", height: "100%", objectFit: "contain", background: "#000" }}
+      />
+      {status === "idle" && !url ? (
+        <div className="video-preview-placeholder">
+          Seleccioná un canal
+        </div>
+      ) : null}
+      {status === "loading" ? (
+        <div className="video-preview-overlay">
+          <div className="spinner" />
+        </div>
+      ) : null}
+      {status === "error" ? (
+        <div className="video-preview-overlay error">
+          <Icon name="error_outline" size={44} />
+          <div>{errDetail ?? "No se pudo cargar el stream"}</div>
+          <FocusableButton focusKey="PV_RETRY" className="btn primary" onEnterPress={retry}>
+            <Icon name="refresh" /> Reintentar
+          </FocusableButton>
+        </div>
+      ) : null}
+    </div>
+  );
+}

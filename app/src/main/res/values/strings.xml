@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">IPTV Player</string>
+    <string name="setup_title">Configurar fuente</string>
+    <string name="setup_playlist_name">Nombre de la lista</string>
+    <string name="playlists_title">Mis listas</string>
+    <string name="playlists_add">Agregar lista</string>
+    <string name="playlists_empty">No hay listas. Agregá una.</string>
+    <string name="setup_tab_m3u">Lista M3U</string>
+    <string name="setup_tab_xtream">Xtream Codes</string>
+    <string name="setup_m3u_url">URL de la lista (.m3u / .m3u8)</string>
+    <string name="setup_epg_url">URL EPG XMLTV (opcional)</string>
+    <string name="setup_xtream_server">Servidor (https://host:puerto)</string>
+    <string name="setup_xtream_user">Usuario</string>
+    <string name="setup_xtream_pass">Contraseña</string>
+    <string name="setup_save">Guardar y cargar</string>
+    <string name="nav_live">En vivo</string>
+    <string name="nav_movies">Películas</string>
+    <string name="nav_series">Series</string>
+    <string name="nav_favorites">Favoritos</string>
+    <string name="nav_settings">Ajustes</string>
+    <string name="loading">Cargando…</string>
+    <string name="error_generic">Algo falló. Revisá la URL o credenciales.</string>
+    <string name="empty">No hay contenido todavía.</string>
+    <string name="search_hint">Buscar…</string>
+    <string name="all_categories">Todas</string>
+</resources>
