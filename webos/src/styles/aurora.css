@@ -646,3 +646,12 @@ body.kids .a-ch.focused,body.kids .a-cat.focused{background:var(--soft)}
 .fs-ch-name{font-size:20px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .fs-ch-now{font-size:16px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
 .fs-chlist-hint{padding-top:12px;font-size:15px;color:var(--muted)}
+
+/* ===== Filas estilo Netflix dentro de Peliculas/Series ===== */
+.vr-row{padding:6px 0 16px}
+.vr-h{font-size:16px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);font-weight:700;margin:0 0 10px 4px}
+.vr-scroll{display:flex;gap:16px;overflow-x:auto;overflow-y:hidden;padding:4px 4px 8px}
+.vr-card{width:158px;flex-shrink:0;cursor:pointer}
+.vr-poster{position:relative;width:100%;aspect-ratio:2/3;border-radius:14px;overflow:hidden;background:repeating-linear-gradient(125deg,#16161c 0 24px,#101016 24px 48px);border:1px solid var(--line)}
+.vr-card.focused .vr-poster{border-color:var(--accent);box-shadow:0 0 0 2px var(--ring)}
+.vr-name{font-size:16px;font-weight:600;margin-top:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
