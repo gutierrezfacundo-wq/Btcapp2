@@ -126,7 +126,11 @@ export function Player() {
           // con play() después (igual que hace TrackSheet con nudgePlay).
           if (langApplied) return;
           langApplied = true;
-          const { prefAudioLang, prefSubLang } = useAppStore.getState();
+          // En modo Felix se fuerza español latino sin subtítulos (los nenes
+          // no leen); fuera del modo rigen las preferencias del usuario.
+          const st = useAppStore.getState();
+          const prefAudioLang = st.kidsMode ? "es" : st.prefAudioLang;
+          const prefSubLang = st.kidsMode ? "off" : st.prefSubLang;
           window.setTimeout(() => {
             let touched = false;
             if (prefAudioLang) {
@@ -244,8 +248,11 @@ export function Player() {
       hlsInst.attachMedia(video);
       hlsInst.on(Hls.Events.ERROR, (_e, d) => { if (d.fatal) setError(`Error de reproducción (${d.type})`); });
       // Idioma preferido de audio/subtítulos (si el stream trae variantes).
+      // En modo Felix: español latino y sin subtítulos, siempre.
       const applyLangPrefs = (h: Hls) => {
-        const { prefAudioLang, prefSubLang } = useAppStore.getState();
+        const st = useAppStore.getState();
+        const prefAudioLang = st.kidsMode ? "es" : st.prefAudioLang;
+        const prefSubLang = st.kidsMode ? "off" : st.prefSubLang;
         if (prefAudioLang) {
           const i = h.audioTracks.findIndex((t) => langMatches(t.lang ?? t.name, prefAudioLang));
           if (i >= 0 && h.audioTrack !== i) h.audioTrack = i;
