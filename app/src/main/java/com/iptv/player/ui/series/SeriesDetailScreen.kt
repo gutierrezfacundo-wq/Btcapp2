@@ -1,5 +1,6 @@
 package com.iptv.player.ui.series
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -9,6 +10,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -50,12 +52,15 @@ fun SeriesDetailScreen(
     val vm: HomeViewModel = viewModel(factory = HomeViewModel.Factory(container))
     var episodes by remember { mutableStateOf<List<Episode>?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    var retryKey by remember { mutableStateOf(0) }
     val downloadsById by vm.downloadsById.collectAsState()
 
-    LaunchedEffect(seriesId) {
+    LaunchedEffect(seriesId, retryKey) {
+        error = null
+        episodes = null
         runCatching { vm.seriesEpisodes(seriesId) }
             .onSuccess { episodes = it }
-            .onFailure { error = it.message ?: "Error" }
+            .onFailure { error = it.message ?: "No se pudieron cargar los episodios" }
     }
 
     Scaffold(
@@ -72,11 +77,17 @@ fun SeriesDetailScreen(
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             when {
-                error != null -> Text(
-                    error!!,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(16.dp),
-                )
+                error != null -> Column(
+                    modifier = Modifier.fillMaxSize().padding(24.dp),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(error!!, color = MaterialTheme.colorScheme.error)
+                    Button(
+                        onClick = { retryKey++ },
+                        modifier = Modifier.padding(top = 16.dp),
+                    ) { Text("Reintentar") }
+                }
                 episodes == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator()
                 }

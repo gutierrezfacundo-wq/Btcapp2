@@ -23,11 +23,13 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 private const val CACHE_TTL_MS = 6 * 60 * 60 * 1000L // 6 horas
 
@@ -448,9 +450,19 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     suspend fun seriesEpisodes(seriesId: String): List<com.iptv.player.data.model.Episode> {
-        val source = state.value.source as? SourceConfig.Xtream ?: return emptyList()
-        val id = seriesId.toIntOrNull() ?: return emptyList()
-        return container.iptvRepository.seriesEpisodes(source, id)
+        // Esta pantalla usa su PROPIA instancia del ViewModel: al abrirla, su
+        // catálogo todavía se está cargando y `state.source` es null. Antes se
+        // devolvía vacío ahí mismo (y nunca se reintentaba, de ahí el "Sin
+        // episodios"); ahora esperamos a la lista activa.
+        val source = state.value.source
+            ?: withTimeoutOrNull(15_000) {
+                container.playlistRepository.activeSource.filterNotNull().first()
+            }
+            ?: error("No se pudo leer la lista activa")
+        val xt = source as? SourceConfig.Xtream
+            ?: error("Los episodios solo están disponibles en listas Xtream")
+        val id = seriesId.toIntOrNull() ?: error("Id de serie inválido")
+        return container.iptvRepository.seriesEpisodes(xt, id)
     }
 
     class Factory(private val container: AppContainer) : ViewModelProvider.Factory {
