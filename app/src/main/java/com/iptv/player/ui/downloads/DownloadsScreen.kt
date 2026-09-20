@@ -122,9 +122,11 @@ private fun DownloadRow(
                 .clip(RoundedCornerShape(8.dp)),
             contentAlignment = Alignment.Center,
         ) {
-            if (!d.posterUrl.isNullOrBlank()) {
+            // Preferimos la miniatura local: sin internet la remota no carga.
+            val art = d.posterPath?.takeIf { java.io.File(it).exists() } ?: d.posterUrl
+            if (!art.isNullOrBlank()) {
                 AsyncImage(
-                    model = d.posterUrl,
+                    model = art,
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),

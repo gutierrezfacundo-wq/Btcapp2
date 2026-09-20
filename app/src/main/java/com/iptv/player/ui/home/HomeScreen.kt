@@ -39,6 +39,7 @@ import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Tv
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -91,6 +92,13 @@ import com.iptv.player.ui.components.PinDialog
 import com.iptv.player.ui.components.MultiSelectChipRow
 import com.iptv.player.ui.components.PosterCard
 
+/** ¿Hay red utilizable? Se usa para abrir la app en Descargas cuando no la hay. */
+private fun isOnline(context: android.content.Context): Boolean = runCatching {
+    val cm = context.getSystemService(android.net.ConnectivityManager::class.java)
+    val caps = cm.getNetworkCapabilities(cm.activeNetwork) ?: return false
+    caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
+}.getOrDefault(true)
+
 private enum class HomeTab(val labelRes: Int, val icon: @Composable () -> Unit) {
     Live(R.string.nav_live, { Icon(Icons.Outlined.Tv, null) }),
     Movies(R.string.nav_movies, { Icon(Icons.Outlined.Movie, null) }),
@@ -142,6 +150,18 @@ fun HomeScreen(
     // Menú de opciones de una película (descarga + Felix)
     var movieForOptions by remember { mutableStateOf<Movie?>(null) }
     val downloadsById by vm.downloadsById.collectAsState()
+
+    // Arranque sin conexión: si hay contenido descargado, abrimos directamente
+    // Descargas (es lo único reproducible). Solo la primera composición.
+    var offlineChecked by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(downloadsById.isNotEmpty()) {
+        if (offlineChecked || kids.on) return@LaunchedEffect
+        val hasDownloads = downloadsById.values.any { it.isComplete }
+        if (hasDownloads && !isOnline(container.appContext)) {
+            tab = HomeTab.Downloads
+        }
+        if (downloadsById.isNotEmpty()) offlineChecked = true
+    }
 
     if (showGuide) {
         val liveChannels = displayLiveChannels
@@ -253,8 +273,22 @@ fun HomeScreen(
             }
             Box(modifier = Modifier.fillMaxSize().weight(1f)) {
             when {
+                // Descargas va SIEMPRE primero: es lo único que funciona sin
+                // internet, así que no puede quedar detrás del spinner ni del
+                // cartel de error del catálogo.
+                tab == HomeTab.Downloads -> DownloadsTab(
+                    vm = vm,
+                    onPlayLocal = { path, title ->
+                        vm.playSingle(title, path, null)
+                        onPlay(path, title)
+                    },
+                )
                 state.loading -> LoadingBox()
-                state.error != null -> ErrorBox(state.error!!)
+                state.error != null -> ErrorBox(
+                    msg = state.error!!,
+                    downloadCount = downloadsById.values.count { it.isComplete },
+                    onOpenDownloads = { tab = HomeTab.Downloads },
+                )
                 else -> when (tab) {
                     HomeTab.Live -> LiveTab(
                         channels = displayLiveChannels,
@@ -301,13 +335,8 @@ fun HomeScreen(
                         onLongPress = { if (!kids.on) seriesForKids = it },
                     )
                     HomeTab.Favorites -> FavoritesAndCollectionsTab(vm = vm, onPlay = onPlay)
-                    HomeTab.Downloads -> DownloadsTab(
-                        vm = vm,
-                        onPlayLocal = { path, title ->
-                            vm.playSingle(title, path, null)
-                            onPlay(path, title)
-                        },
-                    )
+                    // Downloads ya se resolvió arriba (funciona sin internet).
+                    HomeTab.Downloads -> Unit
                 }
             }
             }
@@ -459,9 +488,30 @@ private fun LoadingBox() {
 }
 
 @Composable
-private fun ErrorBox(msg: String) {
+private fun ErrorBox(
+    msg: String,
+    downloadCount: Int = 0,
+    onOpenDownloads: () -> Unit = {},
+) {
     Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
-        Text(msg, color = MaterialTheme.colorScheme.error)
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(msg, color = MaterialTheme.colorScheme.error)
+            // Sin internet, lo descargado sigue disponible: lo ofrecemos acá.
+            if (downloadCount > 0) {
+                Text(
+                    "Tenés $downloadCount ${if (downloadCount == 1) "descarga" else "descargas"} " +
+                        "que podés ver sin conexión.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
+                    modifier = Modifier.padding(top = 16.dp),
+                )
+                Button(onClick = onOpenDownloads, modifier = Modifier.padding(top = 12.dp)) {
+                    Icon(Icons.Outlined.Download, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Ver mis descargas")
+                }
+            }
+        }
     }
 }
 

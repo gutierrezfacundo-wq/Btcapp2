@@ -31,6 +31,8 @@ data class DownloadEntity(
     val sourceUrl: String,
     val localPath: String,
     val posterUrl: String?,
+    /** Miniatura guardada en el teléfono: la lista se ve bien sin internet. */
+    val posterPath: String?,
     val kindOrdinal: Int,
     val bytesDownloaded: Long,
     /** 0 si el servidor no informa el tamaño. */
@@ -65,6 +67,9 @@ interface DownloadDao {
 
     @Query("UPDATE downloads SET bytesDownloaded = :downloaded, bytesTotal = :total WHERE id = :id")
     suspend fun updateProgress(id: String, downloaded: Long, total: Long)
+
+    @Query("UPDATE downloads SET posterPath = :path WHERE id = :id")
+    suspend fun updatePosterPath(id: String, path: String)
 
     @Query("UPDATE downloads SET status = :status, error = :error WHERE id = :id")
     suspend fun updateStatus(id: String, status: String, error: String? = null)

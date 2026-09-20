@@ -44,6 +44,14 @@ class DownloadRepository(
         return File(downloadsDir(), "$safe.$ext")
     }
 
+    /** Archivo de la miniatura de una descarga. */
+    internal fun posterFileFor(id: String): File {
+        val safe = id.replace(Regex("[^A-Za-z0-9_-]"), "_")
+        return File(downloadsDir(), "$safe.jpg")
+    }
+
+    internal suspend fun savePosterPath(id: String, path: String) = dao.updatePosterPath(id, path)
+
     /** Espacio libre en la carpeta de descargas (bytes). */
     fun freeSpaceBytes(): Long = runCatching {
         val st = StatFs(downloadsDir().absolutePath)
@@ -88,6 +96,7 @@ class DownloadRepository(
             sourceUrl = sourceUrl,
             localPath = fileFor(id, sourceUrl).absolutePath,
             posterUrl = posterUrl,
+            posterPath = null,
             kindOrdinal = kind.ordinal,
             bytesDownloaded = 0L,
             bytesTotal = 0L,
@@ -106,7 +115,10 @@ class DownloadRepository(
     suspend fun remove(id: String) {
         val d = dao.get(id)
         dao.remove(id)
-        d?.let { runCatching { File(it.localPath).delete() } }
+        d?.let {
+            runCatching { File(it.localPath).delete() }
+            it.posterPath?.let { p -> runCatching { File(p).delete() } }
+        }
     }
 
     // --- Usado por el servicio ---

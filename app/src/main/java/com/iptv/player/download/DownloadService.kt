@@ -154,6 +154,19 @@ class DownloadService : Service() {
                 repo.saveProgress(item.id, downloaded, if (total > 0) total else downloaded)
             }
         }
+        // Miniatura local: la lista de descargas se ve bien sin internet.
+        val posterUrl = item.posterUrl
+        if (item.posterPath == null && !posterUrl.isNullOrBlank()) {
+            runCatching {
+                val pf = repo.posterFileFor(item.id)
+                http.newCall(Request.Builder().url(posterUrl).build()).execute().use { r ->
+                    if (r.isSuccessful) {
+                        r.body?.byteStream()?.use { input -> pf.outputStream().use { input.copyTo(it) } }
+                        repo.savePosterPath(item.id, pf.absolutePath)
+                    }
+                }
+            }
+        }
         repo.markDone(item.id)
         notify("Descarga lista", item.title, null)
     }

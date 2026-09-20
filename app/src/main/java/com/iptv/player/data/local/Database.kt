@@ -77,6 +77,7 @@ val MIGRATION_5_6 = object : androidx.room.migration.Migration(5, 6) {
                 sourceUrl TEXT NOT NULL,
                 localPath TEXT NOT NULL,
                 posterUrl TEXT,
+                posterPath TEXT,
                 kindOrdinal INTEGER NOT NULL,
                 bytesDownloaded INTEGER NOT NULL DEFAULT 0,
                 bytesTotal INTEGER NOT NULL DEFAULT 0,
