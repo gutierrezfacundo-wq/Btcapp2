@@ -45,7 +45,11 @@ class PlaybackManager(
         }
         currentUrl = url
         val p = player
-        p.setMediaItem(MediaItem.fromUri(url))
+        // Una descarga local llega como ruta absoluta ("/storage/…"): la
+        // convertimos a file:// para que ExoPlayer use el lector de archivos.
+        val uri = if (url.startsWith("/")) android.net.Uri.fromFile(java.io.File(url))
+        else android.net.Uri.parse(url)
+        p.setMediaItem(MediaItem.fromUri(uri))
         p.prepare()
         if (startPositionMs > 0L) p.seekTo(startPositionMs)
         p.playWhenReady = true

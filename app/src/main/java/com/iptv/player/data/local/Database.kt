@@ -49,8 +49,9 @@ interface RecentDao {
         ChannelPrefEntity::class,
         CategoryPrefEntity::class,
         EpgMapEntity::class,
+        DownloadEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = false,
 )
 abstract class IptvDatabase : RoomDatabase() {
@@ -62,6 +63,30 @@ abstract class IptvDatabase : RoomDatabase() {
     abstract fun channelPrefDao(): ChannelPrefDao
     abstract fun categoryPrefDao(): CategoryPrefDao
     abstract fun epgMapDao(): EpgMapDao
+    abstract fun downloadDao(): DownloadDao
+}
+
+val MIGRATION_5_6 = object : androidx.room.migration.Migration(5, 6) {
+    override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS downloads (
+                id TEXT NOT NULL PRIMARY KEY,
+                title TEXT NOT NULL,
+                subtitle TEXT,
+                sourceUrl TEXT NOT NULL,
+                localPath TEXT NOT NULL,
+                posterUrl TEXT,
+                kindOrdinal INTEGER NOT NULL,
+                bytesDownloaded INTEGER NOT NULL DEFAULT 0,
+                bytesTotal INTEGER NOT NULL DEFAULT 0,
+                status TEXT NOT NULL,
+                error TEXT,
+                createdAt INTEGER NOT NULL
+            )
+            """.trimIndent()
+        )
+    }
 }
 
 val MIGRATION_4_5 = object : androidx.room.migration.Migration(4, 5) {

@@ -33,6 +33,7 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Favorite
 import androidx.compose.material.icons.outlined.LiveTv
 import androidx.compose.material.icons.outlined.ChildCare
+import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material.icons.outlined.PlayArrow
@@ -83,6 +84,8 @@ import androidx.media3.common.util.UnstableApi
 import com.iptv.player.ui.components.ChannelRow
 import com.iptv.player.ui.components.ChannelSearchBar
 import com.iptv.player.ui.components.KidsMarkDialog
+import com.iptv.player.ui.components.MovieOptionsDialog
+import com.iptv.player.ui.downloads.DownloadsTab
 import com.iptv.player.ui.components.MiniPlayer
 import com.iptv.player.ui.components.PinDialog
 import com.iptv.player.ui.components.MultiSelectChipRow
@@ -93,6 +96,7 @@ private enum class HomeTab(val labelRes: Int, val icon: @Composable () -> Unit) 
     Movies(R.string.nav_movies, { Icon(Icons.Outlined.Movie, null) }),
     Series(R.string.nav_series, { Icon(Icons.Outlined.LiveTv, null) }),
     Favorites(R.string.nav_favorites, { Icon(Icons.Outlined.Favorite, null) }),
+    Downloads(R.string.nav_downloads, { Icon(Icons.Outlined.Download, null) }),
 }
 
 @OptIn(ExperimentalMaterial3Api::class, UnstableApi::class)
@@ -134,7 +138,10 @@ fun HomeScreen(
     var movieForKids by remember { mutableStateOf<Movie?>(null) }
     var seriesForKids by remember { mutableStateOf<com.iptv.player.data.model.SeriesInfo?>(null) }
     val visibleTabs = if (kids.on) listOf(HomeTab.Live, HomeTab.Movies, HomeTab.Series) else HomeTab.entries.toList()
-    LaunchedEffect(kids.on) { if (kids.on && tab == HomeTab.Favorites) tab = HomeTab.Live }
+    LaunchedEffect(kids.on) { if (kids.on && tab !in visibleTabs) tab = HomeTab.Live }
+    // Menú de opciones de una película (descarga + Felix)
+    var movieForOptions by remember { mutableStateOf<Movie?>(null) }
+    val downloadsById by vm.downloadsById.collectAsState()
 
     if (showGuide) {
         val liveChannels = displayLiveChannels
@@ -285,7 +292,7 @@ fun HomeScreen(
                             vm.playSingle(movie.name, movie.streamUrl, movie.posterUrl)
                             onPlay(movie.streamUrl, movie.name)
                         },
-                        onLongPress = { if (!kids.on) movieForKids = it },
+                        onLongPress = { if (!kids.on) movieForOptions = it },
                     )
                     HomeTab.Series -> SeriesTab(
                         series = displaySeries,
@@ -294,6 +301,13 @@ fun HomeScreen(
                         onLongPress = { if (!kids.on) seriesForKids = it },
                     )
                     HomeTab.Favorites -> FavoritesAndCollectionsTab(vm = vm, onPlay = onPlay)
+                    HomeTab.Downloads -> DownloadsTab(
+                        vm = vm,
+                        onPlayLocal = { path, title ->
+                            vm.playSingle(title, path, null)
+                            onPlay(path, title)
+                        },
+                    )
                 }
             }
             }
@@ -359,6 +373,28 @@ fun HomeScreen(
             onDismiss = { channelForKids = null },
         )
     }
+    // Opciones de película: descargar / gestionar la descarga / marcar para Felix.
+    val optionsMovie = movieForOptions
+    if (optionsMovie != null) {
+        MovieOptionsDialog(
+            title = optionsMovie.name,
+            download = downloadsById[optionsMovie.id],
+            kidsEnabled = !kids.on,
+            onDownload = { vm.downloadMovie(optionsMovie) },
+            onPause = { vm.pauseDownload(optionsMovie.id) },
+            onResume = { vm.resumeDownload(optionsMovie.id) },
+            onRemoveDownload = { vm.removeDownload(optionsMovie.id) },
+            onPlayLocal = {
+                downloadsById[optionsMovie.id]?.localPath?.let { path ->
+                    vm.playSingle(optionsMovie.name, path, optionsMovie.posterUrl)
+                    onPlay(path, optionsMovie.name)
+                }
+            },
+            onKidsMark = { movieForKids = optionsMovie },
+            onDismiss = { movieForOptions = null },
+        )
+    }
+
     val kidsMovie = movieForKids
     if (kidsMovie != null) {
         KidsMarkDialog(

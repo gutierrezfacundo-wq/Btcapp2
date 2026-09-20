@@ -29,9 +29,20 @@ class MainActivity : ComponentActivity() {
 
     private val isInPipMode = MutableStateFlow(false)
 
+    /** Permiso para la notificación de progreso de las descargas (Android 13+). */
+    private val notifPermission = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
+    ) { /* si lo niega, la descarga igual corre: solo no se ve el progreso */ }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) !=
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            runCatching { notifPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS) }
+        }
         val container = (application as IptvApp).container
         val lastCrash = com.iptv.player.crash.CrashStore.consume(this)
         setContent {

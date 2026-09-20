@@ -18,6 +18,7 @@
     <string name="nav_movies">Películas</string>
     <string name="nav_series">Series</string>
     <string name="nav_favorites">Favoritos</string>
+    <string name="nav_downloads">Descargas</string>
     <string name="nav_settings">Ajustes</string>
     <string name="loading">Cargando…</string>
     <string name="error_generic">Algo falló. Revisá la URL o credenciales.</string>

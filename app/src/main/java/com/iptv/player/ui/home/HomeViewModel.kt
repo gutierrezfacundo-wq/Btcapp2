@@ -154,6 +154,66 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
 
     fun isFavorite(id: String): Boolean = favorites.value.any { it.id == id }
 
+    // --- Descargas locales ---
+    val downloads = container.downloadRepository.downloads
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** Estado de descarga por id de contenido, para pintar los botones. */
+    val downloadsById = downloads
+        .map { list -> list.associateBy { it.id } }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
+
+    fun downloadMovie(movie: Movie) {
+        viewModelScope.launch {
+            container.downloadRepository.enqueue(
+                id = movie.id,
+                title = movie.name,
+                subtitle = listOfNotNull(movie.year?.take(4), movie.category).joinToString(" · ")
+                    .takeIf { it.isNotBlank() },
+                sourceUrl = movie.streamUrl,
+                posterUrl = movie.posterUrl,
+                kind = MediaKind.MOVIE,
+            )
+            com.iptv.player.download.DownloadService.start(container.appContext)
+        }
+    }
+
+    fun downloadEpisode(ep: com.iptv.player.data.model.Episode, seriesTitle: String, poster: String?) {
+        viewModelScope.launch {
+            container.downloadRepository.enqueue(
+                id = ep.id,
+                title = "$seriesTitle — ${ep.title}",
+                subtitle = "T${ep.seasonNumber} · E${ep.episodeNumber}",
+                sourceUrl = ep.streamUrl,
+                posterUrl = poster,
+                kind = MediaKind.SERIES_EPISODE,
+            )
+            com.iptv.player.download.DownloadService.start(container.appContext)
+        }
+    }
+
+    fun pauseDownload(id: String) {
+        viewModelScope.launch { container.downloadRepository.pause(id) }
+    }
+
+    fun resumeDownload(id: String) {
+        viewModelScope.launch {
+            container.downloadRepository.resume(id)
+            com.iptv.player.download.DownloadService.start(container.appContext)
+        }
+    }
+
+    fun removeDownload(id: String) {
+        viewModelScope.launch { container.downloadRepository.remove(id) }
+    }
+
+    /** Reproduce el archivo local (si está completo); devuelve la ruta o null. */
+    suspend fun localPathOf(id: String): String? =
+        container.downloadRepository.localPathIfComplete(id)
+
+    fun downloadsUsedBytes(): Long = container.downloadRepository.usedSpaceBytes()
+    fun downloadsFreeBytes(): Long = container.downloadRepository.freeSpaceBytes()
+
     // --- Modo Felix (niños) ---
     data class KidsState(
         val on: Boolean = false,

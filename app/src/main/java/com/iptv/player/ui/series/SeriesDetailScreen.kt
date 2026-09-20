@@ -2,6 +2,7 @@ package com.iptv.player.ui.series
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -19,6 +20,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -29,8 +31,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.iptv.player.data.local.DownloadStatus
 import com.iptv.player.data.model.Episode
 import com.iptv.player.di.AppContainer
+import com.iptv.player.ui.components.DownloadProgressLine
+import com.iptv.player.ui.components.EpisodeDownloadIcon
 import com.iptv.player.ui.home.HomeViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -45,6 +50,7 @@ fun SeriesDetailScreen(
     val vm: HomeViewModel = viewModel(factory = HomeViewModel.Factory(container))
     var episodes by remember { mutableStateOf<List<Episode>?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    val downloadsById by vm.downloadsById.collectAsState()
 
     LaunchedEffect(seriesId) {
         runCatching { vm.seriesEpisodes(seriesId) }
@@ -82,26 +88,58 @@ fun SeriesDetailScreen(
                     val eps = episodes!!
                     LazyColumn {
                         items(eps, key = { it.id }) { ep ->
-                            Column(
-                                modifier = Modifier.fillMaxWidth()
-                                    .clickable {
-                                        val idx = eps.indexOf(ep)
-                                        container.playbackController.setEpisodes(
-                                            episodes = eps,
-                                            activeIndex = idx,
-                                            seriesTitle = title,
-                                            poster = null,
-                                        )
-                                        onPlay(ep.streamUrl, "T${ep.seasonNumber} E${ep.episodeNumber} — ${ep.title}")
-                                    }
-                                    .padding(16.dp),
+                            val dl = downloadsById[ep.id]
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                Text(
-                                    "T${ep.seasonNumber} · E${ep.episodeNumber}",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
-                                Text(ep.title, style = MaterialTheme.typography.bodyLarge)
+                                Column(
+                                    modifier = Modifier.weight(1f)
+                                        .clickable {
+                                            // Si está descargado, se reproduce del archivo local.
+                                            val local = dl?.takeIf { it.isComplete }?.localPath
+                                            if (local != null) {
+                                                vm.playSingle(ep.title, local, null)
+                                                onPlay(local, "T${ep.seasonNumber} E${ep.episodeNumber} — ${ep.title}")
+                                            } else {
+                                                val idx = eps.indexOf(ep)
+                                                container.playbackController.setEpisodes(
+                                                    episodes = eps,
+                                                    activeIndex = idx,
+                                                    seriesTitle = title,
+                                                    poster = null,
+                                                )
+                                                onPlay(ep.streamUrl, "T${ep.seasonNumber} E${ep.episodeNumber} — ${ep.title}")
+                                            }
+                                        }
+                                        .padding(16.dp),
+                                ) {
+                                    Text(
+                                        "T${ep.seasonNumber} · E${ep.episodeNumber}",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.primary,
+                                    )
+                                    Text(ep.title, style = MaterialTheme.typography.bodyLarge)
+                                    if (dl != null && !dl.isComplete) DownloadProgressLine(dl)
+                                    else if (dl != null) Text(
+                                        "Descargado · se ve sin internet",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.primary,
+                                    )
+                                }
+                                IconButton(
+                                    onClick = {
+                                        when (dl?.status) {
+                                            null -> vm.downloadEpisode(ep, title, null)
+                                            DownloadStatus.DONE -> vm.removeDownload(ep.id)
+                                            DownloadStatus.PAUSED, DownloadStatus.FAILED -> vm.resumeDownload(ep.id)
+                                            else -> vm.pauseDownload(ep.id)
+                                        }
+                                    },
+                                    modifier = Modifier.padding(end = 8.dp),
+                                ) {
+                                    EpisodeDownloadIcon(dl)
+                                }
                             }
                             HorizontalDivider()
                         }

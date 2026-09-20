@@ -56,6 +56,7 @@ class AppContainer(context: Context) {
             com.iptv.player.data.local.MIGRATION_2_3,
             com.iptv.player.data.local.MIGRATION_3_4,
             com.iptv.player.data.local.MIGRATION_4_5,
+            com.iptv.player.data.local.MIGRATION_5_6,
         )
         .fallbackToDestructiveMigration()
         .build()
@@ -68,6 +69,10 @@ class AppContainer(context: Context) {
     val collectionRepository = CollectionRepository(
         database.collectionDao(),
         database.collectionItemDao(),
+    )
+    val downloadRepository = com.iptv.player.data.repository.DownloadRepository(
+        appContext,
+        database.downloadDao(),
     )
     val playbackController = PlaybackController()
     val playbackManager = PlaybackManager(appContext, httpClient)
