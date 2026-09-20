@@ -55,6 +55,25 @@ class PlaybackManager(
         p.playWhenReady = true
     }
 
+    /**
+     * Idioma preferido de audio/subtítulos. ExoPlayer elige esa pista si el
+     * contenido la trae (vale igual para streams y para descargas locales).
+     * `subLang` puede ser "off" para no mostrar subtítulos.
+     */
+    fun setPreferredLanguages(audioLang: String, subLang: String) {
+        val p = _player ?: return
+        p.trackSelectionParameters = p.trackSelectionParameters.buildUpon().apply {
+            if (audioLang.isNotBlank()) setPreferredAudioLanguage(audioLang)
+            when {
+                subLang == "off" -> setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, true)
+                subLang.isNotBlank() -> {
+                    setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, false)
+                    setPreferredTextLanguage(subLang)
+                }
+            }
+        }.build()
+    }
+
     fun pause() { _player?.pause() }
     fun stop() {
         _player?.stop()

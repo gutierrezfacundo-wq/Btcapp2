@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Pause
+import androidx.compose.material.icons.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -90,9 +91,13 @@ fun DownloadsTab(
         HorizontalDivider()
         LazyColumn {
             items(downloads, key = { it.id }) { d ->
+                val ctx = androidx.compose.ui.platform.LocalContext.current
                 DownloadRow(
                     d = d,
                     onPlay = { onPlayLocal(d.localPath, d.title) },
+                    onOpenWith = {
+                        com.iptv.player.download.openWithExternalPlayer(ctx, d.localPath, d.title)
+                    },
                     onPause = { vm.pauseDownload(d.id) },
                     onResume = { vm.resumeDownload(d.id) },
                     onRemove = { vm.removeDownload(d.id) },
@@ -107,6 +112,7 @@ fun DownloadsTab(
 private fun DownloadRow(
     d: DownloadEntity,
     onPlay: () -> Unit,
+    onOpenWith: () -> Unit,
     onPause: () -> Unit,
     onResume: () -> Unit,
     onRemove: () -> Unit,
@@ -163,8 +169,13 @@ private fun DownloadRow(
             }
         }
         when {
-            d.isComplete -> IconButton(onClick = onPlay) {
-                Icon(Icons.Outlined.PlayArrow, "Reproducir", tint = MaterialTheme.colorScheme.primary)
+            d.isComplete -> {
+                IconButton(onClick = onPlay) {
+                    Icon(Icons.Outlined.PlayArrow, "Reproducir", tint = MaterialTheme.colorScheme.primary)
+                }
+                IconButton(onClick = onOpenWith) {
+                    Icon(Icons.Outlined.OpenInNew, "Abrir con otro reproductor")
+                }
             }
             d.status == DownloadStatus.PAUSED || d.status == DownloadStatus.FAILED ->
                 IconButton(onClick = onResume) { Icon(Icons.Outlined.Download, "Reanudar") }

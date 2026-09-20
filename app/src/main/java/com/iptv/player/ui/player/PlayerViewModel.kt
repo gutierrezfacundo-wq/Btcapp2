@@ -70,6 +70,12 @@ class PlayerViewModel(private val container: AppContainer) : ViewModel() {
             else -> container.database.recentDao().get(url)?.positionMs ?: 0L
         }
         container.playbackManager.play(url, seekTo)
+        // Idioma preferido: vale igual para streams y para descargas locales.
+        val audio = container.preferencesStore.prefAudioLang.first()
+        val subs = container.preferencesStore.prefSubLang.first()
+        if (audio.isNotBlank() || subs.isNotBlank()) {
+            container.playbackManager.setPreferredLanguages(audio, subs)
+        }
     }
 
     fun selectIndex(index: Int) = container.playbackController.selectIndex(index)

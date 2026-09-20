@@ -154,6 +154,20 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
 
     fun isFavorite(id: String): Boolean = favorites.value.any { it.id == id }
 
+    // --- Idioma preferido de las pistas ---
+    val prefAudioLang = container.preferencesStore.prefAudioLang
+        .stateIn(viewModelScope, SharingStarted.Eagerly, "")
+    val prefSubLang = container.preferencesStore.prefSubLang
+        .stateIn(viewModelScope, SharingStarted.Eagerly, "")
+
+    fun setPrefAudioLang(v: String) {
+        viewModelScope.launch { container.preferencesStore.setPrefAudioLang(v) }
+    }
+
+    fun setPrefSubLang(v: String) {
+        viewModelScope.launch { container.preferencesStore.setPrefSubLang(v) }
+    }
+
     // --- Descargas locales ---
     val downloads = container.downloadRepository.downloads
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())

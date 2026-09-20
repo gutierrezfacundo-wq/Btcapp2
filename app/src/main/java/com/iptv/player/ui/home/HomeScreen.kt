@@ -38,6 +38,7 @@ import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.material.icons.outlined.Tv
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -85,6 +86,7 @@ import androidx.media3.common.util.UnstableApi
 import com.iptv.player.ui.components.ChannelRow
 import com.iptv.player.ui.components.ChannelSearchBar
 import com.iptv.player.ui.components.KidsMarkDialog
+import com.iptv.player.ui.components.LanguageSettingsDialog
 import com.iptv.player.ui.components.MovieOptionsDialog
 import com.iptv.player.ui.downloads.DownloadsTab
 import com.iptv.player.ui.components.MiniPlayer
@@ -150,6 +152,9 @@ fun HomeScreen(
     // Menú de opciones de una película (descarga + Felix)
     var movieForOptions by remember { mutableStateOf<Movie?>(null) }
     val downloadsById by vm.downloadsById.collectAsState()
+    var showLanguageSettings by remember { mutableStateOf(false) }
+    val prefAudioLang by vm.prefAudioLang.collectAsState()
+    val prefSubLang by vm.prefSubLang.collectAsState()
 
     // Arranque sin conexión: si hay contenido descargado, abrimos directamente
     // Descargas (es lo único reproducible). Solo la primera composición.
@@ -218,6 +223,9 @@ fun HomeScreen(
                             if (parentalPin.isEmpty()) showPinSetup = true else vm.setKidsMode(true)
                         }) {
                             Icon(Icons.Outlined.ChildCare, contentDescription = "Modo Felix")
+                        }
+                        IconButton(onClick = { showLanguageSettings = true }) {
+                            Icon(Icons.Outlined.Translate, contentDescription = "Idioma preferido")
                         }
                         IconButton(onClick = vm::refresh) {
                             Icon(Icons.Outlined.Refresh, contentDescription = "Recargar")
@@ -402,13 +410,38 @@ fun HomeScreen(
             onDismiss = { channelForKids = null },
         )
     }
+    if (showLanguageSettings) {
+        LanguageSettingsDialog(
+            audioLang = prefAudioLang,
+            subLang = prefSubLang,
+            onAudioLang = vm::setPrefAudioLang,
+            onSubLang = vm::setPrefSubLang,
+            onDismiss = { showLanguageSettings = false },
+        )
+    }
+
     // Opciones de película: descargar / gestionar la descarga / marcar para Felix.
     val optionsMovie = movieForOptions
     if (optionsMovie != null) {
+        val ctx = androidx.compose.ui.platform.LocalContext.current
         MovieOptionsDialog(
             title = optionsMovie.name,
             download = downloadsById[optionsMovie.id],
             kidsEnabled = !kids.on,
+            languageVariants = remember(optionsMovie.id, state.catalog.movies) {
+                com.iptv.player.data.model.LanguageVariants.variantsOf(optionsMovie, state.catalog.movies)
+            },
+            onDownloadVariant = { v -> vm.downloadMovie(v) },
+            onOpenWith = {
+                downloadsById[optionsMovie.id]?.localPath?.let {
+                    com.iptv.player.download.openWithExternalPlayer(ctx, it, optionsMovie.name)
+                }
+            },
+            onShare = {
+                downloadsById[optionsMovie.id]?.localPath?.let {
+                    com.iptv.player.download.shareDownload(ctx, it, optionsMovie.name)
+                }
+            },
             onDownload = { vm.downloadMovie(optionsMovie) },
             onPause = { vm.pauseDownload(optionsMovie.id) },
             onResume = { vm.resumeDownload(optionsMovie.id) },

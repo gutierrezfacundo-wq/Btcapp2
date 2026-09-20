@@ -26,11 +26,30 @@ class PreferencesStore(private val context: Context) {
         val XPass = stringPreferencesKey("xtream_pass")
         val ActivePlaylistId = longPreferencesKey("active_playlist_id")
 
+        // Idioma preferido de las pistas al reproducir
+        val PrefAudioLang = stringPreferencesKey("pref_audio_lang")
+        val PrefSubLang = stringPreferencesKey("pref_sub_lang")
+
         // Modo Felix (niños)
         val KidsMode = booleanPreferencesKey("kids_mode")
         val ParentalPin = stringPreferencesKey("parental_pin")
         val KidsCategories = stringSetPreferencesKey("kids_categories")
         val KidsItems = stringSetPreferencesKey("kids_items")
+    }
+
+    // ===== Idioma preferido de las pistas =====
+    /** Código de idioma para el audio ("" = el que venga). */
+    val prefAudioLang: Flow<String> = context.dataStore.data.map { it[Keys.PrefAudioLang].orEmpty() }
+
+    /** "" sin preferencia, "off" sin subtítulos, o código de idioma. */
+    val prefSubLang: Flow<String> = context.dataStore.data.map { it[Keys.PrefSubLang].orEmpty() }
+
+    suspend fun setPrefAudioLang(v: String) {
+        context.dataStore.edit { it[Keys.PrefAudioLang] = v }
+    }
+
+    suspend fun setPrefSubLang(v: String) {
+        context.dataStore.edit { it[Keys.PrefSubLang] = v }
     }
 
     // ===== Modo Felix (niños) =====
