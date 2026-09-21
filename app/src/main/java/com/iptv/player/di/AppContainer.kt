@@ -74,6 +74,7 @@ class AppContainer(context: Context) {
     val downloadRepository = com.iptv.player.data.repository.DownloadRepository(
         appContext,
         database.downloadDao(),
+        preferencesStore,
     )
     val playbackController = PlaybackController()
     val playbackManager = PlaybackManager(appContext, httpClient)

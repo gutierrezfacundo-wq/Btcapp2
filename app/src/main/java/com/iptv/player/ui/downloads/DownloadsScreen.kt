@@ -153,12 +153,7 @@ fun DownloadsTab(
     }
 
     Column(Modifier.fillMaxSize()) {
-        Text(
-            "${formatBytes(used)} usados · ${formatBytes(free)} libres en el teléfono",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-        )
+        StorageHeader(vm = vm, used = used, free = free)
         HorizontalDivider()
         LazyColumn {
             items(
@@ -224,6 +219,43 @@ fun DownloadsTab(
                 }
                 HorizontalDivider()
             }
+        }
+    }
+}
+
+/**
+ * Espacio usado/libre y, si hay tarjeta SD, dónde guardar lo que se descargue
+ * de ahora en más. Lo ya descargado no se mueve: sigue donde está.
+ */
+@Composable
+private fun StorageHeader(vm: HomeViewModel, used: Long, free: Long) {
+    val volume by vm.downloadVolume.collectAsState()
+    val targets = remember { vm.storageTargets() }
+    Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+        Text(
+            "${formatBytes(used)} usados · ${formatBytes(free)} libres en el destino elegido",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+        )
+        if (targets.size > 1) {
+            Row(
+                modifier = Modifier.padding(top = 8.dp),
+                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
+            ) {
+                targets.forEach { t ->
+                    androidx.compose.material3.FilterChip(
+                        selected = volume == t.id,
+                        onClick = { vm.setDownloadVolume(t.id) },
+                        label = { Text("${t.label} · ${formatBytes(t.freeBytes)} libres") },
+                    )
+                }
+            }
+            Text(
+                "Las descargas nuevas van al destino elegido; las que ya bajaste no se mueven.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                modifier = Modifier.padding(top = 6.dp),
+            )
         }
     }
 }

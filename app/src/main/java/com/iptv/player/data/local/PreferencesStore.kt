@@ -26,6 +26,9 @@ class PreferencesStore(private val context: Context) {
         val XPass = stringPreferencesKey("xtream_pass")
         val ActivePlaylistId = longPreferencesKey("active_playlist_id")
 
+        // Dónde guardar las descargas: "internal" o "sd"
+        val DownloadVolume = stringPreferencesKey("download_volume")
+
         // Idioma preferido de las pistas al reproducir
         val PrefAudioLang = stringPreferencesKey("pref_audio_lang")
         val PrefSubLang = stringPreferencesKey("pref_sub_lang")
@@ -36,6 +39,19 @@ class PreferencesStore(private val context: Context) {
         val KidsCategories = stringSetPreferencesKey("kids_categories")
         val KidsItems = stringSetPreferencesKey("kids_items")
     }
+
+    // ===== Destino de las descargas =====
+    /** "internal" (por defecto) o "sd" si hay tarjeta y el usuario la eligió. */
+    val downloadVolume: Flow<String> = context.dataStore.data.map {
+        it[Keys.DownloadVolume] ?: "internal"
+    }
+
+    suspend fun setDownloadVolume(v: String) {
+        context.dataStore.edit { it[Keys.DownloadVolume] = v }
+    }
+
+    /** Lectura directa: el servicio de descarga la necesita sin observar. */
+    suspend fun downloadVolumeOnce(): String = downloadVolume.first()
 
     // ===== Idioma preferido de las pistas =====
     /** Código de idioma para el audio ("" = el que venga). */

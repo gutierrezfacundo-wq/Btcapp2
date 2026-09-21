@@ -4,4 +4,7 @@
          reproductores (VLC, MX Player…), nunca por file:// -->
     <external-files-path name="downloads" path="Movies/" />
     <files-path name="internal_downloads" path="movies/" />
+    <!-- Carpeta de la app en la tarjeta SD: getExternalFilesDirs()[1] vive
+         bajo /storage/<ID-de-la-tarjeta>/, fuera de external-files-path. -->
+    <root-path name="removable_downloads" path="/storage/" />
 </paths>

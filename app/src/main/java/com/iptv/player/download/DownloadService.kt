@@ -162,7 +162,7 @@ class DownloadService : Service() {
         val posterUrl = item.posterUrl
         if (item.posterPath == null && !posterUrl.isNullOrBlank()) {
             runCatching {
-                val pf = repo.posterFileFor(item.id)
+                val pf = repo.posterFileFor(item.id, item.localPath)
                 http.newCall(Request.Builder().url(posterUrl).build()).execute().use { r ->
                     if (r.isSuccessful) {
                         r.body?.byteStream()?.use { input -> pf.outputStream().use { input.copyTo(it) } }

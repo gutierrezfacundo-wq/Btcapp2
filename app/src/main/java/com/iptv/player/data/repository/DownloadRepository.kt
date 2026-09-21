@@ -16,10 +16,50 @@ import java.io.File
  * Descargas locales: qué se bajó, qué falta y dónde quedó cada archivo.
  * El trabajo pesado lo hace DownloadService (uno por vez); acá vive el estado.
  */
+/** Un destino posible para las descargas (memoria del equipo o tarjeta SD). */
+data class StorageTarget(
+    val id: String,
+    val label: String,
+    val dir: File,
+    val removable: Boolean,
+) {
+    val freeBytes: Long
+        get() = runCatching {
+            val st = StatFs(dir.absolutePath)
+            st.availableBlocksLong * st.blockSizeLong
+        }.getOrDefault(0L)
+}
+
 class DownloadRepository(
     private val appContext: Context,
     private val dao: DownloadDao,
+    private val prefs: com.iptv.player.data.local.PreferencesStore,
 ) {
+
+    /**
+     * Destinos disponibles. getExternalFilesDirs devuelve una carpeta por
+     * volumen: la [0] es la memoria del equipo y las siguientes, tarjetas SD o
+     * USB. Son carpetas propias de la app: no necesitan permisos.
+     */
+    fun storageTargets(): List<StorageTarget> {
+        val dirs = runCatching {
+            appContext.getExternalFilesDirs(Environment.DIRECTORY_MOVIES)
+        }.getOrNull()?.filterNotNull().orEmpty()
+        if (dirs.isEmpty()) {
+            return listOf(StorageTarget("internal", "Memoria del equipo", downloadsDirFor(null), false))
+        }
+        return dirs.mapIndexed { i, dir ->
+            StorageTarget(
+                id = if (i == 0) "internal" else "sd",
+                label = if (i == 0) "Memoria del equipo" else "Tarjeta SD",
+                dir = dir,
+                removable = i > 0,
+            )
+        }.distinctBy { it.id }
+    }
+
+    /** ¿Hay tarjeta SD disponible ahora mismo? */
+    fun hasRemovableStorage(): Boolean = storageTargets().any { it.removable }
 
     val downloads: Flow<List<DownloadEntity>> = dao.observeAll()
 
@@ -30,37 +70,47 @@ class DownloadRepository(
     internal fun setActive(id: String?) { _activeId.value = id }
 
     /** Carpeta de descargas: propia de la app, sin permisos y se limpia al desinstalar. */
-    fun downloadsDir(): File {
-        val dir = appContext.getExternalFilesDir(Environment.DIRECTORY_MOVIES)
+    private fun downloadsDirFor(volumeId: String?): File {
+        val dir = when {
+            volumeId == "sd" -> storageTargets().firstOrNull { it.removable }?.dir
+            else -> null
+        } ?: appContext.getExternalFilesDir(Environment.DIRECTORY_MOVIES)
             ?: File(appContext.filesDir, "movies")
         if (!dir.exists()) dir.mkdirs()
         return dir
     }
 
-    private fun fileFor(id: String, sourceUrl: String): File {
+    /** Carpeta donde se guardan las descargas nuevas (según la preferencia). */
+    suspend fun downloadsDir(): File = downloadsDirFor(prefs.downloadVolumeOnce())
+
+    /** Todas las carpetas con descargas, para sumar el espacio ocupado. */
+    private fun allDirs(): List<File> = storageTargets().map { it.dir }.distinct()
+
+    private suspend fun fileFor(id: String, sourceUrl: String): File {
         val ext = sourceUrl.substringBefore('?').substringAfterLast('.', "")
             .takeIf { it.length in 2..4 && it.all(Char::isLetterOrDigit) } ?: "mp4"
         val safe = id.replace(Regex("[^A-Za-z0-9_-]"), "_")
         return File(downloadsDir(), "$safe.$ext")
     }
 
-    /** Archivo de la miniatura de una descarga. */
-    internal fun posterFileFor(id: String): File {
+    /** Miniatura: se guarda junto al video, en el mismo volumen. */
+    internal fun posterFileFor(id: String, videoPath: String): File {
         val safe = id.replace(Regex("[^A-Za-z0-9_-]"), "_")
-        return File(downloadsDir(), "$safe.jpg")
+        val dir = File(videoPath).parentFile ?: File(appContext.filesDir, "movies")
+        return File(dir, "$safe.jpg")
     }
 
     internal suspend fun savePosterPath(id: String, path: String) = dao.updatePosterPath(id, path)
 
-    /** Espacio libre en la carpeta de descargas (bytes). */
-    fun freeSpaceBytes(): Long = runCatching {
+    /** Espacio libre en el destino elegido (bytes). */
+    suspend fun freeSpaceBytes(): Long = runCatching {
         val st = StatFs(downloadsDir().absolutePath)
         st.availableBlocksLong * st.blockSizeLong
     }.getOrDefault(0L)
 
-    /** Total ocupado por las descargas de la app (bytes). */
+    /** Total ocupado por las descargas, sumando todos los volúmenes. */
     fun usedSpaceBytes(): Long = runCatching {
-        downloadsDir().listFiles()?.sumOf { it.length() } ?: 0L
+        allDirs().sumOf { dir -> dir.listFiles()?.sumOf { it.length() } ?: 0L }
     }.getOrDefault(0L)
 
     suspend fun get(id: String): DownloadEntity? = dao.get(id)

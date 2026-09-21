@@ -236,7 +236,17 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
         container.downloadRepository.localPathIfComplete(id)
 
     fun downloadsUsedBytes(): Long = container.downloadRepository.usedSpaceBytes()
-    fun downloadsFreeBytes(): Long = container.downloadRepository.freeSpaceBytes()
+    suspend fun downloadsFreeBytes(): Long = container.downloadRepository.freeSpaceBytes()
+
+    // --- Dónde guardar las descargas (memoria del equipo o tarjeta SD) ---
+    val downloadVolume = container.preferencesStore.downloadVolume
+        .stateIn(viewModelScope, SharingStarted.Eagerly, "internal")
+
+    fun storageTargets() = container.downloadRepository.storageTargets()
+
+    fun setDownloadVolume(id: String) {
+        viewModelScope.launch { container.preferencesStore.setDownloadVolume(id) }
+    }
 
     // --- Modo Felix (niños) ---
     data class KidsState(
