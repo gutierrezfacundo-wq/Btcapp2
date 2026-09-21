@@ -32,27 +32,40 @@ class DownloadFileProvider : ContentProvider() {
     companion object {
         fun authority(context: Context) = "${context.packageName}.downloads"
 
-        /** Carpetas que el provider acepta servir (memoria del equipo, SD…). */
-        private fun roots(context: Context): List<File> = buildList {
+        /** Segmento del volumen interno (filesDir), el plan B sin almacenamiento externo. */
+        private const val INTERNAL = "i"
+
+        /**
+         * Volúmenes externos (memoria del equipo, SD…). Se conservan los nulos
+         * a propósito: getExternalFilesDirs devuelve null en la posición de un
+         * volumen que ahora no está, y si los filtráramos se correrían los
+         * índices y un URI viejo apuntaría a otro volumen.
+         */
+        private fun externalRoots(context: Context): List<File?> =
             runCatching { context.getExternalFilesDirs(Environment.DIRECTORY_MOVIES) }
-                .getOrNull()?.filterNotNull()?.forEach { add(it) }
-            add(File(context.filesDir, "movies"))
-        }
+                .getOrNull()?.toList().orEmpty()
+
+        private fun internalRoot(context: Context) = File(context.filesDir, "movies")
 
         /**
          * URI para compartir [file]. [displayName] es lo que ve la otra app
          * (el título, en vez del nombre interno del archivo).
          */
         fun uriFor(context: Context, file: File, displayName: String? = null): Uri {
-            val roots = roots(context)
             val path = file.absolutePath
-            val index = roots.indexOfFirst { path.startsWith(it.absolutePath + File.separator) }
-            require(index >= 0) { "el archivo está fuera de las carpetas de descargas" }
-            val relative = path.removePrefix(roots[index].absolutePath + File.separator)
+            fun under(root: File?) =
+                root != null && path.startsWith(root.absolutePath + File.separator)
+
+            val external = externalRoots(context)
+            val index = external.indexOfFirst(::under)
+            val root = if (index >= 0) external[index]!! else internalRoot(context)
+            require(index >= 0 || under(root)) { "el archivo está fuera de las carpetas de descargas" }
+
+            val relative = path.removePrefix(root.absolutePath + File.separator)
             val builder = Uri.Builder()
                 .scheme(ContentResolver.SCHEME_CONTENT)
                 .authority(authority(context))
-                .appendPath("v$index")
+                .appendPath(if (index >= 0) "v$index" else INTERNAL)
             relative.split(File.separatorChar).forEach { builder.appendPath(it) }
             displayName?.let { builder.appendQueryParameter("name", it) }
             return builder.build()
@@ -63,8 +76,11 @@ class DownloadFileProvider : ContentProvider() {
         val ctx = context ?: return null
         val segments = uri.pathSegments
         if (segments.size < 2) return null
-        val index = segments[0].removePrefix("v").toIntOrNull() ?: return null
-        val root = roots(ctx).getOrNull(index) ?: return null
+        val root = when (val volume = segments[0]) {
+            INTERNAL -> internalRoot(ctx)
+            else -> volume.removePrefix("v").toIntOrNull()
+                ?.let { externalRoots(ctx).getOrNull(it) }
+        } ?: return null
         val rest = segments.drop(1)
         if (rest.any { it.isEmpty() || it == "." || it == ".." }) return null
         val file = File(root, rest.joinToString(File.separator))

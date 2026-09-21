@@ -107,6 +107,14 @@ class DownloadService : Service() {
             .build()
 
         http.newCall(req).execute().use { resp ->
+            // 416 = pedimos desde un punto que ya es el final: el archivo estaba
+            // completo y se cortó antes de marcarlo. No es un error.
+            if (resp.code == 416 && already > 0) {
+                repo.saveProgress(item.id, already, already)
+                repo.markDone(item.id)
+                notify("Descarga lista", label(item), null)
+                return@withContext
+            }
             if (!resp.isSuccessful) error("El servidor respondió ${resp.code}")
             // 200 = no soporta reanudar: arrancamos de cero.
             if (resp.code == 200 && already > 0) {
