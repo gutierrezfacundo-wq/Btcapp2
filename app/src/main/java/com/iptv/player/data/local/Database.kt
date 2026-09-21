@@ -51,7 +51,7 @@ interface RecentDao {
         EpgMapEntity::class,
         DownloadEntity::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = false,
 )
 abstract class IptvDatabase : RoomDatabase() {
@@ -64,6 +64,16 @@ abstract class IptvDatabase : RoomDatabase() {
     abstract fun categoryPrefDao(): CategoryPrefDao
     abstract fun epgMapDao(): EpgMapDao
     abstract fun downloadDao(): DownloadDao
+}
+
+val MIGRATION_6_7 = object : androidx.room.migration.Migration(6, 7) {
+    override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+        // Agrupar episodios por serie y temporada en la lista de Descargas.
+        db.execSQL("ALTER TABLE downloads ADD COLUMN groupId TEXT")
+        db.execSQL("ALTER TABLE downloads ADD COLUMN groupTitle TEXT")
+        db.execSQL("ALTER TABLE downloads ADD COLUMN season INTEGER")
+        db.execSQL("ALTER TABLE downloads ADD COLUMN episode INTEGER")
+    }
 }
 
 val MIGRATION_5_6 = object : androidx.room.migration.Migration(5, 6) {
@@ -79,6 +89,10 @@ val MIGRATION_5_6 = object : androidx.room.migration.Migration(5, 6) {
                 posterUrl TEXT,
                 posterPath TEXT,
                 kindOrdinal INTEGER NOT NULL,
+                groupId TEXT,
+                groupTitle TEXT,
+                season INTEGER,
+                episode INTEGER,
                 bytesDownloaded INTEGER NOT NULL DEFAULT 0,
                 bytesTotal INTEGER NOT NULL DEFAULT 0,
                 status TEXT NOT NULL,

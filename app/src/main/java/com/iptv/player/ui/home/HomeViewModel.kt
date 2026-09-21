@@ -196,13 +196,21 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
 
     fun downloadEpisode(ep: com.iptv.player.data.model.Episode, seriesTitle: String, poster: String?) {
         viewModelScope.launch {
+            // Si no nos pasan carátula, la sacamos del catálogo: así la serie se
+            // ve con su miniatura en la lista de Descargas.
+            val art = poster ?: state.value.catalog.series
+                .firstOrNull { it.id == ep.seriesId }?.posterUrl
             container.downloadRepository.enqueue(
                 id = ep.id,
-                title = "$seriesTitle — ${ep.title}",
+                title = ep.title,
                 subtitle = "T${ep.seasonNumber} · E${ep.episodeNumber}",
                 sourceUrl = ep.streamUrl,
-                posterUrl = poster,
+                posterUrl = art,
                 kind = MediaKind.SERIES_EPISODE,
+                groupId = ep.seriesId,
+                groupTitle = seriesTitle,
+                season = ep.seasonNumber,
+                episode = ep.episodeNumber,
             )
             com.iptv.player.download.DownloadService.start(container.appContext)
         }

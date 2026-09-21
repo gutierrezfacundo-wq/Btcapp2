@@ -34,6 +34,12 @@ data class DownloadEntity(
     /** Miniatura guardada en el teléfono: la lista se ve bien sin internet. */
     val posterPath: String?,
     val kindOrdinal: Int,
+    /** Serie a la que pertenece (null en películas): agrupa las descargas. */
+    val groupId: String?,
+    val groupTitle: String?,
+    /** Temporada y episodio, para ordenar dentro del grupo. */
+    val season: Int?,
+    val episode: Int?,
     val bytesDownloaded: Long,
     /** 0 si el servidor no informa el tamaño. */
     val bytesTotal: Long,

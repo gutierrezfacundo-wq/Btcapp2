@@ -85,12 +85,16 @@ class DownloadService : Service() {
                 val st = repo.statusOf(next.id)
                 if (st != null && st != DownloadStatus.PAUSED) {
                     repo.markFailed(next.id, e.message ?: "Error de descarga")
-                    notify("Falló la descarga", next.title, null)
+                    notify("Falló la descarga", label(next), null)
                 }
             }
         }
         stopSelf()
     }
+
+    /** Título para la notificación: los episodios llevan el nombre de la serie. */
+    private fun label(item: DownloadEntity): String =
+        item.groupTitle?.takeIf { it.isNotBlank() }?.let { "$it — ${item.title}" } ?: item.title
 
     private suspend fun downloadOne(item: DownloadEntity) = withContext(Dispatchers.IO) {
         val file = File(item.localPath)
@@ -143,7 +147,7 @@ class DownloadService : Service() {
                             lastNotified = now
                             val pct = if (total > 0) ((downloaded * 100) / total).toInt() else null
                             notify(
-                                item.title,
+                                label(item),
                                 if (total > 0) "${formatBytes(downloaded)} de ${formatBytes(total)}"
                                 else formatBytes(downloaded),
                                 pct,
@@ -168,7 +172,7 @@ class DownloadService : Service() {
             }
         }
         repo.markDone(item.id)
-        notify("Descarga lista", item.title, null)
+        notify("Descarga lista", label(item), null)
     }
 
     // ===== Notificación =====

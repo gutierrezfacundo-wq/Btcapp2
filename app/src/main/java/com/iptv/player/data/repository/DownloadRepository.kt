@@ -80,6 +80,10 @@ class DownloadRepository(
         sourceUrl: String,
         posterUrl: String?,
         kind: MediaKind,
+        groupId: String? = null,
+        groupTitle: String? = null,
+        season: Int? = null,
+        episode: Int? = null,
     ): DownloadEntity {
         dao.get(id)?.let { existing ->
             // Reintentar algo fallido o pausado vuelve a encolarlo.
@@ -98,6 +102,10 @@ class DownloadRepository(
             posterUrl = posterUrl,
             posterPath = null,
             kindOrdinal = kind.ordinal,
+            groupId = groupId,
+            groupTitle = groupTitle,
+            season = season,
+            episode = episode,
             bytesDownloaded = 0L,
             bytesTotal = 0L,
             status = DownloadStatus.QUEUED,

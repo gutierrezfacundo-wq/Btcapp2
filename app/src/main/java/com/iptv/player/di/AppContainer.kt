@@ -57,6 +57,7 @@ class AppContainer(context: Context) {
             com.iptv.player.data.local.MIGRATION_3_4,
             com.iptv.player.data.local.MIGRATION_4_5,
             com.iptv.player.data.local.MIGRATION_5_6,
+            com.iptv.player.data.local.MIGRATION_6_7,
         )
         .fallbackToDestructiveMigration()
         .build()
