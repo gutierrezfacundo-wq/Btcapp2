@@ -10,17 +10,32 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-    <!-- Android 11+ oculta las apps instaladas salvo que se declaren: sin esto
-         el selector de "Abrir con" puede no encontrar los reproductores. -->
+    <!-- Android 11+ oculta las apps instaladas salvo que se declaren. Los
+         filtros de los reproductores piden un esquema concreto, así que un
+         <data> con solo mimeType no los encuentra: hay que declarar http y
+         content por separado. Sin esto no podemos saber si hay con qué abrir
+         el archivo ni a quién darle permiso. -->
     <queries>
         <intent>
             <action android:name="android.intent.action.VIEW" />
-            <data android:mimeType="video/*" />
+            <data android:scheme="http" android:mimeType="video/*" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="http" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="content" android:mimeType="video/*" />
         </intent>
         <intent>
             <action android:name="android.intent.action.SEND" />
             <data android:mimeType="video/*" />
         </intent>
+        <!-- Los dos reproductores que la gente usa para esto. -->
+        <package android:name="org.videolan.vlc" />
+        <package android:name="com.mxtech.videoplayer.ad" />
+        <package android:name="com.mxtech.videoplayer.pro" />
     </queries>
 
     <uses-feature
@@ -62,6 +77,14 @@
 
         <service
             android:name=".download.DownloadService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+        <!-- Mantiene viva la app mientras otro reproductor lee una descarga
+             por el servidor local (si no, el sistema puede matar el proceso
+             y cortar la película por la mitad). -->
+        <service
+            android:name=".download.SharingService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
