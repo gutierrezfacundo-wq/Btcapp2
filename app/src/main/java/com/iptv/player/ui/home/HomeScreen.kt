@@ -432,9 +432,20 @@ fun HomeScreen(
             title = optionsMovie.name,
             download = downloadsById[optionsMovie.id],
             kidsEnabled = !kids.on,
-            languageVariants = remember(optionsMovie.id, state.catalog.movies) {
-                com.iptv.player.data.model.LanguageVariants.variantsOf(optionsMovie, state.catalog.movies)
-            },
+            // Se calcula en segundo plano: recorrer el catálogo entero en el
+            // hilo de la UI congelaba la app al abrir el menú (ANR).
+            languageVariants = androidx.compose.runtime.produceState(
+                initialValue = emptyList<Movie>(),
+                optionsMovie.id,
+                state.catalog.movies,
+            ) {
+                value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                    com.iptv.player.data.model.LanguageVariants.variantsOf(
+                        optionsMovie,
+                        state.catalog.movies,
+                    )
+                }
+            }.value,
             onDownloadVariant = { v -> vm.downloadMovie(v) },
             onOpenWith = {
                 downloadsById[optionsMovie.id]?.localPath?.let {

@@ -52,8 +52,13 @@ fun DownloadsTab(
     onPlayLocal: (path: String, title: String) -> Unit,
 ) {
     val downloads by vm.downloads.collectAsState()
-    val used = remember(downloads) { vm.downloadsUsedBytes() }
-    val free = remember(downloads) { vm.downloadsFreeBytes() }
+    // Medir el disco es I/O: en el hilo de la UI trababa la pantalla.
+    val space by androidx.compose.runtime.produceState(0L to 0L, downloads.size) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            vm.downloadsUsedBytes() to vm.downloadsFreeBytes()
+        }
+    }
+    val (used, free) = space
 
     if (downloads.isEmpty()) {
         Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
