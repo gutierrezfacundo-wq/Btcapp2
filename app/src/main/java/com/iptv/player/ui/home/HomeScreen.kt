@@ -85,6 +85,7 @@ import com.iptv.player.di.AppContainer
 import androidx.media3.common.util.UnstableApi
 import com.iptv.player.ui.components.ChannelRow
 import com.iptv.player.ui.components.ChannelSearchBar
+import com.iptv.player.ui.components.ConfirmDeleteDialog
 import com.iptv.player.ui.components.KidsMarkDialog
 import com.iptv.player.ui.components.LanguageSettingsDialog
 import com.iptv.player.ui.components.MovieOptionsDialog
@@ -153,6 +154,7 @@ fun HomeScreen(
     var movieForOptions by remember { mutableStateOf<Movie?>(null) }
     val downloadsById by vm.downloadsById.collectAsState()
     var showLanguageSettings by remember { mutableStateOf(false) }
+    var confirmDeleteMovie by remember { mutableStateOf<Movie?>(null) }
     val prefAudioLang by vm.prefAudioLang.collectAsState()
     val prefSubLang by vm.prefSubLang.collectAsState()
 
@@ -460,7 +462,7 @@ fun HomeScreen(
             onDownload = { vm.downloadMovie(optionsMovie) },
             onPause = { vm.pauseDownload(optionsMovie.id) },
             onResume = { vm.resumeDownload(optionsMovie.id) },
-            onRemoveDownload = { vm.removeDownload(optionsMovie.id) },
+            onRemoveDownload = { confirmDeleteMovie = optionsMovie },
             onPlayLocal = {
                 downloadsById[optionsMovie.id]?.localPath?.let { path ->
                     vm.playSingle(optionsMovie.name, path, optionsMovie.posterUrl)
@@ -469,6 +471,19 @@ fun HomeScreen(
             },
             onKidsMark = { movieForKids = optionsMovie },
             onDismiss = { movieForOptions = null },
+        )
+    }
+
+    confirmDeleteMovie?.let { m ->
+        val d = downloadsById[m.id]
+        ConfirmDeleteDialog(
+            title = "¿Borrar la descarga?",
+            message = "Se va a borrar \"${m.name}\" del teléfono" +
+                (d?.bytesDownloaded?.takeIf { it > 0 }
+                    ?.let { " y se liberarán " + com.iptv.player.data.repository.formatBytes(it) } ?: "") +
+                ". Para verla sin internet habrá que descargarla otra vez.",
+            onConfirm = { vm.removeDownload(m.id) },
+            onDismiss = { confirmDeleteMovie = null },
         )
     }
 

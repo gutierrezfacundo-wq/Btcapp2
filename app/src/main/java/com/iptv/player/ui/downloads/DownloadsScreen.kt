@@ -43,8 +43,16 @@ import coil.compose.AsyncImage
 import com.iptv.player.data.local.DownloadEntity
 import com.iptv.player.data.local.DownloadStatus
 import com.iptv.player.data.repository.formatBytes
+import com.iptv.player.ui.components.ConfirmDeleteDialog
 import com.iptv.player.ui.components.DownloadProgressLine
 import com.iptv.player.ui.home.HomeViewModel
+
+/** Borrado pendiente de confirmación. */
+private data class PendingDelete(
+    val title: String,
+    val message: String,
+    val onConfirm: () -> Unit,
+)
 
 /** Una fila de la lista: una película suelta, o una serie con sus episodios. */
 private sealed interface DownloadRowItem {
@@ -104,6 +112,19 @@ fun DownloadsTab(
     val (used, free) = space
     val rows = remember(downloads) { groupDownloads(downloads) }
     val expanded = remember { mutableStateMapOf<String, Boolean>() }
+    // Qué se está por borrar: se confirma antes, borrar no tiene vuelta atrás.
+    var pendingDelete by androidx.compose.runtime.remember {
+        androidx.compose.runtime.mutableStateOf<PendingDelete?>(null)
+    }
+
+    pendingDelete?.let { p ->
+        ConfirmDeleteDialog(
+            title = p.title,
+            message = p.message,
+            onConfirm = p.onConfirm,
+            onDismiss = { pendingDelete = null },
+        )
+    }
 
     if (downloads.isEmpty()) {
         Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
@@ -159,7 +180,15 @@ fun DownloadsTab(
                         },
                         onPause = { vm.pauseDownload(row.d.id) },
                         onResume = { vm.resumeDownload(row.d.id) },
-                        onRemove = { vm.removeDownload(row.d.id) },
+                        onRemove = {
+                            pendingDelete = PendingDelete(
+                                title = "¿Borrar la descarga?",
+                                message = "Se va a borrar \"${row.d.title}\" del teléfono" +
+                                    (if (row.d.bytesDownloaded > 0) " y se liberarán ${formatBytes(row.d.bytesDownloaded)}" else "") +
+                                    ". Para verla de nuevo habrá que descargarla otra vez.",
+                                onConfirm = { vm.removeDownload(row.d.id) },
+                            )
+                        },
                     )
                     is DownloadRowItem.Series -> SeriesGroup(
                         row = row,
@@ -173,8 +202,24 @@ fun DownloadsTab(
                         },
                         onPause = { d -> vm.pauseDownload(d.id) },
                         onResume = { d -> vm.resumeDownload(d.id) },
-                        onRemove = { d -> vm.removeDownload(d.id) },
-                        onRemoveAll = { row.episodes.forEach { vm.removeDownload(it.id) } },
+                        onRemove = { d ->
+                            pendingDelete = PendingDelete(
+                                title = "¿Borrar el episodio?",
+                                message = "Se va a borrar \"${d.title}\"" +
+                                    (d.season?.let { " (T$it" + (d.episode?.let { e -> " · E$e" } ?: "") + ")" } ?: "") +
+                                    " del teléfono.",
+                                onConfirm = { vm.removeDownload(d.id) },
+                            )
+                        },
+                        onRemoveAll = {
+                            pendingDelete = PendingDelete(
+                                title = "¿Borrar toda la serie?",
+                                message = "Se van a borrar los ${row.episodes.size} episodios " +
+                                    "descargados de \"${row.title}\"" +
+                                    (if (row.totalBytes > 0) " y se liberarán ${formatBytes(row.totalBytes)}" else "") + ".",
+                                onConfirm = { row.episodes.forEach { vm.removeDownload(it.id) } },
+                            )
+                        },
                     )
                 }
                 HorizontalDivider()

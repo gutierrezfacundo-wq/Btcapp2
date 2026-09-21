@@ -36,6 +36,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.iptv.player.data.local.DownloadStatus
 import com.iptv.player.data.model.Episode
 import com.iptv.player.di.AppContainer
+import com.iptv.player.ui.components.ConfirmDeleteDialog
 import com.iptv.player.ui.components.DownloadProgressLine
 import com.iptv.player.ui.components.EpisodeDownloadIcon
 import com.iptv.player.ui.home.HomeViewModel
@@ -54,6 +55,18 @@ fun SeriesDetailScreen(
     var error by remember { mutableStateOf<String?>(null) }
     var retryKey by remember { mutableStateOf(0) }
     val downloadsById by vm.downloadsById.collectAsState()
+    // El ícono de "descargado" borraba de una al tocarlo: ahora pregunta.
+    var confirmDelete by remember { mutableStateOf<Episode?>(null) }
+
+    confirmDelete?.let { ep ->
+        ConfirmDeleteDialog(
+            title = "¿Borrar el episodio descargado?",
+            message = "Se va a borrar \"${ep.title}\" (T${ep.seasonNumber} · E${ep.episodeNumber}) " +
+                "del teléfono. Para verlo sin internet habrá que descargarlo otra vez.",
+            onConfirm = { vm.removeDownload(ep.id) },
+            onDismiss = { confirmDelete = null },
+        )
+    }
 
     LaunchedEffect(seriesId, retryKey) {
         error = null
@@ -142,7 +155,7 @@ fun SeriesDetailScreen(
                                     onClick = {
                                         when (dl?.status) {
                                             null -> vm.downloadEpisode(ep, title, null)
-                                            DownloadStatus.DONE -> vm.removeDownload(ep.id)
+                                            DownloadStatus.DONE -> confirmDelete = ep
                                             DownloadStatus.PAUSED, DownloadStatus.FAILED -> vm.resumeDownload(ep.id)
                                             else -> vm.pauseDownload(ep.id)
                                         }
