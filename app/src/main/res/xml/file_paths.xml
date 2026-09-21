@@ -1,10 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
-    <!-- Carpeta de descargas de la app: se comparte por content:// con otros
-         reproductores (VLC, MX Player…), nunca por file:// -->
-    <external-files-path name="downloads" path="Movies/" />
-    <files-path name="internal_downloads" path="movies/" />
-    <!-- Carpeta de la app en la tarjeta SD: getExternalFilesDirs()[1] vive
-         bajo /storage/<ID-de-la-tarjeta>/, fuera de external-files-path. -->
-    <root-path name="removable_downloads" path="/storage/" />
+    <!-- Carpetas de descargas de la app, para compartirlas por content:// con
+         otros reproductores (VLC, MX Player…); pasar un file:// a otra app está
+         prohibido desde Android 7.
+
+         La raíz cubre cualquier volumen: la carpeta de la app en una tarjeta SD
+         no siempre cuelga de /storage/ (según el equipo puede resolverse en
+         /mnt/...), y si la ruta no matchea, FileProvider falla y el archivo no
+         se puede abrir afuera. Esto no expone nada de más: solo se sirven los
+         URI que la app genera y para los que otorga permiso en el Intent. -->
+    <root-path name="files" path="/" />
 </paths>

@@ -27,15 +27,30 @@ private fun uriFor(context: Context, file: File) =
 fun openWithExternalPlayer(context: Context, localPath: String, title: String) {
     val file = File(localPath)
     if (!file.exists()) {
-        Toast.makeText(context, "No se encuentra el archivo descargado", Toast.LENGTH_SHORT).show()
+        Toast.makeText(
+            context,
+            "No se encuentra el archivo. Si está en la tarjeta SD, revisá que esté puesta.",
+            Toast.LENGTH_LONG,
+        ).show()
         return
     }
+    // Generar el content:// y abrir la app se tratan por separado a propósito:
+    // antes cualquier fallo decía "no hay otro reproductor instalado", que es
+    // engañoso cuando lo que falló fue compartir el archivo.
+    val uri = runCatching { uriFor(context, file) }.getOrElse { e ->
+        Toast.makeText(
+            context,
+            "No se pudo compartir el archivo con otra app (${e.message ?: "error desconocido"})",
+            Toast.LENGTH_LONG,
+        ).show()
+        return
+    }
+    val intent = Intent(Intent.ACTION_VIEW).apply {
+        setDataAndType(uri, mimeOf(localPath))
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+        putExtra("title", title)
+    }
     runCatching {
-        val intent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(uriFor(context, file), mimeOf(localPath))
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
-            putExtra("title", title)
-        }
         context.startActivity(Intent.createChooser(intent, "Abrir con").apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         })
@@ -48,10 +63,18 @@ fun openWithExternalPlayer(context: Context, localPath: String, title: String) {
 fun shareDownload(context: Context, localPath: String, title: String) {
     val file = File(localPath)
     if (!file.exists()) return
+    val uri = runCatching { uriFor(context, file) }.getOrElse { e ->
+        Toast.makeText(
+            context,
+            "No se pudo compartir el archivo (${e.message ?: "error desconocido"})",
+            Toast.LENGTH_LONG,
+        ).show()
+        return
+    }
     runCatching {
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = mimeOf(localPath)
-            putExtra(Intent.EXTRA_STREAM, uriFor(context, file))
+            putExtra(Intent.EXTRA_STREAM, uri)
             putExtra(Intent.EXTRA_TITLE, title)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
         }
