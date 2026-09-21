@@ -65,15 +65,14 @@
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
-        <!-- Comparte las descargas con otros reproductores vía content:// -->
+        <!-- Comparte las descargas con otros reproductores vía content://.
+             Provider propio en vez de FileProvider: ver DownloadFileProvider
+             (en la tarjeta SD la ruta canónica no es accesible ni para la
+             propia app, y por eso fallaba abrir esos archivos afuera). -->
         <provider
-            android:name="androidx.core.content.FileProvider"
-            android:authorities="${applicationId}.files"
+            android:name=".download.DownloadFileProvider"
+            android:authorities="${applicationId}.downloads"
             android:exported="false"
-            android:grantUriPermissions="true">
-            <meta-data
-                android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/file_paths" />
-        </provider>
+            android:grantUriPermissions="true" />
     </application>
 </manifest>
