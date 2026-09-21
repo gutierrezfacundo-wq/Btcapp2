@@ -22,6 +22,10 @@ data class Catalog(
     val movieCategories: List<Category> = emptyList(),
     val series: List<SeriesInfo> = emptyList(),
     val seriesCategories: List<Category> = emptyList(),
+    /** Por qué falló Películas, si falló (null = sin problema). */
+    @kotlinx.serialization.Transient val moviesError: String? = null,
+    /** Por qué falló Series, si falló. */
+    @kotlinx.serialization.Transient val seriesError: String? = null,
 )
 
 class IptvRepository(
@@ -64,43 +68,67 @@ class IptvRepository(
     private suspend fun loadFromXtream(s: SourceConfig.Xtream): Catalog = withContext(Dispatchers.IO) {
         // Usamos el stream client (parsea JSON sin cargar todo a memoria) para evitar
         // OutOfMemoryError en portales con catalogos grandes.
+        //
+        // Cada sección se carga por separado: si el proveedor falla o no devuelve
+        // el VOD (pasa cuando la cuenta está al límite de conexiones), En Vivo
+        // tiene que seguir funcionando y el motivo se propaga a la UI.
         val base = s.playerApi()
+
         val liveCats = xtreamStreamClient.liveCategories(base).toCategories()
+        // Índice por id: antes se buscaba con firstOrNull dentro del map, o sea
+        // categorías × ítems. Con 20.000 títulos y 300 categorías son millones de
+        // comparaciones — en equipos lentos la carga parecía colgada.
+        val liveCatById = liveCats.associateBy { it.id }
         val liveStreams = xtreamStreamClient.liveStreams(base).map { dto ->
             Channel(
                 id = "xt-live-${dto.streamId}",
                 name = dto.name,
                 streamUrl = s.streamLive(dto.streamId),
                 logoUrl = dto.streamIcon,
-                groupTitle = liveCats.firstOrNull { it.id == dto.categoryId }?.name,
+                groupTitle = liveCatById[dto.categoryId]?.name,
                 tvgId = dto.epgChannelId,
                 archiveDays = if (dto.tvArchive == 1) dto.tvArchiveDuration else 0,
                 xtreamStreamId = dto.streamId,
             )
         }
-        val vodCats = xtreamStreamClient.vodCategories(base).toCategories()
-        val movies = xtreamStreamClient.vodStreams(base).map { dto ->
-            Movie(
-                id = "xt-vod-${dto.streamId}",
-                name = dto.name,
-                streamUrl = s.streamMovie(dto.streamId, dto.containerExtension ?: "mp4"),
-                posterUrl = dto.streamIcon,
-                category = vodCats.firstOrNull { it.id == dto.categoryId }?.name,
-                rating = dto.rating,
-                year = dto.releaseDate,
-                plot = dto.plot,
-            )
-        }
-        val seriesCats = xtreamStreamClient.seriesCategories(base).toCategories()
-        val series = xtreamStreamClient.series(base).map { dto ->
-            SeriesInfo(
-                id = dto.seriesId.toString(),
-                name = dto.name,
-                posterUrl = dto.cover,
-                category = seriesCats.firstOrNull { it.id == dto.categoryId }?.name,
-                plot = dto.plot,
-            )
-        }
+
+        var moviesError: String? = null
+        var vodCats: List<Category> = emptyList()
+        var movies: List<Movie> = emptyList()
+        runCatching {
+            vodCats = xtreamStreamClient.vodCategories(base).toCategories()
+            val vodCatById = vodCats.associateBy { it.id }
+            movies = xtreamStreamClient.vodStreams(base).map { dto ->
+                Movie(
+                    id = "xt-vod-${dto.streamId}",
+                    name = dto.name,
+                    streamUrl = s.streamMovie(dto.streamId, dto.containerExtension ?: "mp4"),
+                    posterUrl = dto.streamIcon,
+                    category = vodCatById[dto.categoryId]?.name,
+                    rating = dto.rating,
+                    year = dto.releaseDate,
+                    plot = dto.plot,
+                )
+            }
+        }.onFailure { e -> moviesError = e.message ?: e::class.simpleName }
+
+        var seriesError: String? = null
+        var seriesCats: List<Category> = emptyList()
+        var series: List<SeriesInfo> = emptyList()
+        runCatching {
+            seriesCats = xtreamStreamClient.seriesCategories(base).toCategories()
+            val seriesCatById = seriesCats.associateBy { it.id }
+            series = xtreamStreamClient.series(base).map { dto ->
+                SeriesInfo(
+                    id = dto.seriesId.toString(),
+                    name = dto.name,
+                    posterUrl = dto.cover,
+                    category = seriesCatById[dto.categoryId]?.name,
+                    plot = dto.plot,
+                )
+            }
+        }.onFailure { e -> seriesError = e.message ?: e::class.simpleName }
+
         Catalog(
             liveChannels = liveStreams,
             liveCategories = liveCats,
@@ -108,6 +136,8 @@ class IptvRepository(
             movieCategories = vodCats,
             series = series,
             seriesCategories = seriesCats,
+            moviesError = moviesError,
+            seriesError = seriesError,
         )
     }
 

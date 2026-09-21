@@ -335,12 +335,16 @@ fun HomeScreen(
                             onPlay(movie.streamUrl, movie.name)
                         },
                         onLongPress = { if (!kids.on) movieForOptions = it },
+                        loadError = state.catalog.moviesError,
+                        onRetry = vm::refresh,
                     )
                     HomeTab.Series -> SeriesTab(
                         series = displaySeries,
                         categories = displaySeriesCategories,
                         onOpen = onOpenSeries,
                         onLongPress = { if (!kids.on) seriesForKids = it },
+                        loadError = state.catalog.seriesError,
+                        onRetry = vm::refresh,
                     )
                     HomeTab.Favorites -> FavoritesAndCollectionsTab(vm = vm, onPlay = onPlay)
                     // Downloads ya se resolvió arriba (funciona sin internet).
@@ -870,6 +874,8 @@ private fun MoviesTab(
     categories: List<Category>,
     onPlay: (Movie) -> Unit,
     onLongPress: (Movie) -> Unit = {},
+    loadError: String? = null,
+    onRetry: () -> Unit = {},
 ) {
     var selected by rememberSaveable { mutableStateOf<String?>(null) }
     var query by rememberSaveable { mutableStateOf("") }
@@ -883,7 +889,14 @@ private fun MoviesTab(
     Column {
         ChannelSearchBar(query = query, onQueryChange = { query = it }, placeholder = "Buscar película…")
         CategoryChips(categories, selected) { selected = it }
-        if (filtered.isEmpty()) EmptyBox()
+        // Distinguimos "el proveedor no mandó nada" de "tu filtro no encontró nada":
+        // antes ambos casos decían "No hay contenido todavía" y no se sabía qué pasó.
+        if (movies.isEmpty()) SectionProblemBox(
+            what = "películas",
+            loadError = loadError,
+            onRetry = onRetry,
+        )
+        else if (filtered.isEmpty()) EmptyBox()
         else LazyVerticalGrid(
             columns = GridCells.Adaptive(minSize = 140.dp),
             contentPadding = PaddingValues(8.dp),
@@ -906,6 +919,8 @@ private fun SeriesTab(
     categories: List<Category>,
     onOpen: (String, String) -> Unit,
     onLongPress: (SeriesInfo) -> Unit = {},
+    loadError: String? = null,
+    onRetry: () -> Unit = {},
 ) {
     var selected by rememberSaveable { mutableStateOf<String?>(null) }
     var query by rememberSaveable { mutableStateOf("") }
@@ -919,7 +934,12 @@ private fun SeriesTab(
     Column {
         ChannelSearchBar(query = query, onQueryChange = { query = it }, placeholder = "Buscar serie…")
         CategoryChips(categories, selected) { selected = it }
-        if (filtered.isEmpty()) EmptyBox()
+        if (series.isEmpty()) SectionProblemBox(
+            what = "series",
+            loadError = loadError,
+            onRetry = onRetry,
+        )
+        else if (filtered.isEmpty()) EmptyBox()
         else LazyVerticalGrid(
             columns = GridCells.Adaptive(minSize = 140.dp),
             contentPadding = PaddingValues(8.dp),
@@ -931,6 +951,37 @@ private fun SeriesTab(
                     onClick = { onOpen(s.id, s.name) },
                     onLongClick = { onLongPress(s) },
                 )
+            }
+        }
+    }
+}
+
+/**
+ * Sección vacía: explica si fue un error del proveedor o si simplemente no
+ * devolvió nada, y permite reintentar sin reiniciar la app.
+ */
+@Composable
+private fun SectionProblemBox(what: String, loadError: String?, onRetry: () -> Unit) {
+    Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                if (loadError != null) "No se pudieron cargar las $what"
+                else "Tu proveedor no devolvió $what",
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text(
+                loadError
+                    ?: "La lista llegó vacía. Suele pasar si la cuenta está al límite de " +
+                    "conexiones (cerrá lo que estés viendo en otro dispositivo) o si el " +
+                    "catálogo del proveedor está caído en este momento.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                modifier = Modifier.padding(top = 8.dp),
+            )
+            Button(onClick = onRetry, modifier = Modifier.padding(top = 16.dp)) {
+                Icon(Icons.Outlined.Refresh, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Reintentar")
             }
         }
     }
