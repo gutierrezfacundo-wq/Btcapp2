@@ -66,12 +66,19 @@ class SharingService : Service() {
         super.onDestroy()
     }
 
-    /** Si el reproductor no pide nada por un buen rato, ya no hace falta. */
+    /**
+     * Si el reproductor no pide nada por un buen rato Y además cerró la
+     * conexión, ya no hace falta seguir. Mirar solo el último pedido no
+     * alcanzaba: con la película en pausa el reproductor no pide nada pero
+     * mantiene la conexión abierta, y cortarle el servidor le mataba la
+     * reproducción al volver.
+     */
     private suspend fun watchIdle() {
         while (scope.isActive) {
             delay(60_000)
             val quietFor = System.currentTimeMillis() - LocalMediaServer.lastRequestAt
-            if (!LocalMediaServer.isPublishing || quietFor > IDLE_TIMEOUT_MS) {
+            val abandoned = LocalMediaServer.activeConnections == 0 && quietFor > IDLE_TIMEOUT_MS
+            if (!LocalMediaServer.isPublishing || abandoned) {
                 LocalMediaServer.clear()
                 stopSelf()
                 return
@@ -120,7 +127,7 @@ class SharingService : Service() {
         private const val NOTIF_ID = 4712
         private const val ACTION_STOP = "com.iptv.player.SHARING_STOP"
         private const val EXTRA_TITLE = "title"
-        private const val IDLE_TIMEOUT_MS = 20 * 60 * 1000L
+        private const val IDLE_TIMEOUT_MS = 60 * 60 * 1000L
 
         fun start(context: Context, title: String) {
             val intent = Intent(context, SharingService::class.java).putExtra(EXTRA_TITLE, title)

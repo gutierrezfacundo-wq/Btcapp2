@@ -18,6 +18,33 @@ internal fun mimeOf(path: String): String = when (path.substringAfterLast('.', "
     else -> "video/mp4"
 }
 
+/**
+ * Tipo real del archivo, mirando sus primeros bytes.
+ *
+ * La extensión se deduce de la URL del proveedor y miente seguido: muchos
+ * paneles sirven un MKV o un MPEG-TS con nombre .mp4. El reproductor de la app
+ * no se entera porque husmea el contenido, pero a otro reproductor le estábamos
+ * declarando un tipo falso, y algunos filtran por eso.
+ */
+internal fun mimeOfFile(file: File): String {
+    val head = runCatching {
+        ByteArray(16).also { buf -> file.inputStream().use { it.read(buf) } }
+    }.getOrNull() ?: return mimeOf(file.name)
+
+    fun ascii(from: Int, text: String) =
+        text.indices.all { i -> head.getOrNull(from + i)?.toInt()?.toChar() == text[i] }
+
+    return when {
+        head[0] == 0x1A.toByte() && head[1] == 0x45.toByte() &&
+            head[2] == 0xDF.toByte() && head[3] == 0xA3.toByte() -> "video/x-matroska"
+        ascii(4, "ftyp") -> "video/mp4"
+        ascii(0, "RIFF") && ascii(8, "AVI ") -> "video/x-msvideo"
+        ascii(0, "FLV") -> "video/x-flv"
+        head[0] == 0x47.toByte() -> "video/mp2t"
+        else -> mimeOf(file.name)
+    }
+}
+
 private fun toast(context: Context, text: String, long: Boolean = true) =
     Toast.makeText(context, text, if (long) Toast.LENGTH_LONG else Toast.LENGTH_SHORT).show()
 
@@ -55,7 +82,7 @@ fun openWithExternalPlayer(context: Context, localPath: String, title: String) {
     // Algunos reproductores filtran por MIME y otros solo por la extensión de la
     // URL: se prueba con tipo y, si nadie lo atiende, sin tipo.
     val withType = Intent(Intent.ACTION_VIEW).apply {
-        setDataAndType(uri, mimeOf(localPath))
+        setDataAndType(uri, mimeOfFile(file))
         putExtra("title", title)
         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     }
@@ -63,18 +90,21 @@ fun openWithExternalPlayer(context: Context, localPath: String, title: String) {
         putExtra("title", title)
         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     }
-    val intent = if (resolvesToSomething(context, withType) || !resolvesToSomething(context, plain)) {
-        withType
-    } else {
-        plain
+    val typed = resolvesToSomething(context, withType)
+    val intent = if (typed || !resolvesToSomething(context, plain)) withType else plain
+    // El aviso va acá y no en el catch de startActivity: el selector del sistema
+    // siempre abre, así que si no hay con qué abrir el archivo eso nunca falla y
+    // el usuario se queda mirando una hoja vacía sin saber por qué.
+    if (!typed && !resolvesToSomething(context, plain)) {
+        toast(context, "No se ve ningún reproductor de video instalado. Con VLC anda seguro.")
     }
     runCatching {
         context.startActivity(Intent.createChooser(intent, "Abrir con").apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         })
-    }.onFailure {
+    }.onFailure { e ->
         LocalMediaServer.clear()
-        toast(context, "No hay otro reproductor instalado", long = false)
+        toast(context, "No se pudo abrir el selector (${e.message ?: "error desconocido"})")
     }
 }
 
@@ -83,12 +113,15 @@ fun openWithExternalPlayer(context: Context, localPath: String, title: String) {
  * Queda como respaldo del servidor local y es lo que se usa para "Compartir".
  */
 private fun openWithContentUri(context: Context, file: File, title: String, reason: String?) {
+    // Que el camino nuevo falle en silencio y caiga al viejo deja el síntoma
+    // idéntico al de antes y no hay forma de saber cuál se usó: se avisa.
+    reason?.let { toast(context, "No se pudo usar el servidor local ($it); probando el modo anterior") }
     val uri = runCatching { DownloadFileProvider.uriFor(context, file, title) }.getOrElse { e ->
         toast(context, "No se pudo abrir el archivo (${reason ?: e.message ?: "error desconocido"})")
         return
     }
     val intent = Intent(Intent.ACTION_VIEW).apply {
-        setDataAndType(uri, mimeOf(file.name))
+        setDataAndType(uri, mimeOfFile(file))
         clipData = ClipData.newRawUri(title, uri)
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
         putExtra("title", title)

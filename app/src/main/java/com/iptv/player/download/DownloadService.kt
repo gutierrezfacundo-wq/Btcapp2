@@ -164,6 +164,14 @@ class DownloadService : Service() {
                     }
                 }
                 repo.saveProgress(item.id, downloaded, if (total > 0) total else downloaded)
+                // El proveedor a veces corta el stream antes de terminar. Si se
+                // marcaba DONE igual, quedaba un archivo trunco que la app
+                // reproduce a medias y que otro reproductor directamente
+                // rechaza. Se deja como fallida: el archivo parcial queda y
+                // reanudarla la completa.
+                if (total > 0 && downloaded < total) {
+                    error("Se cortó la descarga: faltan ${formatBytes(total - downloaded)}. Reanudala para completarla.")
+                }
             }
         }
         // Miniatura local: la lista de descargas se ve bien sin internet.

@@ -46,6 +46,10 @@ object LocalMediaServer {
     /** ¿Hay algo publicado ahora mismo? */
     val isPublishing: Boolean get() = files.isNotEmpty()
 
+    /** Conexiones abiertas. Un reproductor en pausa la deja abierta sin pedir nada. */
+    private val open = java.util.concurrent.atomic.AtomicInteger(0)
+    val activeConnections: Int get() = open.get()
+
     /**
      * Deja [file] disponible y devuelve la URL para pasarle a otro reproductor.
      * El nombre visible se usa solo para que el reproductor muestre algo lindo.
@@ -88,7 +92,16 @@ object LocalMediaServer {
             } catch (e: IOException) {
                 return
             }
-            workers.execute { runCatching { serve(client) } }
+            workers.execute {
+                open.incrementAndGet()
+                try {
+                    serve(client)
+                } catch (e: Throwable) {
+                    // Que el reproductor corte la conexión es lo normal.
+                } finally {
+                    open.decrementAndGet()
+                }
+            }
         }
     }
 
@@ -181,7 +194,7 @@ object LocalMediaServer {
         val count = end - start + 1
         val header = StringBuilder()
             .append(if (partial) "HTTP/1.1 206 Partial Content\r\n" else "HTTP/1.1 200 OK\r\n")
-            .append("Content-Type: ").append(mimeOf(file.name)).append("\r\n")
+            .append("Content-Type: ").append(mimeOfFile(file)).append("\r\n")
             .append("Accept-Ranges: bytes\r\n")
             .append("Content-Length: ").append(count).append("\r\n")
         if (partial) header.append("Content-Range: bytes $start-$end/$length\r\n")

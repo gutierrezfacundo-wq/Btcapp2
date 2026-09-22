@@ -1,7 +1,9 @@
 package com.iptv.player.ui.downloads
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -13,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -173,6 +176,9 @@ fun DownloadsTab(
                         onOpenWith = {
                             com.iptv.player.download.openWithExternalPlayer(ctx, row.d.localPath, row.d.title)
                         },
+                        onDiagnose = {
+                            com.iptv.player.download.copyDownloadDiagnostics(ctx, row.d.localPath, row.d.title)
+                        },
                         onPause = { vm.pauseDownload(row.d.id) },
                         onResume = { vm.resumeDownload(row.d.id) },
                         onRemove = {
@@ -192,6 +198,11 @@ fun DownloadsTab(
                         onPlay = { d -> onPlayLocal(d.localPath, "${row.title} — ${d.title}") },
                         onOpenWith = { d ->
                             com.iptv.player.download.openWithExternalPlayer(
+                                ctx, d.localPath, "${row.title} — ${d.title}",
+                            )
+                        },
+                        onDiagnose = { d ->
+                            com.iptv.player.download.copyDownloadDiagnostics(
                                 ctx, d.localPath, "${row.title} — ${d.title}",
                             )
                         },
@@ -268,6 +279,7 @@ private fun SeriesGroup(
     onToggle: () -> Unit,
     onPlay: (DownloadEntity) -> Unit,
     onOpenWith: (DownloadEntity) -> Unit,
+    onDiagnose: (DownloadEntity) -> Unit,
     onPause: (DownloadEntity) -> Unit,
     onResume: (DownloadEntity) -> Unit,
     onRemove: (DownloadEntity) -> Unit,
@@ -332,6 +344,7 @@ private fun SeriesGroup(
                         d = ep,
                         onPlay = { onPlay(ep) },
                         onOpenWith = { onOpenWith(ep) },
+                        onDiagnose = { onDiagnose(ep) },
                         onPause = { onPause(ep) },
                         onResume = { onResume(ep) },
                         onRemove = { onRemove(ep) },
@@ -343,11 +356,30 @@ private fun SeriesGroup(
     }
 }
 
+/**
+ * Abrir con otro reproductor. Mantenerlo apretado copia el diagnóstico: si no
+ * abre, ese texto dice qué pasó en el equipo en vez de dejarnos adivinar.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun OpenWithButton(onOpenWith: () -> Unit, onDiagnose: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(48.dp)
+            .clip(CircleShape)
+            .combinedClickable(onClick = onOpenWith, onLongClick = onDiagnose),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(Icons.Outlined.OpenInNew, "Abrir con otro reproductor")
+    }
+}
+
 @Composable
 private fun EpisodeRow(
     d: DownloadEntity,
     onPlay: () -> Unit,
     onOpenWith: () -> Unit,
+    onDiagnose: () -> Unit,
     onPause: () -> Unit,
     onResume: () -> Unit,
     onRemove: () -> Unit,
@@ -377,9 +409,7 @@ private fun EpisodeRow(
             IconButton(onClick = onPlay) {
                 Icon(Icons.Outlined.PlayArrow, "Reproducir", tint = MaterialTheme.colorScheme.primary)
             }
-            IconButton(onClick = onOpenWith) {
-                Icon(Icons.Outlined.OpenInNew, "Abrir con otro reproductor")
-            }
+            OpenWithButton(onOpenWith, onDiagnose)
         } else if (d.status == DownloadStatus.PAUSED || d.status == DownloadStatus.FAILED) {
             IconButton(onClick = onResume) { Icon(Icons.Outlined.Download, "Reanudar") }
         } else {
@@ -415,6 +445,7 @@ private fun DownloadRow(
     d: DownloadEntity,
     onPlay: () -> Unit,
     onOpenWith: () -> Unit,
+    onDiagnose: () -> Unit,
     onPause: () -> Unit,
     onResume: () -> Unit,
     onRemove: () -> Unit,
@@ -458,9 +489,7 @@ private fun DownloadRow(
                 IconButton(onClick = onPlay) {
                     Icon(Icons.Outlined.PlayArrow, "Reproducir", tint = MaterialTheme.colorScheme.primary)
                 }
-                IconButton(onClick = onOpenWith) {
-                    Icon(Icons.Outlined.OpenInNew, "Abrir con otro reproductor")
-                }
+                OpenWithButton(onOpenWith, onDiagnose)
             }
             d.status == DownloadStatus.PAUSED || d.status == DownloadStatus.FAILED ->
                 IconButton(onClick = onResume) { Icon(Icons.Outlined.Download, "Reanudar") }

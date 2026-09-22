@@ -102,10 +102,15 @@ class DownloadFileProvider : ContentProvider() {
 
     override fun onCreate(): Boolean = true
 
-    override fun getType(uri: Uri): String = mimeOf(uri.path.orEmpty())
+    override fun getType(uri: Uri): String =
+        fileFor(uri)?.let { mimeOfFile(it) } ?: mimeOf(uri.path.orEmpty())
 
+    /**
+     * Siempre se abre en solo lectura, sin mirar el modo pedido: un reproductor
+     * nunca escribe, y rechazar el pedido por el modo solo agrega una forma más
+     * de fallar (hay apps que piden "rw" por costumbre).
+     */
     override fun openFile(uri: Uri, mode: String): ParcelFileDescriptor {
-        if (mode != "r") throw FileNotFoundException("Solo lectura: $uri")
         val file = fileFor(uri) ?: throw FileNotFoundException("URI inválido: $uri")
         if (!file.exists()) throw FileNotFoundException("No existe el archivo: ${file.name}")
         return ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
@@ -123,15 +128,18 @@ class DownloadFileProvider : ContentProvider() {
         sortOrder: String?,
     ): Cursor? {
         val file = fileFor(uri)?.takeIf { it.exists() } ?: return null
-        val columns = projection?.toList()
-            ?: listOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE)
-        // _data se omite a propósito: es una ruta privada de la app y si la
-        // contestamos hay reproductores que intentan abrirla directo y fallan.
+        val known = listOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE)
+        // Se contestan SOLO las columnas que conocemos. Antes se devolvía la
+        // proyección entera rellenando con null las demás, y eso es peor que no
+        // contestarlas: un reproductor que pide _data la veía presente y vacía,
+        // en vez de entender que este provider no la ofrece y usar el
+        // descriptor. (_data es además una ruta privada de la app: si la
+        // diéramos, la otra app intentaría abrirla directo y fallaría.)
+        val columns = projection?.filter { it in known }?.takeIf { it.isNotEmpty() } ?: known
         val values = columns.map { column ->
             when (column) {
                 OpenableColumns.DISPLAY_NAME -> displayNameFor(uri, file)
-                OpenableColumns.SIZE -> file.length()
-                else -> null
+                else -> file.length()
             }
         }
         return MatrixCursor(columns.toTypedArray(), 1).apply { addRow(values) }
