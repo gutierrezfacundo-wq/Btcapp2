@@ -1,0 +1,42 @@
+/* ============================================================
+   FOCO ESTILO APPLE TV — importar en main.tsx DESPUÉS de aurora.css
+   Reglas de oro:
+   - Solo se anima transform (GPU). El anillo aparece/desaparece SIN
+     transición: animar box-shadow repinta toda la caja en webOS.
+   - Fallback global: cualquier .focused sin estilo propio recibe
+     anillo dorado + escala — el foco NUNCA es invisible.
+   - Los estilos .focused específicos de aurora.css siguen ganando
+     por especificidad donde existan.
+   Además: subir --ring a rgba(216,180,106,.55) en global.css.
+   ============================================================ */
+
+.focusable {
+  transition: transform 0.16s cubic-bezier(0.2, 0.6, 0.3, 1);
+}
+
+.focused {
+  position: relative;
+  z-index: 2;
+  transform: scale(1.04);
+  box-shadow:
+    0 0 0 3px var(--ring),
+    0 16px 40px -14px rgba(0, 0, 0, 0.7);
+}
+
+/* Filas anchas: escala más sutil para que los bordes no se recorten
+   contra el contenedor. */
+.a-ch.focused,
+.fav-row.focused,
+.ep-row.focused,
+.src-card.focused,
+.a-cat.focused {
+  transform: scale(1.015);
+}
+
+/* Elementos que no deben escalar (moverían el layout del overlay). */
+.ply-track.focused,
+.grd-search.focused,
+.fld-in.focused,
+.a-trk-close.focused {
+  transform: none;
+}

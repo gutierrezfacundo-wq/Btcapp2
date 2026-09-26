@@ -1,0 +1,413 @@
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { FocusContext, useFocusable } from "@noriginmedia/norigin-spatial-navigation";
+import { useAppStore } from "../store/useAppStore";
+import { FocusableButton } from "../components/FocusableButton";
+import { FocusZone } from "../components/FocusZone";
+import { Icon } from "../components/Icon";
+import { PinDialog } from "../components/PinDialog";
+import { PosterImg } from "../components/PosterImg";
+import { Rail } from "../components/Rail";
+import { TopBar } from "../components/TopBar";
+import { Hints, HINTS_NAV } from "../components/Hints";
+import { useRailNav } from "../hooks/useRailNav";
+import { restoreFocus, focusWhenReady } from "../navigation/focusMemory";
+
+type SectionId = "live" | "movies" | "series" | "favorites";
+
+function greeting(): string {
+  const h = new Date().getHours();
+  if (h < 6) return "Buenas noches";
+  if (h < 13) return "Buenos días";
+  if (h < 20) return "Buenas tardes";
+  return "Buenas noches";
+}
+
+export function Hub() {
+  const navigate = useNavigate();
+  const railNav = useRailNav();
+  const source = useAppStore((s) => s.source);
+  const catalog = useAppStore((s) => s.catalog);
+  const favorites = useAppStore((s) => s.favorites);
+  const history = useAppStore((s) => s.history);
+  const loading = useAppStore((s) => s.loading);
+  const loadingStep = useAppStore((s) => s.loadingStep);
+  const error = useAppStore((s) => s.error);
+  const loadedSections = useAppStore((s) => s.loadedSections);
+  const ensureMovies = useAppStore((s) => s.ensureMovies);
+  const ensureSeries = useAppStore((s) => s.ensureSeries);
+  const reload = useAppStore((s) => s.reload);
+  const setUi = useAppStore((s) => s.setUi);
+  const progress = useAppStore((s) => s.progress);
+
+  // Modo Felix (niños)
+  const kidsMode = useAppStore((s) => s.kidsMode);
+  const setKidsMode = useAppStore((s) => s.setKidsMode);
+  const parentalPin = useAppStore((s) => s.parentalPin);
+  const kidsPrefs = useAppStore((s) => s.kidsPrefs);
+  const kidsTimerEndsAt = useAppStore((s) => s.kidsTimerEndsAt);
+  const setKidsTimer = useAppStore((s) => s.setKidsTimer);
+  const [pinOpen, setPinOpen] = useState(false);
+
+  // Refrescar "quedan X min" del temporizador cada 30 s.
+  const [, timerTick] = useState(0);
+  useEffect(() => {
+    if (!kidsMode || !kidsTimerEndsAt) return;
+    const t = window.setInterval(() => timerTick((x) => x + 1), 30000);
+    return () => window.clearInterval(t);
+  }, [kidsMode, kidsTimerEndsAt]);
+  const remainMin = kidsTimerEndsAt ? Math.max(0, Math.ceil((kidsTimerEndsAt - Date.now()) / 60000)) : null;
+
+  useEffect(() => {
+    if (!source) navigate("/setup");
+  }, [source, navigate]);
+
+  const { ref, focusKey } = useFocusable({ trackChildren: true, focusKey: "HUB" });
+  // Enfocar cuando los tiles existen (solo el estado de error sin catálogo los oculta).
+  const hubBlocked = !!error && !catalog.liveChannels.length;
+  useEffect(() => {
+    if (!hubBlocked) restoreFocus("hub:tiles", "HUB_T_0");
+  }, [hubBlocked, kidsMode]);
+
+  // ¿Un ítem del historial es apto para el modo Felix?
+  const kidsAllowedHistory = useMemo(() => {
+    const items = new Set(kidsPrefs.items);
+    const live = new Set(kidsPrefs.live);
+    const mov = new Set(kidsPrefs.movies);
+    const ser = new Set(kidsPrefs.series);
+    return (h: { id: string; kind: string }): boolean => {
+      if (h.kind === "movie") {
+        if (items.has(h.id)) return true;
+        const m = catalog.movies.find((x) => x.id === h.id);
+        return !!m && mov.has(m.category ?? "");
+      }
+      if (h.kind === "series-episode") {
+        const sid = h.id.replace(/^series:/, "");
+        if (items.has(sid) || items.has(h.id)) return true;
+        const s = catalog.series.find((x) => x.id === sid);
+        return !!s && ser.has(s.category ?? "");
+      }
+      if (items.has(h.id)) return true;
+      const c = catalog.liveChannels.find((x) => x.id === h.id);
+      return !!c && live.has(c.groupTitle ?? "");
+    };
+  }, [kidsPrefs, catalog]);
+
+  // Conteo de contenido apto (para los tiles del modo Felix).
+  const kidsCounts = useMemo(() => {
+    if (!kidsMode) return { live: 0, movies: 0, series: 0 };
+    const items = new Set(kidsPrefs.items);
+    const live = new Set(kidsPrefs.live);
+    const mov = new Set(kidsPrefs.movies);
+    const ser = new Set(kidsPrefs.series);
+    return {
+      live: catalog.liveChannels.filter((c) => live.has(c.groupTitle ?? "") || items.has(c.id)).length,
+      movies: catalog.movies.filter((m) => mov.has(m.category ?? "") || items.has(m.id)).length,
+      series: catalog.series.filter((s) => ser.has(s.category ?? "") || items.has(s.id)).length,
+    };
+  }, [kidsMode, kidsPrefs, catalog]);
+
+  const tiles: { id: SectionId; title: string; sub: string; icon: string }[] = kidsMode
+    ? [
+        { id: "live", title: "Tele", sub: kidsCounts.live ? `${kidsCounts.live} canales` : "Sin canales aptos", icon: "smart_display" },
+        { id: "movies", title: "Pelis", sub: loadedSections.movies ? `${kidsCounts.movies} pelis` : "Cargar al entrar", icon: "animation" },
+        { id: "series", title: "Dibujitos", sub: loadedSections.series ? `${kidsCounts.series} series` : "Cargar al entrar", icon: "smart_toy" },
+      ]
+    : [
+        { id: "live", title: "En vivo", sub: catalog.liveChannels.length ? `${catalog.liveChannels.length.toLocaleString()} canales` : loading || loadingStep ? "Cargando…" : "—", icon: "live_tv" },
+        { id: "movies", title: "Películas", sub: loadedSections.movies ? `${catalog.movies.length.toLocaleString()} títulos` : "Cargar al entrar", icon: "movie" },
+        { id: "series", title: "Series", sub: loadedSections.series ? `${catalog.series.length.toLocaleString()} títulos` : "Cargar al entrar", icon: "video_library" },
+        { id: "favorites", title: "Favoritos", sub: `${favorites.length} guardados`, icon: "star" },
+      ];
+
+  // "Seguir viendo" lleva al detalle (película/serie) o al canal, no directo al player.
+  const openHistory = (h: { id: string; name: string; kind: string; route: string }) => {
+    if (h.kind === "movie") navigate(`/movie/${h.id}`);
+    else if (h.kind === "series-episode") navigate(`/series/${h.id.replace(/^series:/, "")}?name=${encodeURIComponent(h.name)}`);
+    else { setUi({ tab: "live", selectedChannelId: h.id }); navigate("/home?tab=live"); }
+  };
+
+  const onTile = (id: SectionId) => {
+    // Navegamos al instante; la sección muestra su propio spinner mientras carga.
+    if (id === "movies" && !loadedSections.movies) ensureMovies();
+    else if (id === "series" && !loadedSections.series) ensureSeries();
+    navigate(`/home?tab=${id}`);
+  };
+
+  // Filtro para títulos VOD en las filas del Inicio: excluye las categorías
+  // que el usuario ocultó (Gestionar categorías) y, en modo Felix, lo no apto.
+  const catPrefs = useAppStore((s) => s.catPrefs);
+  const vodAllowed = useMemo(() => {
+    const items = new Set(kidsPrefs.items);
+    const mov = new Set(kidsPrefs.movies);
+    const ser = new Set(kidsPrefs.series);
+    const hiddenMov = new Set(catPrefs.movies.hidden);
+    const hiddenSer = new Set(catPrefs.series.hidden);
+    return {
+      movie: (m: { id: string; category?: string | null }) =>
+        !hiddenMov.has(m.category ?? "") && (!kidsMode || mov.has(m.category ?? "") || items.has(m.id)),
+      series: (s: { id: string; category?: string | null }) =>
+        !hiddenSer.has(s.category ?? "") && (!kidsMode || ser.has(s.category ?? "") || items.has(s.id)),
+    };
+  }, [kidsMode, kidsPrefs, catPrefs]);
+
+  // Novedades: lo último que agregó el proveedor (pelis + series por addedAt).
+  const newest = useMemo(() => {
+    const all = [
+      ...catalog.movies.filter(vodAllowed.movie).map((m) => ({ id: m.id, name: m.name, posterUrl: m.posterUrl, at: m.addedAt ?? 0, kind: "movie" as const })),
+      ...catalog.series.filter(vodAllowed.series).map((s) => ({ id: s.id, name: s.name, posterUrl: s.posterUrl, at: s.addedAt ?? 0, kind: "series" as const })),
+    ].filter((x) => x.at > 0);
+    all.sort((a, b) => b.at - a.at);
+    return all.slice(0, 10);
+  }, [catalog, vodAllowed]);
+
+  // ===== Billboard: novedad destacada rotativa con sinopsis =====
+  const billItems = useMemo(() => newest.slice(0, 6).map((n) => {
+    if (n.kind === "movie") {
+      const m = catalog.movies.find((x) => x.id === n.id);
+      return { ...n, plot: m?.plot, year: m?.year?.slice(0, 4), genre: m?.genre || m?.category };
+    }
+    const s = catalog.series.find((x) => x.id === n.id);
+    return { ...n, plot: s?.plot, year: s?.year, genre: s?.genre || s?.category };
+  }), [newest, catalog]);
+  const [billIdx, setBillIdx] = useState(0);
+  useEffect(() => {
+    if (billItems.length < 2) return;
+    const t = window.setInterval(() => setBillIdx((i) => i + 1), 10000);
+    return () => window.clearInterval(t);
+  }, [billItems.length]);
+  const bill = billItems.length ? billItems[billIdx % billItems.length] : null;
+
+  // ===== Filas estilo Netflix: "Porque viste X" + géneros fuertes =====
+  const firstGenre = (g?: string) => (g ?? "").split(/[,/|]/)[0].trim();
+  const seenIds = useMemo(
+    () => new Set(history.map((h) => (h.kind === "series-episode" ? h.id.replace(/^series:/, "") : h.id))),
+    [history],
+  );
+
+  type RailItem = { id: string; name: string; posterUrl?: string; kind: "movie" | "series" };
+  const becauseRow = useMemo((): { title: string; items: RailItem[] } | null => {
+    const seed = history.find((h) => h.kind === "movie" || h.kind === "series-episode");
+    if (!seed) return null;
+    const sid = seed.id.replace(/^series:/, "");
+    const src = seed.kind === "movie" ? catalog.movies.find((m) => m.id === seed.id) : catalog.series.find((s) => s.id === sid);
+    if (!src) return null;
+    const g = firstGenre(src.genre).toLowerCase();
+    const cat = src.category;
+    if (!g && !cat) return null;
+    const match = (it: { genre?: string; category?: string }) =>
+      g ? (it.genre ?? "").toLowerCase().includes(g) : it.category === cat;
+    const pool: RailItem[] = [
+      ...catalog.movies.filter((m) => vodAllowed.movie(m) && m.id !== seed.id && match(m))
+        .map((m) => ({ id: m.id, name: m.name, posterUrl: m.posterUrl, kind: "movie" as const })),
+      ...catalog.series.filter((s) => vodAllowed.series(s) && s.id !== sid && match(s))
+        .map((s) => ({ id: s.id, name: s.name, posterUrl: s.posterUrl, kind: "series" as const })),
+    ].filter((x) => !seenIds.has(x.id));
+    return pool.length >= 4 ? { title: `Porque viste ${src.name}`, items: pool.slice(0, 10) } : null;
+  }, [history, catalog, vodAllowed, seenIds]);
+
+  const genreRows = useMemo((): { title: string; items: RailItem[] }[] => {
+    const counts = new Map<string, { label: string; n: number }>();
+    const add = (g?: string) => {
+      const label = firstGenre(g);
+      if (label.length < 2) return;
+      const k = label.toLowerCase();
+      const e = counts.get(k);
+      if (e) e.n += 1; else counts.set(k, { label, n: 1 });
+    };
+    catalog.movies.forEach((m) => add(m.genre));
+    catalog.series.forEach((s) => add(s.genre));
+    const skip = becauseRow ? becauseRow.title.toLowerCase() : "";
+    const top = [...counts.values()]
+      .filter((e) => e.n >= 6 && !skip.includes(e.label.toLowerCase()))
+      .sort((a, b) => b.n - a.n)
+      .slice(0, 2);
+    return top.map((t) => {
+      const k = t.label.toLowerCase();
+      const items: RailItem[] = [
+        ...catalog.movies.filter((m) => vodAllowed.movie(m) && firstGenre(m.genre).toLowerCase() === k)
+          .map((m) => ({ id: m.id, name: m.name, posterUrl: m.posterUrl, at: m.addedAt ?? 0, kind: "movie" as const })),
+        ...catalog.series.filter((s) => vodAllowed.series(s) && firstGenre(s.genre).toLowerCase() === k)
+          .map((s) => ({ id: s.id, name: s.name, posterUrl: s.posterUrl, at: s.addedAt ?? 0, kind: "series" as const })),
+      ]
+        .sort((a, b) => (b as { at: number }).at - (a as { at: number }).at)
+        .slice(0, 10);
+      return { title: t.label, items };
+    }).filter((r) => r.items.length >= 4);
+  }, [catalog, vodAllowed, becauseRow]);
+
+  const newTag = (at: number): string => {
+    const d = Math.floor((Date.now() / 1000 - at) / 86400);
+    return d <= 0 ? "Hoy" : d === 1 ? "Ayer" : `Hace ${d} días`;
+  };
+  const openNew = (n: { id: string; name: string; kind: "movie" | "series" }) => {
+    if (n.kind === "movie") navigate(`/movie/${n.id}`);
+    else navigate(`/series/${n.id}?name=${encodeURIComponent(n.name)}`);
+  };
+
+  const enterKids = () => { setKidsMode(true); focusWhenReady("HUB_T_0"); };
+  const exitKids = () => {
+    if (parentalPin) setPinOpen(true);
+    else { setKidsMode(false); focusWhenReady("HUB_T_0"); }
+  };
+
+  const shownHistory = (kidsMode ? history.filter(kidsAllowedHistory) : history).slice(0, 8);
+
+  return (
+    <FocusContext.Provider value={focusKey}>
+      <div className="ascreen" ref={ref}>
+        <TopBar title={kidsMode ? "Modo Felix" : "Inicio"} />
+        <div className="a-body">
+          <Rail active="hub" onSelect={railNav} reloading={loading} />
+          <div className="a-screen">
+            {error && !catalog.liveChannels.length ? (
+              <div className="ld">
+                <Icon name="wifi_off" className="eo-ic" />
+                <div className="ld-step" style={{ color: "var(--err)" }}>{error}</div>
+                <div style={{ display: "flex", gap: 14 }}>
+                  <FocusableButton className="btn primary" onEnterPress={reload}>Reintentar</FocusableButton>
+                  <FocusableButton className="btn" onEnterPress={() => navigate("/setup")}>Editar lista</FocusableButton>
+                </div>
+              </div>
+            ) : (
+              <div className="hub">
+                <div className="hub-hero">
+                  <div>
+                    <div className="hub-greet">{kidsMode ? "¡Hola, Felix! 🦖" : greeting()}</div>
+                    <div className="hub-title">{kidsMode ? <>¿Qué vamos a <span>ver</span>?</> : <>¿Qué querés <span>ver</span> hoy?</>}</div>
+                  </div>
+                </div>
+                {bill ? (
+                  <FocusableButton focusKey="HUB_BILL" className="hub-bill" onEnterPress={() => openNew(bill)}>
+                    {bill.posterUrl ? <PosterImg className="hub-bill-img" src={bill.posterUrl} /> : null}
+                    <div className="hub-bill-grad" />
+                    <div className="hub-bill-c">
+                      <div className="hub-bill-tag">NOVEDAD · {bill.kind === "movie" ? "PELÍCULA" : "SERIE"}</div>
+                      <div className="hub-bill-t">{bill.name}</div>
+                      {bill.year || bill.genre ? <div className="hub-bill-m">{[bill.year, bill.genre].filter(Boolean).join(" · ")}</div> : null}
+                      {bill.plot ? <div className="hub-bill-p">{bill.plot}</div> : null}
+                      <div className="hub-bill-hint"><Icon name="play_circle" /> OK para ver la ficha</div>
+                    </div>
+                    {billItems.length > 1 ? (
+                      <div className="hub-bill-dots">
+                        {billItems.map((_, i) => <span key={i} className={i === billIdx % billItems.length ? "on" : ""} />)}
+                      </div>
+                    ) : null}
+                  </FocusableButton>
+                ) : null}
+                <FocusZone zone="hub:tiles" preferred="HUB_T_0" className="hub-grid">
+                  {tiles.map((t, i) => (
+                    <FocusableButton key={t.id} focusKey={`HUB_T_${i}`} className="hub-tile" onEnterPress={() => onTile(t.id)}>
+                      <div className="hub-tile-ic"><Icon name={t.icon} /></div>
+                      <div className="hub-tile-b">
+                        <div className="hub-tile-t">{t.title}</div>
+                        <div className="hub-tile-s">{t.sub}</div>
+                      </div>
+                    </FocusableButton>
+                  ))}
+                  {kidsMode ? (
+                    <FocusableButton focusKey={`HUB_T_${tiles.length}`} className="hub-tile hub-exit" onEnterPress={exitKids}>
+                      <div className="hub-tile-ic"><Icon name="lock" /></div>
+                      <div className="hub-tile-b">
+                        <div className="hub-tile-t">Grandes</div>
+                        <div className="hub-tile-s">{parentalPin ? "Salir con PIN" : "Salir del modo Felix"}</div>
+                      </div>
+                    </FocusableButton>
+                  ) : (
+                    <FocusableButton focusKey={`HUB_T_${tiles.length}`} className="hub-tile hub-felix" onEnterPress={enterKids}>
+                      <div className="hub-tile-ic"><Icon name="child_care" /></div>
+                      <div className="hub-tile-b">
+                        <div className="hub-tile-t">Felix</div>
+                        <div className="hub-tile-s">Modo niños</div>
+                      </div>
+                    </FocusableButton>
+                  )}
+                </FocusZone>
+                {kidsMode ? (
+                  <div className="hub-cont">
+                    <div className="hub-cont-h">Temporizador</div>
+                    <FocusZone zone="hub:timer" className="gsr-kinds hub-timer">
+                      {[{ m: 30, l: "30 min" }, { m: 60, l: "1 hora" }, { m: 90, l: "1 hora y media" }].map(({ m, l }) => (
+                        <FocusableButton key={m} className="chip" onEnterPress={() => setKidsTimer(m)}>{l}</FocusableButton>
+                      ))}
+                      <FocusableButton className={`chip ${!kidsTimerEndsAt ? "on" : ""}`} onEnterPress={() => setKidsTimer(null)}>Sin límite</FocusableButton>
+                      {remainMin !== null ? (
+                        <span className="hub-timer-left"><Icon name="schedule" /> quedan {remainMin} min</span>
+                      ) : null}
+                    </FocusZone>
+                  </div>
+                ) : null}
+                {newest.length ? (
+                  <div className="hub-cont">
+                    <div className="hub-cont-h">Novedades</div>
+                    <FocusZone zone="hub:new" className="hub-rowscroll scroll">
+                      {newest.map((n, i) => (
+                        <FocusableButton key={`${n.kind}-${n.id}`} focusKey={`HUB_N_${i}`} className="hub-mini" onEnterPress={() => openNew(n)}>
+                          <div className="hub-mini-p">
+                            {n.posterUrl ? <PosterImg src={n.posterUrl} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} /> : null}
+                            <span className="hub-mini-tag">{newTag(n.at)}</span>
+                          </div>
+                          <div className="hub-mini-t">{n.name}</div>
+                        </FocusableButton>
+                      ))}
+                    </FocusZone>
+                  </div>
+                ) : null}
+                {shownHistory.length ? (
+                  <div className="hub-cont">
+                    <div className="hub-cont-h">Seguir viendo</div>
+                    <FocusZone zone="hub:cont" className="hub-rowscroll scroll">
+                      {shownHistory.map((h, i) => {
+                        // Barra de progreso (posición guardada del contenido/episodio).
+                        const pr = progress[h.cid ?? h.id];
+                        const pct = pr && pr.dur > 0 ? Math.max(2, Math.min(100, (pr.pos / pr.dur) * 100)) : null;
+                        // Serie con episodios nuevos desde la última vez que la viste.
+                        const serie = h.kind === "series-episode" ? catalog.series.find((x) => x.id === h.id.replace(/^series:/, "")) : undefined;
+                        const hasNew = !!(serie?.addedAt && serie.addedAt * 1000 > h.at);
+                        return (
+                          <FocusableButton key={h.id} focusKey={`HUB_C_${i}`} className="hub-mini" onEnterPress={() => openHistory(h)}>
+                            <div className="hub-mini-p">
+                              {h.posterUrl ? <PosterImg src={h.posterUrl} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} /> : null}
+                              {hasNew ? <span className="hub-mini-tag new">NUEVO EPISODIO</span> : h.sub ? <span className="hub-mini-tag">{h.sub}</span> : null}
+                              {pct !== null ? <span className="hub-mini-bar"><i style={{ width: `${pct}%` }} /></span> : null}
+                            </div>
+                            <div className="hub-mini-t">{h.name}</div>
+                          </FocusableButton>
+                        );
+                      })}
+                    </FocusZone>
+                  </div>
+                ) : null}
+                {[becauseRow, ...genreRows].filter((r): r is { title: string; items: RailItem[] } => !!r).map((row, ri) => (
+                  <div className="hub-cont" key={row.title}>
+                    <div className="hub-cont-h">{row.title}</div>
+                    <FocusZone zone={`hub:rail${ri}`} className="hub-rowscroll scroll">
+                      {row.items.map((n, i) => (
+                        <FocusableButton key={`${n.kind}-${n.id}`} focusKey={`HUB_R${ri}_${i}`} className="hub-mini" onEnterPress={() => openNew(n)}>
+                          <div className="hub-mini-p">
+                            {n.posterUrl ? <PosterImg src={n.posterUrl} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} /> : null}
+                          </div>
+                          <div className="hub-mini-t">{n.name}</div>
+                        </FocusableButton>
+                      ))}
+                    </FocusZone>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+        {pinOpen ? (
+          <PinDialog
+            mode="verify"
+            expected={parentalPin}
+            title="Modo grandes"
+            onSuccess={() => { setPinOpen(false); setKidsMode(false); focusWhenReady("HUB_T_0"); }}
+            onClose={() => setPinOpen(false)}
+          />
+        ) : null}
+        <Hints items={HINTS_NAV} />
+      </div>
+    </FocusContext.Provider>
+  );
+}

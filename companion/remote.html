@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>POTRI · Control remoto</title>
+<style>
+  :root{ --bg:#0a0a0c; --surface:#16161a; --surface2:#1f1f25; --line:rgba(255,255,255,.08);
+         --text:#f3f2f5; --muted:#8a8a94; --accent:#d8b46a; --ok:#5fcaa0; --err:#ff5d6c; }
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(130% 90% at 78% -10%,#1a1a20,#0c0c0f 52%,#08080a);
+       color:var(--text);font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+       min-height:100vh;padding:20px 16px 40px;display:flex;justify-content:center}
+  .wrap{width:100%;max-width:520px}
+  .logo{font-weight:800;font-size:26px;letter-spacing:1px}
+  .logo span{color:var(--accent)}
+  .sub{color:var(--muted);font-size:13px;margin:2px 0 16px}
+  .nocfg{display:none;background:rgba(255,93,108,.12);color:var(--err);padding:12px;border-radius:10px;font-size:14px;margin-bottom:14px}
+  .tabs{display:flex;gap:8px;margin-bottom:14px}
+  .tab{flex:1;text-align:center;padding:11px;border-radius:10px;background:var(--surface2);border:1px solid var(--line);cursor:pointer;font-weight:600}
+  .tab.on{background:var(--accent);color:#1a1500;border-color:var(--accent)}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:14px}
+  .pad{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .pbtn{padding:22px 8px;border:none;border-radius:14px;background:var(--surface2);color:var(--text);
+        font-size:17px;font-weight:700;cursor:pointer;border:1px solid var(--line)}
+  .pbtn:active{background:var(--accent);color:#1a1500}
+  .pbtn.big{grid-column:1 / -1;background:var(--accent);color:#1a1500;font-size:19px}
+  input.q{width:100%;padding:13px 14px;border-radius:10px;background:var(--surface2);border:1px solid var(--line);
+        color:var(--text);font-size:16px;outline:none}
+  input.q:focus{border-color:var(--accent)}
+  .kinds{display:flex;gap:8px;margin:12px 0}
+  .kind{flex:1;text-align:center;padding:9px;border-radius:999px;background:var(--surface2);border:1px solid var(--line);font-size:14px;font-weight:600;cursor:pointer}
+  .kind.on{background:var(--accent);color:#1a1500;border-color:var(--accent)}
+  .res{display:flex;flex-direction:column;gap:8px}
+  .item{display:flex;align-items:center;gap:12px;background:var(--surface2);border:1px solid var(--line);
+        border-radius:12px;padding:10px 12px;cursor:pointer}
+  .item:active{border-color:var(--accent)}
+  .item img{width:44px;height:44px;object-fit:contain;border-radius:8px;background:#0c0c10;flex-shrink:0}
+  .item .n{flex:1;font-size:15px;line-height:1.3;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+  .item .go{color:var(--accent);font-size:22px;flex-shrink:0}
+  .stat{color:var(--muted);font-size:13px;text-align:center;padding:10px}
+  .toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--surface);border:1px solid var(--accent);
+         color:var(--text);padding:11px 18px;border-radius:12px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none;white-space:nowrap}
+  .toast.show{opacity:1}
+  .backlink{color:var(--accent);font-size:14px;cursor:pointer;margin-bottom:10px;display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="logo">POTR<span>I</span> <span style="color:var(--muted);font-weight:500;font-size:15px">control remoto</span></div>
+  <div class="sub" id="sub">—</div>
+  <div id="nocfg" class="nocfg">Falta vincular: escaneá el QR de "Control remoto" en la TV (Mis Listas).</div>
+
+  <div class="tabs">
+    <div class="tab on" id="t-ctl">Control</div>
+    <div class="tab" id="t-src">Buscar</div>
+  </div>
+
+  <div id="p-ctl" class="card">
+    <div class="pad">
+      <button class="pbtn big" id="b-pause">⏯︎&nbsp; Pausa / Reproducir</button>
+      <button class="pbtn" id="b-chup">CH +</button>
+      <button class="pbtn" id="b-chdn">CH −</button>
+      <button class="pbtn big" id="b-back" style="background:var(--surface2);color:var(--text)">⟵&nbsp; Volver</button>
+    </div>
+  </div>
+
+  <div id="p-src" style="display:none">
+    <div class="card">
+      <input class="q" id="q" placeholder="Buscar canales, pelis o series…" />
+      <div class="kinds">
+        <div class="kind on" data-k="live">TV</div>
+        <div class="kind" data-k="vod">Pelis</div>
+        <div class="kind" data-k="series">Series</div>
+      </div>
+      <div class="backlink" id="epback">← Volver a resultados</div>
+      <div class="res" id="res"></div>
+      <div class="stat" id="stat">Escribí al menos 2 letras.</div>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+  // ===== Vinculación: ?code= y ?s= (config b64url) quedan en localStorage =====
+  function decodeB64Url(s){ try{ s=s.replace(/-/g,"+").replace(/_/g,"/"); while(s.length%4)s+="="; return JSON.parse(decodeURIComponent(escape(atob(s)))); }catch(e){ return null; } }
+  var params = new URLSearchParams(location.search);
+  var saved = {};
+  try { saved = JSON.parse(localStorage.getItem("potri.remote") || "{}"); } catch(e){}
+  var code = (params.get("code") || saved.code || "").toUpperCase().replace(/[^A-Z0-9]/g,"");
+  var cfg = params.get("s") ? decodeB64Url(params.get("s")) : (saved.cfg || null);
+  if (code) { try { localStorage.setItem("potri.remote", JSON.stringify({ code: code, cfg: cfg })); } catch(e){} }
+  if (params.get("code")) history.replaceState(null, "", location.pathname); // sacar credenciales de la URL
+
+  document.getElementById("sub").textContent = code ? ("Vinculado · código " + code) : "Sin vincular";
+  if (!code) document.getElementById("nocfg").style.display = "block";
+
+  function toast(t){ var el=document.getElementById("toast"); el.textContent=t; el.classList.add("show"); clearTimeout(el._t); el._t=setTimeout(function(){el.classList.remove("show");},1800); }
+
+  function send(cmd){
+    if (!code) { toast("Falta vincular con la TV"); return; }
+    fetch("/api/cmd/" + code, { method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify(cmd) })
+      .then(function(r){ if(!r.ok) throw 0; toast("Enviado a la TV ✓"); })
+      .catch(function(){ toast("No se pudo enviar"); });
+  }
+
+  document.getElementById("b-pause").onclick = function(){ send({action:"pause"}); };
+  document.getElementById("b-back").onclick  = function(){ send({action:"back"}); };
+  document.getElementById("b-chup").onclick  = function(){ send({action:"zap", dir:1}); };
+  document.getElementById("b-chdn").onclick  = function(){ send({action:"zap", dir:-1}); };
+
+  // ===== Tabs =====
+  function showTab(t){
+    document.getElementById("t-ctl").classList.toggle("on", t==="ctl");
+    document.getElementById("t-src").classList.toggle("on", t==="src");
+    document.getElementById("p-ctl").style.display = t==="ctl" ? "" : "none";
+    document.getElementById("p-src").style.display = t==="src" ? "" : "none";
+  }
+  document.getElementById("t-ctl").onclick = function(){ showTab("ctl"); };
+  document.getElementById("t-src").onclick = function(){ showTab("src"); };
+
+  // ===== Catálogo Xtream (vía /api/proxy por CORS) =====
+  var kind = "live";
+  var cache = {};           // kind -> lista
+  var epMode = null;        // {name, episodes} cuando se mira una serie
+  var kindsEl = document.querySelectorAll(".kind");
+  kindsEl.forEach(function(k){ k.onclick = function(){ kind = k.dataset.k; epMode=null; document.getElementById("epback").style.display="none"; kindsEl.forEach(function(x){x.classList.toggle("on", x===k);}); render(); }; });
+
+  function api(action, extra){
+    var base = cfg.server.replace(/\/+$/,"") + "/player_api.php?username=" + encodeURIComponent(cfg.username) + "&password=" + encodeURIComponent(cfg.password) + "&action=" + action + (extra||"");
+    return fetch("/api/proxy?u=" + encodeURIComponent(base)).then(function(r){ return r.json(); });
+  }
+  function streamUrl(kindK, id, ext){
+    var b = cfg.server.replace(/\/+$/,"");
+    if (kindK === "live")   return b + "/live/" + cfg.username + "/" + cfg.password + "/" + id + ".m3u8";
+    if (kindK === "vod")    return b + "/movie/" + cfg.username + "/" + cfg.password + "/" + id + "." + (ext || "mp4");
+    return b + "/series/" + cfg.username + "/" + cfg.password + "/" + id + "." + (ext || "mp4");
+  }
+
+  function ensure(k){
+    if (cache[k]) return Promise.resolve(cache[k]);
+    if (!cfg || cfg.kind !== "xtream") return Promise.reject("solo Xtream");
+    document.getElementById("stat").textContent = "Cargando catálogo…";
+    var action = k==="live" ? "get_live_streams" : k==="vod" ? "get_vod_streams" : "get_series";
+    return api(action).then(function(list){ cache[k] = Array.isArray(list) ? list : []; return cache[k]; });
+  }
+
+  var q = "";
+  document.getElementById("q").addEventListener("input", function(e){ q = e.target.value.trim().toLowerCase(); epMode=null; document.getElementById("epback").style.display="none"; render(); });
+  document.getElementById("epback").onclick = function(){ epMode=null; this.style.display="none"; render(); };
+
+  function row(icon, name, onTap){
+    var d = document.createElement("div"); d.className = "item";
+    var img = document.createElement("img"); img.loading="lazy"; img.src = icon || ""; img.onerror = function(){ this.style.visibility="hidden"; };
+    var n = document.createElement("div"); n.className = "n"; n.textContent = name;
+    var g = document.createElement("div"); g.className = "go"; g.textContent = "▶";
+    d.appendChild(img); d.appendChild(n); d.appendChild(g);
+    d.onclick = onTap;
+    return d;
+  }
+
+  function render(){
+    var res = document.getElementById("res"); res.innerHTML = "";
+    var stat = document.getElementById("stat");
+    if (epMode){
+      stat.textContent = epMode.name;
+      epMode.episodes.forEach(function(ep){
+        res.appendChild(row(null, "T" + ep.season + " · E" + ep.num + (ep.title ? " · " + ep.title : ""), function(){
+          send({action:"play", url: streamUrl("series", ep.id, ep.ext), title: epMode.name + " · T" + ep.season + " E" + ep.num});
+        }));
+      });
+      return;
+    }
+    if (!cfg || cfg.kind !== "xtream"){ stat.textContent = "La búsqueda remota funciona con listas Xtream."; return; }
+    if (q.length < 2){ stat.textContent = "Escribí al menos 2 letras."; return; }
+    ensure(kind).then(function(list){
+      var hits = list.filter(function(it){ return String(it.name||"").toLowerCase().indexOf(q) >= 0; }).slice(0, 40);
+      stat.textContent = hits.length ? (hits.length + " resultados — tocá para ver en la TV") : "Sin resultados.";
+      hits.forEach(function(it){
+        if (kind === "series"){
+          res.appendChild(row(it.cover, it.name, function(){
+            stat.textContent = "Cargando episodios…";
+            api("get_series_info", "&series_id=" + it.series_id).then(function(info){
+              var eps = [];
+              var seasons = info && info.episodes ? info.episodes : {};
+              Object.keys(seasons).forEach(function(s){
+                (seasons[s]||[]).forEach(function(e){
+                  eps.push({ id: e.id, season: Number(e.season||s), num: Number(e.episode_num||0), title: e.title||"", ext: e.container_extension||"mp4" });
+                });
+              });
+              eps.sort(function(a,b){ return a.season-b.season || a.num-b.num; });
+              epMode = { name: it.name, episodes: eps };
+              document.getElementById("epback").style.display = "block";
+              render();
+            }).catch(function(){ stat.textContent = "No se pudieron cargar los episodios."; });
+          }));
+        } else if (kind === "vod"){
+          res.appendChild(row(it.stream_icon, it.name, function(){
+            send({action:"play", url: streamUrl("vod", it.stream_id, it.container_extension), title: it.name});
+          }));
+        } else {
+          res.appendChild(row(it.stream_icon, it.name, function(){
+            send({action:"play", url: streamUrl("live", it.stream_id, null), title: it.name});
+          }));
+        }
+      });
+    }).catch(function(){ stat.textContent = "No se pudo cargar el catálogo."; });
+  }
+</script>
+</body>
+</html>

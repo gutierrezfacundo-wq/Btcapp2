@@ -1,0 +1,139 @@
+/* ============================================================
+   TrackSheet — hoja inferior "Audio y subtítulos"
+   Reemplaza al panel lateral .a-trk. Ver SPEC_AUDIO_SUBTITULOS.md
+   y el mockup "Audio y subtítulos.dc.html" (medidas exactas).
+   Importar en main.tsx después de focus.css.
+   ============================================================ */
+
+.tsh-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.28), rgba(0, 0, 0, 0.8) 60%);
+}
+
+.tsh {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-height: 56%;
+  background: rgba(10, 10, 14, 0.97);
+  border-top: 1px solid rgba(216, 180, 106, 0.35);
+  padding: 40px 110px 52px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.tsh-h {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-family: "Schibsted Grotesk", sans-serif;
+  font-size: 32px;
+  font-weight: 700;
+}
+.tsh-h .ms {
+  font-size: 34px;
+  color: var(--accent);
+}
+.tsh-hint {
+  margin-left: auto;
+  font-family: "Space Grotesk", monospace;
+  font-size: 16px;
+  font-weight: 400;
+  color: var(--muted);
+  letter-spacing: 0.5px;
+}
+
+.tsh-cols {
+  display: flex;
+  gap: 64px;
+  flex: 1;
+  min-height: 0;
+}
+
+.tsh-col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tsh-sec {
+  font-size: 15px;
+  letter-spacing: 2.5px;
+  color: var(--accent);
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.tsh-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+}
+
+.tsh-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  border-radius: 12px;
+  font-size: 23px;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+.tsh-check {
+  width: 26px;
+  display: flex;
+  justify-content: center;
+  flex-shrink: 0;
+  opacity: 0;
+}
+.tsh-check .ms,
+.tsh-item .ms {
+  font-size: 24px;
+  color: var(--accent);
+}
+.tsh-item.on {
+  color: var(--accent);
+  font-weight: 600;
+}
+.tsh-item.on .tsh-check,
+.tsh-item.action .tsh-check {
+  opacity: 1;
+}
+.tsh-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tsh-meta {
+  font-family: "Space Grotesk", monospace;
+  font-size: 16px;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.tsh-item.focused {
+  border-color: var(--accent);
+  background: var(--soft);
+  box-shadow: 0 0 0 3px var(--ring);
+}
+.tsh-item.focused .tsh-meta {
+  color: rgba(216, 180, 106, 0.85);
+}
+
+.tsh-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  align-items: flex-start;
+  font-size: 21px;
+  color: var(--muted);
+}

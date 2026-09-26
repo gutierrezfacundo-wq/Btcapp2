@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>POTRI · Configurar lista</title>
+<style>
+  :root{ --bg:#0a0a0c; --surface:#16161a; --surface2:#1f1f25; --line:rgba(255,255,255,.08);
+         --text:#f3f2f5; --muted:#8a8a94; --accent:#d8b46a; --ok:#5fcaa0; --err:#ff5d6c; }
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(130% 90% at 78% -10%,#1a1a20,#0c0c0f 52%,#08080a);
+       color:var(--text);font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+       min-height:100vh;padding:24px;display:flex;justify-content:center}
+  .wrap{width:100%;max-width:480px}
+  .logo{font-weight:800;font-size:30px;letter-spacing:1px;margin:8px 0 2px}
+  .logo span{color:var(--accent)}
+  .sub{color:var(--muted);font-size:14px;margin-bottom:20px}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:18px;margin-bottom:16px}
+  .tabs{display:flex;gap:8px;margin-bottom:14px}
+  .tab{flex:1;text-align:center;padding:10px;border-radius:10px;background:var(--surface2);border:1px solid var(--line);cursor:pointer;font-weight:600}
+  .tab.on{background:var(--accent);color:#1a1500;border-color:var(--accent)}
+  label{display:block;font-size:13px;color:var(--muted);margin:12px 0 6px}
+  input{width:100%;padding:13px 14px;border-radius:10px;background:var(--surface2);border:1px solid var(--line);
+        color:var(--text);font-size:16px;outline:none}
+  input:focus{border-color:var(--accent)}
+  .row{display:flex;gap:10px}
+  .row>div{flex:1}
+  button.go{width:100%;margin-top:18px;padding:15px;border:none;border-radius:12px;background:var(--accent);
+            color:#1a1500;font-size:17px;font-weight:700;cursor:pointer}
+  button.go:disabled{opacity:.5}
+  .msg{margin-top:14px;padding:12px;border-radius:10px;font-size:14px;text-align:center;display:none}
+  .msg.ok{display:block;background:rgba(95,202,160,.15);color:var(--ok)}
+  .msg.err{display:block;background:rgba(255,93,108,.15);color:var(--err)}
+  .nocode{display:none;background:rgba(255,93,108,.12);color:var(--err);padding:12px;border-radius:10px;font-size:14px;margin-bottom:16px}
+  .hint{color:var(--muted);font-size:12px;margin-top:6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="logo">POTR<span>I</span></div>
+  <div class="sub">Configurá tu lista y se envía a la TV</div>
+
+  <div id="nocode" class="nocode">Abrí esta página escaneando el QR de la TV (te falta el código de emparejamiento).</div>
+
+  <div class="card">
+    <div class="tabs">
+      <div class="tab on" data-tab="xtream" id="t-xt">Xtream</div>
+      <div class="tab" data-tab="m3u" id="t-m3">Lista M3U</div>
+    </div>
+
+    <label>Nombre de la lista</label>
+    <input id="name" placeholder="Ej: Mi Proveedor" />
+
+    <div id="xt">
+      <label>Servidor</label>
+      <input id="server" placeholder="http://host:puerto" inputmode="url" autocapitalize="off" autocorrect="off" />
+      <div class="row">
+        <div><label>Usuario</label><input id="user" autocapitalize="off" autocorrect="off" /></div>
+        <div><label>Contraseña</label><input id="pass" autocapitalize="off" autocorrect="off" /></div>
+      </div>
+    </div>
+
+    <div id="m3" style="display:none">
+      <label>URL de la lista (.m3u / .m3u8)</label>
+      <input id="m3uUrl" placeholder="https://.../playlist.m3u8" inputmode="url" autocapitalize="off" autocorrect="off" />
+      <label>URL EPG XMLTV (opcional)</label>
+      <input id="epgUrl" placeholder="https://.../epg.xml" inputmode="url" autocapitalize="off" autocorrect="off" />
+    </div>
+  </div>
+
+  <button class="go" id="go">Enviar a la TV</button>
+  <div class="msg" id="msg"></div>
+</div>
+
+<script>
+  var params = new URLSearchParams(location.search);
+  var code = (params.get("code") || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  var kind = "xtream";
+  if (!code) document.getElementById("nocode").style.display = "block";
+
+  function decodeB64Url(s){
+    try {
+      s = s.replace(/-/g, "+").replace(/_/g, "/");
+      while (s.length % 4) s += "=";
+      return JSON.parse(decodeURIComponent(escape(atob(s))));
+    } catch (e) { return null; }
+  }
+
+  // Precarga: si la TV mandó la config actual codificada en el QR (?cfg=...),
+  // rellenamos el formulario para editar en vez de tipear todo de cero.
+  var cfgRaw = params.get("cfg");
+  if (cfgRaw) {
+    var cfg = decodeB64Url(cfgRaw);
+    if (cfg) {
+      if (cfg.name) document.getElementById("name").value = cfg.name;
+      if (cfg.source) {
+        if (cfg.source.kind === "m3u") {
+          if (cfg.source.playlistUrl) document.getElementById("m3uUrl").value = cfg.source.playlistUrl;
+          if (cfg.source.epgUrl) document.getElementById("epgUrl").value = cfg.source.epgUrl;
+          setTab("m3u");
+        } else if (cfg.source.kind === "xtream") {
+          if (cfg.source.server) document.getElementById("server").value = cfg.source.server;
+          if (cfg.source.username) document.getElementById("user").value = cfg.source.username;
+          if (cfg.source.password) document.getElementById("pass").value = cfg.source.password;
+          setTab("xtream");
+        }
+      }
+    }
+  }
+
+  function setTab(k){
+    kind = k;
+    document.getElementById("t-xt").classList.toggle("on", k==="xtream");
+    document.getElementById("t-m3").classList.toggle("on", k==="m3u");
+    document.getElementById("xt").style.display = k==="xtream" ? "" : "none";
+    document.getElementById("m3").style.display = k==="m3u" ? "" : "none";
+  }
+  document.getElementById("t-xt").onclick = function(){ setTab("xtream"); };
+  document.getElementById("t-m3").onclick = function(){ setTab("m3u"); };
+
+  function val(id){ return (document.getElementById(id).value || "").trim(); }
+  function show(cls, txt){ var m=document.getElementById("msg"); m.className="msg "+cls; m.textContent=txt; }
+
+  document.getElementById("go").onclick = function(){
+    if (!code){ show("err","Falta el código. Escaneá el QR de la TV."); return; }
+    var source;
+    if (kind === "xtream") {
+      if (!val("server") || !val("user") || !val("pass")) { show("err","Completá servidor, usuario y contraseña."); return; }
+      source = { kind:"xtream", server:val("server"), username:val("user"), password:val("pass") };
+    } else {
+      if (!val("m3uUrl")) { show("err","Completá la URL de la lista."); return; }
+      source = { kind:"m3u", playlistUrl:val("m3uUrl") };
+      if (val("epgUrl")) source.epgUrl = val("epgUrl");
+    }
+    var payload = { v:1, name: val("name") || (kind==="xtream"?"Mi lista Xtream":"Mi lista M3U"), source: source };
+    var btn = document.getElementById("go"); btn.disabled = true; show("ok","Enviando…");
+    fetch("/api/pair/" + code, { method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify(payload) })
+      .then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); })
+      .then(function(){ show("ok","¡Enviado! Mirá la TV, debería configurarse sola."); })
+      .catch(function(e){ btn.disabled=false; show("err","No se pudo enviar: "+e.message); });
+  };
+</script>
+</body>
+</html>
