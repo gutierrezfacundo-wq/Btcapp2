@@ -1,3 +1,5 @@
+import { DEVICE_NAME } from "../platform";
+
 export class HttpError extends Error {
   constructor(message: string, readonly status?: number) {
     super(message);
@@ -17,11 +19,11 @@ async function fetchWithTimeout(url: string, timeoutMs: number): Promise<Respons
     if (e instanceof HttpError) throw e;
     if ((e as Error)?.name === "AbortError") {
       throw new HttpError(
-        `Tiempo de espera agotado (${Math.round(timeoutMs / 1000)}s): el servidor no respondió desde la TV.`,
+        `Tiempo de espera agotado (${Math.round(timeoutMs / 1000)}s): el servidor no respondió desde ${DEVICE_NAME}.`,
       );
     }
     throw new HttpError(
-      "No se pudo conectar desde la TV: revisá la URL, la red de la TV, o que el servidor no bloquee la conexión.",
+      `No se pudo conectar desde ${DEVICE_NAME}: revisá la URL, la conexión a internet, o que el servidor no bloquee la conexión.`,
     );
   } finally {
     clearTimeout(timer);

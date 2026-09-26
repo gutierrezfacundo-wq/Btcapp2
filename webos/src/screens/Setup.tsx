@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { IS_WEBOS } from "../platform";
 import { useNavigate } from "react-router-dom";
 import { FocusContext, useFocusable, setFocus } from "@noriginmedia/norigin-spatial-navigation";
 import { FocusableButton } from "../components/FocusableButton";
@@ -294,6 +295,8 @@ export function Setup() {
                     ) : null}
                   </div>
 
+                  {/* Solo tiene sentido en la TV: en la PC no hay pipeline de webOS. */}
+                  {IS_WEBOS ? (
                   <div className="fld" style={{ marginTop: 18 }}>
                     <label className="fld-l"><Icon name="closed_caption" /> Subtítulos embebidos (reproductor nativo webOS)</label>
                     <FocusableButton className={`btn ${nativeSubs ? "primary" : ""}`} onEnterPress={() => setNativeSubs(!nativeSubs)}>
@@ -301,6 +304,7 @@ export function Setup() {
                     </FocusableButton>
                     <div className="a-pdesc" style={{ marginTop: 6 }}>Usa el pipeline nativo de webOS para exponer/renderizar subtítulos embebidos de las pelis/series. Si algún video no reproduce en la TV, desactivalo (cae al modo estándar).</div>
                   </div>
+                  ) : null}
 
                   <div className="fld" style={{ marginTop: 18 }}>
                     <label className="fld-l"><Icon name="schedule" /> Corrección horaria de la guía (EPG)</label>

@@ -29,7 +29,9 @@ export function isBackKey(e: KeyboardEvent): boolean {
     e.key === "GoBack" ||
     e.key === "XF86Back" ||
     e.key === "BrowserBack" ||
-    e.key === "Back";
+    e.key === "Back" ||
+    // PC: Escape es el "volver" natural del teclado.
+    e.key === "Escape";
 }
 
 export function isPlayPauseKey(e: KeyboardEvent): boolean {

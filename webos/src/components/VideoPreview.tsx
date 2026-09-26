@@ -5,6 +5,7 @@ import { FocusableButton } from "./FocusableButton";
 import { Icon } from "./Icon";
 import { useAppStore } from "../store/useAppStore";
 import { diagnoseStreamError } from "../data/xtream";
+import { attachTs, needsTsShim, type TsHandle } from "../data/tsPlayback";
 
 interface Props {
   url: string | null;
@@ -86,7 +87,20 @@ export function VideoPreview({ url, muted = true, onVideoEl, onHls, onResolution
     const hlsUrl = isTs && m3u8Allowed ? url.replace(/\.ts(\?|$)/i, ".m3u8$1") : url;
     const canHls = /\.m3u8(\?|$)/i.test(hlsUrl) && Hls.isSupported();
 
+    let tsHandle: TsHandle | null = null;
+    let disposed = false;
     const playNative = (src: string) => {
+      if (needsTsShim(src)) {
+        // PC: Chrome no abre un .ts directo; lo desarma mpegts.js.
+        onHls?.(null);
+        video.oncanplay = () => setStatus("playing");
+        attachTs(video, src, () => setStatus("error"), onBitrate).then((h) => {
+          if (disposed) { h?.destroy(); return; }
+          if (!h) setStatus("error");
+          tsHandle = h;
+        });
+        return;
+      }
       video.src = src;
       video.oncanplay = () => setStatus("playing");
       video.onerror = () => setStatus("error");
@@ -121,10 +135,16 @@ export function VideoPreview({ url, muted = true, onVideoEl, onHls, onResolution
         if (bytes && dur) onBitrate?.(Math.round((bytes * 8) / dur));
       });
       let recover = 0;
+      let manifestOk = false;
+      hls.on(Hls.Events.MANIFEST_PARSED, () => { manifestOk = true; });
       hls.on(Hls.Events.ERROR, (_evt, data) => {
         if (!data.fatal) return;
         // Recuperacion automatica (corte de red / glitch de media) antes de rendirse.
-        if (recover < 3) {
+        // Solo si el stream ya había arrancado: si lo que falló es la lista
+        // .m3u8 misma (ej. 404 porque el canal no tiene variante HLS),
+        // startLoad() no la vuelve a pedir y todo quedaba trabado en negro sin
+        // llegar nunca a probar el .ts.
+        if (recover < 3 && manifestOk) {
           recover += 1;
           if (data.type === Hls.ErrorTypes.NETWORK_ERROR) { try { hls.startLoad(); return; } catch { /* sigue */ } }
           else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) { try { hls.recoverMediaError(); return; } catch { /* sigue */ } }
@@ -145,6 +165,9 @@ export function VideoPreview({ url, muted = true, onVideoEl, onHls, onResolution
     }
 
     return () => {
+      disposed = true;
+      tsHandle?.destroy();
+      video.oncanplay = null;
       video.removeEventListener("loadedmetadata", reportRes);
       video.removeEventListener("resize", reportRes);
       onHls?.(null);

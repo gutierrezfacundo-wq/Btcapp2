@@ -119,10 +119,52 @@ jobs:
           retention-days: 90
           if-no-files-found: error
 
+  desktop:
+    name: Build Windows desktop
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            webos/package-lock.json
+            desktop/package-lock.json
+
+      # La app de escritorio es la misma de la TV: primero se compila webos/.
+      - name: Build web app
+        working-directory: webos
+        run: |
+          npm ci
+          npm run build
+
+      - name: Package Windows app
+        working-directory: desktop
+        shell: bash
+        env:
+          RUN_NUMBER: ${{ github.run_number }}
+          # Sin certificado de firma: que no intente buscar uno.
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: |
+          npm ci
+          npm run copy-app
+          npx electron-builder --win --publish never -c.extraMetadata.version=0.2.$RUN_NUMBER
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: IptvPlayer-windows
+          path: desktop/dist/*.exe
+          retention-days: 90
+          if-no-files-found: error
+
   release:
     name: Publish GitHub Release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [android, webos]
+    needs: [android, webos, desktop]
     runs-on: ubuntu-latest
     permissions:
       contents: write

@@ -13,6 +13,8 @@ import { getMediaId, watchEmbeddedTracks, selectTrack, setSubtitleEnable, type E
 import { diagnoseStreamError } from "../data/xtream";
 import { langMatches } from "../data/langs";
 import { isPlayPauseKey, RemoteKey } from "../webos/remote-keys";
+import { IS_WEBOS } from "../platform";
+import { attachTs, needsTsShim, type TsHandle } from "../data/tsPlayback";
 
 /** Estado que viaja DENTRO de la URL (?st=): location.state se pierde en webOS. */
 export interface PlayerRouteState {
@@ -20,9 +22,6 @@ export interface PlayerRouteState {
   cid?: string;
   fav?: FavoriteItem;
 }
-
-const IS_WEBOS = typeof navigator !== "undefined"
-  && (/web0s|webos/i.test(navigator.userAgent) || typeof (window as unknown as { webOS?: unknown }).webOS !== "undefined");
 
 /** MIME por extensión: le da a webOS la pista del formato para demuxear bien. */
 function mimeForUrl(u: string): string {
@@ -242,7 +241,17 @@ export function Player() {
     const video = videoRef.current;
     if (!video || !url) return;
     let hlsInst: Hls | null = null;
-    if (isHls && Hls.isSupported()) {
+    let tsHandle: TsHandle | null = null;
+    let disposed = false;
+    if (needsTsShim(url)) {
+      // PC: el .ts no se reproduce de fábrica, lo desarma mpegts.js.
+      setHls(null);
+      attachTs(video, url, (msg) => setError(msg), setBitrate).then((h) => {
+        if (disposed) { h?.destroy(); return; }
+        if (!h) setError("Este equipo no puede reproducir este formato de stream.");
+        tsHandle = h;
+      });
+    } else if (isHls && Hls.isSupported()) {
       hlsInst = new Hls({ enableWorker: true, lowLatencyMode: true });
       hlsInst.loadSource(url);
       hlsInst.attachMedia(video);
@@ -297,7 +306,14 @@ export function Player() {
     video.play().catch(() => undefined);
     showOverlay();
     focusWhenReady("PL_PLAY");
-    return () => { if (hlsInst) hlsInst.destroy(); setHls(null); video.removeAttribute("src"); video.load(); };
+    return () => {
+      disposed = true;
+      if (hlsInst) hlsInst.destroy();
+      tsHandle?.destroy();
+      setHls(null);
+      video.removeAttribute("src");
+      video.load();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url, reloadKey]);
 
