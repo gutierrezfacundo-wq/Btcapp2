@@ -33,14 +33,37 @@ function initials(s: string) {
 }
 
 /** Búsqueda global: canales + películas + series en una sola pantalla. */
-/** Los primeros `cap` que contienen `q` y pasan `ok`: corta apenas los junta,
- *  en vez de filtrar las decenas de miles de títulos en cada tecla. */
-function takeMatching<T>(list: T[], lower: string[], q: string, cap: number, ok: (item: T) => boolean): T[] {
-  const out: T[] = [];
-  for (let i = 0; i < list.length && out.length < cap; i++) {
-    if (lower[i].includes(q) && ok(list[i])) out.push(list[i]);
+/**
+ * Los primeros `cap` que contienen `q` y pasan `ok`. Sin agrupar corta apenas
+ * los junta; con las versiones agrupadas sigue recorriendo para contar las
+ * versiones de cada título (y quedarse con la del idioma preferido).
+ */
+function takeMatching<T extends { id: string; vg?: number; vLang?: string }>(
+  list: T[], lower: string[], q: string, cap: number, ok: (item: T) => boolean,
+  groupOn: boolean, prefer: string,
+): { items: T[]; counts: number[] } {
+  const items: T[] = [];
+  const counts: number[] = [];
+  const slot = groupOn ? new Map<number, number>() : null;
+  for (let i = 0; i < list.length; i++) {
+    if (!slot && items.length >= cap) break;
+    if (!lower[i].includes(q)) continue;
+    const x = list[i];
+    if (!ok(x)) continue;
+    if (slot && x.vg !== undefined) {
+      const at = slot.get(x.vg);
+      if (at !== undefined) {
+        counts[at]++;
+        if (prefer && x.vLang === prefer && items[at].vLang !== prefer) items[at] = x;
+        continue;
+      }
+      if (items.length >= cap) continue;
+      slot.set(x.vg, items.length);
+    } else if (items.length >= cap) continue;
+    items.push(x);
+    counts.push(1);
   }
-  return out;
+  return { items, counts };
 }
 
 export function Search() {
@@ -96,14 +119,27 @@ export function Search() {
 
   const cap = kind === "all" ? MAX_PER_GROUP : MAX_FILTERED;
   const channels = useMemo(() => (q.length < 2 || (kind !== "all" && kind !== "live") ? [] : takeMatching(catalog.liveChannels, liveLc, q, cap,
-    (c) => !hLive.has(c.groupTitle ?? "") && (!kidsMode || kLive.has(c.groupTitle ?? "") || kItems.has(c.id)))),
+    (c) => !hLive.has(c.groupTitle ?? "") && (!kidsMode || kLive.has(c.groupTitle ?? "") || kItems.has(c.id)), false, "").items),
   [catalog.liveChannels, liveLc, q, kind, cap, kidsMode, kLive, kItems, hLive]);
-  const movies = useMemo(() => (q.length < 2 || (kind !== "all" && kind !== "movie") ? [] : takeMatching(catalog.movies, moviesLc, q, cap,
-    (m) => !hMov.has(m.category ?? "") && (!kidsMode || kMov.has(m.category ?? "") || kItems.has(m.id)))),
-  [catalog.movies, moviesLc, q, kind, cap, kidsMode, kMov, kItems, hMov]);
-  const series = useMemo(() => (q.length < 2 || (kind !== "all" && kind !== "series") ? [] : takeMatching(catalog.series, seriesLc, q, cap,
-    (x) => !hSer.has(x.category ?? "") && (!kidsMode || kSer.has(x.category ?? "") || kItems.has(x.id)))),
-  [catalog.series, seriesLc, q, kind, cap, kidsMode, kSer, kItems, hSer]);
+  // Versiones del mismo título: un resultado por título, con la del idioma preferido.
+  const groupOn = useAppStore((s) => s.groupVariants);
+  const prefAudioLang = useAppStore((s) => s.prefAudioLang);
+  const prefer = (kidsMode ? "es" : prefAudioLang).toLowerCase().slice(0, 2);
+  const NONE = { items: [], counts: [] };
+  const movieRes = useMemo(() => (q.length < 2 || (kind !== "all" && kind !== "movie") ? NONE : takeMatching(catalog.movies, moviesLc, q, cap,
+    (m) => !hMov.has(m.category ?? "") && (!kidsMode || kMov.has(m.category ?? "") || kItems.has(m.id)), groupOn, prefer)),
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  [catalog.movies, moviesLc, q, kind, cap, kidsMode, kMov, kItems, hMov, groupOn, prefer]);
+  const seriesRes = useMemo(() => (q.length < 2 || (kind !== "all" && kind !== "series") ? NONE : takeMatching(catalog.series, seriesLc, q, cap,
+    (x) => !hSer.has(x.category ?? "") && (!kidsMode || kSer.has(x.category ?? "") || kItems.has(x.id)), groupOn, prefer)),
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  [catalog.series, seriesLc, q, kind, cap, kidsMode, kSer, kItems, hSer, groupOn, prefer]);
+  const movies = movieRes.items as typeof catalog.movies;
+  const series = seriesRes.items as typeof catalog.series;
+  /** Título y detalle de un resultado: limpio y con cuántas versiones hay. */
+  const showName = (x: { name: string; vTitle?: string }) => (groupOn ? x.vTitle ?? x.name : x.name);
+  const showMeta = (year: string | undefined, x: { category?: string; vLabel?: string }, n: number) =>
+    [year, groupOn && n > 1 ? `${n} versiones` : groupOn && x.vLabel ? x.vLabel : x.category].filter(Boolean).join(" · ");
   const empty = q.length >= 2 && !channels.length && !movies.length && !series.length;
 
   const openChannel = (id: string) => {
@@ -149,20 +185,20 @@ export function Search() {
                       </FocusableButton>
                     ))}
                     {kind === "all" && movies.length ? <div className="gsr-h">Películas</div> : null}
-                    {movies.map((m) => (
+                    {movies.map((m, mi) => (
                       <FocusableButton key={m.id} focusKey={`SR_M_${m.id}`} className="fav-row" onEnterPress={() => openMovie(m.id)}>
                         <span className="fav-badge movie">PELÍCULA</span>
                         <span className="fav-thumb">{m.posterUrl ? <img src={m.posterUrl} alt="" loading="lazy" decoding="async" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 10 }} /> : initials(m.name)}</span>
-                        <span className="fav-mid"><div className="fav-name">{m.name}</div><div className="fav-meta">{[m.year?.slice(0, 4), m.category].filter(Boolean).join(" · ")}</div></span>
+                        <span className="fav-mid"><div className="fav-name">{showName(m)}</div><div className="fav-meta">{showMeta(m.year?.slice(0, 4), m, movieRes.counts[mi])}</div></span>
                         <Icon name="play_circle" className="fav-go" />
                       </FocusableButton>
                     ))}
                     {kind === "all" && series.length ? <div className="gsr-h">Series</div> : null}
-                    {series.map((s) => (
+                    {series.map((s, si) => (
                       <FocusableButton key={s.id} focusKey={`SR_S_${s.id}`} className="fav-row" onEnterPress={() => navigate(`/series/${s.id}?name=${encodeURIComponent(s.name)}&from=search`)}>
                         <span className="fav-badge series">SERIE</span>
                         <span className="fav-thumb">{s.posterUrl ? <img src={s.posterUrl} alt="" loading="lazy" decoding="async" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 10 }} /> : initials(s.name)}</span>
-                        <span className="fav-mid"><div className="fav-name">{s.name}</div><div className="fav-meta">{[s.year, s.category].filter(Boolean).join(" · ")}</div></span>
+                        <span className="fav-mid"><div className="fav-name">{showName(s)}</div><div className="fav-meta">{showMeta(s.year, s, seriesRes.counts[si])}</div></span>
                         <Icon name="chevron_right" className="fav-go" />
                       </FocusableButton>
                     ))}

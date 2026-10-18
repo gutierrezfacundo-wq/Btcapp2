@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from "react";
-import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
 import {
   getCurrentFocusKey,
   setFocus,
@@ -55,6 +55,17 @@ import { KidsSleepGuard } from "./components/KidsSleepGuard";
 import { RemoteBridge } from "./components/RemoteBridge";
 import { useAppStore } from "./store/useAppStore";
 import { installBackHandler } from "./navigation/backStack";
+
+/** Las fichas se remontan al cambiar de id (por ejemplo, al elegir otra
+ *  versión del mismo título): así no arrastran el estado de la anterior. */
+function KeyedMovieDetail() {
+  const { id } = useParams();
+  return <MovieDetail key={id} />;
+}
+function KeyedSeriesDetail() {
+  const { id } = useParams();
+  return <SeriesDetail key={id} />;
+}
 
 /** Remonta el Player al cambiar de contenido (episodio→episodio) para resetear su estado. */
 function KeyedPlayer() {
@@ -124,8 +135,8 @@ export default function App() {
       <Route path="/setup" element={<Setup />} />
       <Route path="/hub" element={<Hub />} />
       <Route path="/home" element={<Home />} />
-      <Route path="/series/:id" element={<SeriesDetail />} />
-      <Route path="/movie/:id" element={<MovieDetail />} />
+      <Route path="/series/:id" element={<KeyedSeriesDetail />} />
+      <Route path="/movie/:id" element={<KeyedMovieDetail />} />
       <Route path="/player" element={<KeyedPlayer />} />
       <Route path="/search" element={<Search />} />
       <Route path="/catchup/:id" element={<Catchup />} />

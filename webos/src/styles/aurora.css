@@ -83,6 +83,8 @@
   .poster-img::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.1) 40%,rgba(0,0,0,.78))}
   .poster-rate{position:absolute;top:14px;right:14px;z-index:2;font-family:'Space Grotesk',monospace;font-size:15px;font-weight:700;background:rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.18);color:var(--accent);padding:5px 10px;border-radius:8px;display:flex;align-items:center;gap:5px}
   .poster-rate .ms{font-size:16px}
+  /* Versiones del mismo título: "3 versiones" o lo que distingue a esta. */
+  .poster-ver{position:absolute;top:14px;left:14px;z-index:2;max-width:calc(100% - 120px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:700;letter-spacing:.3px;background:rgba(216,180,106,.92);color:#16130c;padding:5px 9px;border-radius:8px}
   .poster-meta{position:relative;z-index:1;width:100%;min-width:0;max-width:100%}
   .poster-ph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'Schibsted Grotesk',sans-serif;font-size:60px;font-weight:800;color:rgba(255,255,255,.07)}
   .poster-name{font-size:21px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:0 2px 10px rgba(0,0,0,.8)}
@@ -192,6 +194,13 @@
   .det-info{flex:1;min-width:0;display:flex;flex-direction:column}
   .det-title{font-family:'Schibsted Grotesk',sans-serif;font-size:50px;font-weight:800;line-height:1.05}
   .det-meta{display:flex;align-items:center;gap:12px;margin-top:14px}
+  /* Versiones del mismo título (idioma/calidad) en la ficha. */
+  .det-vers{margin-top:18px}
+  .det-vers-h{display:flex;align-items:center;gap:8px;font-size:15px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:10px}
+  .det-vers-row{display:flex;flex-wrap:wrap;gap:10px}
+  .det-ver{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:9px 18px;border-radius:14px;max-width:340px}
+  .det-ver-l{font-size:19px;font-weight:700;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .det-ver-c{font-size:13px;opacity:.7;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .det-mchip{font-family:'Space Grotesk',monospace;font-size:17px;font-weight:600;padding:6px 13px;border-radius:8px;background:var(--surface2);border:1px solid var(--line)}
   .det-mchip.rate{color:var(--accent);display:flex;align-items:center;gap:5px}
   .det-mchip.rate .ms{font-size:18px}
@@ -654,4 +663,6 @@ body.kids .a-ch.focused,body.kids .a-cat.focused{background:var(--soft)}
 .vr-card{width:158px;flex-shrink:0;cursor:pointer}
 .vr-poster{position:relative;width:100%;aspect-ratio:2/3;border-radius:14px;overflow:hidden;background:repeating-linear-gradient(125deg,#16161c 0 24px,#101016 24px 48px);border:1px solid var(--line)}
 .vr-card.focused .vr-poster{border-color:var(--accent);box-shadow:0 0 0 2px var(--ring)}
+/* En las filas la tarjeta es angosta: la marca de versiones va abajo. */
+.vr-poster .poster-ver{top:auto;bottom:8px;left:8px;max-width:calc(100% - 16px);font-size:11px;padding:4px 7px}
 .vr-name{font-size:16px;font-weight:600;margin-top:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

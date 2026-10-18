@@ -203,14 +203,18 @@ export function Hub() {
   // La semilla de "Porque viste" sale del historial YA filtrado: nada de una
   // categoría oculta (o no apta en modo Felix) puede asomar en el Inicio.
   const seed = useMemo(() => shownHistory.find((h) => h.kind === "movie" || h.kind === "series-episode"), [shownHistory]);
+  // Versiones del mismo título: una vez cada uno, con la del idioma preferido.
+  const groupOn = useAppStore((s) => s.groupVariants);
+  const prefAudioLang = useAppStore((s) => s.prefAudioLang);
+  const preferLang = kidsMode ? "es" : prefAudioLang;
   const becauseRow = useMemo(
-    () => computeBecauseRowCached(seed, movies, series, vodAllowed.movie, vodAllowed.series, seenIds),
-    [seed, movies, series, vodAllowed, seenIds],
+    () => computeBecauseRowCached(seed, movies, series, vodAllowed.movie, vodAllowed.series, seenIds, groupOn, preferLang),
+    [seed, movies, series, vodAllowed, seenIds, groupOn, preferLang],
   );
   const becauseGenre = becauseRow?.genre ?? "";
   const { newest, bill: billItems, genreRows } = useMemo(
-    () => computeCatalogRowsCached(movies, series, vodAllowed.movie, vodAllowed.series, becauseGenre),
-    [movies, series, vodAllowed, becauseGenre],
+    () => computeCatalogRowsCached(movies, series, vodAllowed.movie, vodAllowed.series, becauseGenre, groupOn, preferLang),
+    [movies, series, vodAllowed, becauseGenre, groupOn, preferLang],
   );
 
 

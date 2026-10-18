@@ -26,6 +26,7 @@ const REMOTECODE_KEY = "iptv.remoteCode.v1"; // código fijo del control remoto 
 const EPGAUTO_KEY = "iptv.epgAuto.v1";       // corrección horaria automática de la guía (on/off)
 const PREFAUDIO_KEY = "iptv.prefAudio.v1";   // idioma preferido de audio ("" = sin preferencia)
 const PREFSUBS_KEY = "iptv.prefSubs.v1";     // subtítulos preferidos ("" | "off" | código de idioma)
+const GROUPVARIANTS_KEY = "iptv.groupVariants.v1"; // agrupar las versiones (idioma/calidad) de un mismo título
 
 function genId(): string {
   return `src-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`;
@@ -341,6 +342,8 @@ interface AppState {
   prefAudioLang: string;
   /** Subtítulos preferidos: "" sin preferencia, "off" apagados, o idioma. */
   prefSubLang: string;
+  /** Una tarjeta por título juntando sus versiones de idioma/calidad. */
+  groupVariants: boolean;
   /** Ocultar/reordenar categorías de la lista activa. */
   catPrefs: CatPrefs;
   /** Modo Felix (niños) activo: toda la app queda restringida a lo apto. */
@@ -392,6 +395,7 @@ interface AppState {
   setEpgAutoOn: (on: boolean) => void;
   setPrefAudioLang: (lang: string) => void;
   setPrefSubLang: (lang: string) => void;
+  setGroupVariants: (on: boolean) => void;
   setCatPrefs: (section: CatSection, prefs: SectionCatPrefs) => void;
   setKidsMode: (on: boolean) => void;
   setParentalPin: (pin: string) => void;
@@ -435,6 +439,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   allowedFormats: null,
   prefAudioLang: (() => { try { return localStorage.getItem(PREFAUDIO_KEY) ?? ""; } catch { return ""; } })(),
   prefSubLang: (() => { try { return localStorage.getItem(PREFSUBS_KEY) ?? ""; } catch { return ""; } })(),
+  groupVariants: (() => { try { return localStorage.getItem(GROUPVARIANTS_KEY) !== "0"; } catch { return true; } })(),
   catPrefs: loadCatPrefs(initial.sources.find((s) => s.id === initial.activeId)?.config ?? null),
   kidsMode: (() => { try { return localStorage.getItem(KIDSMODE_KEY) === "1"; } catch { return false; } })(),
   parentalPin: (() => { try { return localStorage.getItem(PIN_KEY) ?? ""; } catch { return ""; } })(),
@@ -700,6 +705,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   setPrefSubLang: (lang) => {
     try { localStorage.setItem(PREFSUBS_KEY, lang); } catch { /* ignore */ }
     set({ prefSubLang: lang });
+  },
+
+  setGroupVariants: (on) => {
+    try { localStorage.setItem(GROUPVARIANTS_KEY, on ? "1" : "0"); } catch { /* ignore */ }
+    set({ groupVariants: on });
   },
 
   setCatPrefs: (section, prefs) => {

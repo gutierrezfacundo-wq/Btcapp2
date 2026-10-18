@@ -25,6 +25,16 @@ export interface Movie {
   addedAt?: number;
   /** Género de metadata ("Comedia, Familia"): distinto de la categoría del proveedor. */
   genre?: string;
+  /** Versiones del mismo título (ver data/variants): clave de agrupación,
+   *  título limpio (si difiere del nombre), qué distingue a esta versión,
+   *  idioma y año declarados en el nombre. */
+  vKey?: string;
+  vTitle?: string;
+  vLabel?: string;
+  vLang?: string;
+  vYear?: string;
+  /** Número de grupo de versiones (mismo número = mismo título). */
+  vg?: number;
 }
 
 export interface SeriesInfo {
@@ -38,6 +48,16 @@ export interface SeriesInfo {
   addedAt?: number;
   /** Género de metadata ("Comedia, Familia"): distinto de la categoría del proveedor. */
   genre?: string;
+  /** Versiones del mismo título (ver data/variants): clave de agrupación,
+   *  título limpio (si difiere del nombre), qué distingue a esta versión,
+   *  idioma y año declarados en el nombre. */
+  vKey?: string;
+  vTitle?: string;
+  vLabel?: string;
+  vLang?: string;
+  vYear?: string;
+  /** Número de grupo de versiones (mismo número = mismo título). */
+  vg?: number;
 }
 
 /** Metadatos del detalle de serie (de get_series_info.info). */

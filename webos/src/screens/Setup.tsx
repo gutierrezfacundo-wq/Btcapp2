@@ -49,6 +49,8 @@ export function Setup() {
   const setEpgAutoOn = useAppStore((s) => s.setEpgAutoOn);
   const epgAutoMs = useAppStore((s) => s.epgAutoMs);
   const prefAudioLang = useAppStore((s) => s.prefAudioLang);
+  const groupVariants = useAppStore((s) => s.groupVariants);
+  const setGroupVariants = useAppStore((s) => s.setGroupVariants);
   const setPrefAudioLang = useAppStore((s) => s.setPrefAudioLang);
   const prefSubLang = useAppStore((s) => s.prefSubLang);
   const setPrefSubLang = useAppStore((s) => s.setPrefSubLang);
@@ -334,6 +336,14 @@ export function Setup() {
                       ))}
                     </div>
                     <div className="a-pdesc" style={{ marginTop: 8 }}>Las pelis y series arrancan directo con estas pistas cuando el contenido las trae; si no, queda la que venga y podés cambiarla en "Audio y subtítulos".</div>
+                  </div>
+
+                  <div className="fld" style={{ marginTop: 18 }}>
+                    <label className="fld-l"><Icon name="library_add_check" /> Versiones del mismo título</label>
+                    <FocusableButton className={`btn ${groupVariants ? "primary" : ""}`} onEnterPress={() => setGroupVariants(!groupVariants)}>
+                      <Icon name={groupVariants ? "toggle_on" : "toggle_off"} /> {groupVariants ? "Agrupadas" : "Separadas"}
+                    </FocusableButton>
+                    <div className="a-pdesc" style={{ marginTop: 6 }}>Muchos proveedores publican la misma película varias veces ("EN - …", "ES - …", "4K - …"). Agrupadas se ve una sola tarjeta y la versión se elige en la ficha; por defecto, la del idioma de audio preferido.</div>
                   </div>
 
                   <div className="fld" style={{ marginTop: 18 }}>

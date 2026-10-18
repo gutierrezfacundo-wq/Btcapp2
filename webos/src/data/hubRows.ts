@@ -7,6 +7,7 @@
 // el género sin regex.
 
 import type { Movie, SeriesInfo } from "./types";
+import { bestOfGroups } from "./variants";
 
 export type HubKind = "movie" | "series";
 
@@ -52,11 +53,12 @@ function pushTop<T extends { at: number }>(top: T[], item: T, n: number) {
   if (top.length > n) top.pop();
 }
 
-function movieItem(m: Movie): RailItem {
-  return { id: m.id, name: m.name, posterUrl: m.posterUrl, kind: "movie", at: m.addedAt ?? 0 };
+/** `clean`: con las versiones agrupadas se muestra el título sin marcas. */
+function movieItem(m: Movie, clean = false, at?: number): RailItem {
+  return { id: m.id, name: clean ? m.vTitle ?? m.name : m.name, posterUrl: m.posterUrl, kind: "movie", at: at ?? m.addedAt ?? 0 };
 }
-function seriesItem(s: SeriesInfo): RailItem {
-  return { id: s.id, name: s.name, posterUrl: s.posterUrl, kind: "series", at: s.addedAt ?? 0 };
+function seriesItem(s: SeriesInfo, clean = false, at?: number): RailItem {
+  return { id: s.id, name: clean ? s.vTitle ?? s.name : s.name, posterUrl: s.posterUrl, kind: "series", at: at ?? s.addedAt ?? 0 };
 }
 
 export interface CatalogRows {
@@ -71,7 +73,8 @@ export interface CatalogRows {
 /**
  * Novedades + billboard + filas por género, en dos pasadas por el catálogo.
  * `skipGenre`: género (en minúsculas) que no hace falta repetir porque ya
- * tiene su fila ("Porque viste…").
+ * tiene su fila ("Porque viste…"). `groupOn`: una sola vez cada título (sus
+ * versiones de idioma/calidad cuentan como una), con la del idioma preferido.
  */
 export function computeCatalogRows(
   movies: Movie[],
@@ -79,12 +82,18 @@ export function computeCatalogRows(
   allowMovie: Allow<Movie>,
   allowSeries: Allow<SeriesInfo>,
   skipGenre = "",
+  groupOn = false,
+  preferLang = "",
 ): CatalogRows {
+  // Lo permitido (y, con versiones agrupadas, una por título) con su fecha.
+  const ms = groupOn ? bestOfGroups(movies, allowMovie, preferLang) : allowedWithAt(movies, allowMovie);
+  const ss = groupOn ? bestOfGroups(series, allowSeries, preferLang) : allowedWithAt(series, allowSeries);
+
   const newestTop: { at: number; m?: Movie; s?: SeriesInfo }[] = [];
   const counts = new Map<string, { label: string; n: number }>();
-  // Género ya calculado por posición (null = no permitido o sin género).
-  const movieGenre: (string | null)[] = new Array(movies.length);
-  const seriesGenre: (string | null)[] = new Array(series.length);
+  // Género ya calculado por posición (null = sin género).
+  const movieGenre: (string | null)[] = new Array(ms.items.length);
+  const seriesGenre: (string | null)[] = new Array(ss.items.length);
 
   const countGenre = (raw: string | undefined): string | null => {
     const label = firstGenre(raw);
@@ -96,26 +105,24 @@ export function computeCatalogRows(
     return k;
   };
 
-  for (let i = 0; i < movies.length; i++) {
-    const m = movies[i];
-    if (!allowMovie(m)) { movieGenre[i] = null; continue; }
+  for (let i = 0; i < ms.items.length; i++) {
+    const m = ms.items[i];
     movieGenre[i] = countGenre(m.genre);
-    const at = m.addedAt ?? 0;
+    const at = ms.at[i];
     if (at > 0) pushTop(newestTop, { at, m }, 10);
   }
-  for (let i = 0; i < series.length; i++) {
-    const s = series[i];
-    if (!allowSeries(s)) { seriesGenre[i] = null; continue; }
+  for (let i = 0; i < ss.items.length; i++) {
+    const s = ss.items[i];
     seriesGenre[i] = countGenre(s.genre);
-    const at = s.addedAt ?? 0;
+    const at = ss.at[i];
     if (at > 0) pushTop(newestTop, { at, s }, 10);
   }
 
-  const newest = newestTop.map((x) => (x.m ? movieItem(x.m) : seriesItem(x.s!)));
+  const newest = newestTop.map((x) => (x.m ? movieItem(x.m, groupOn, x.at) : seriesItem(x.s!, groupOn, x.at)));
   const bill: BillItem[] = newestTop.slice(0, 6).map((x) =>
     x.m
-      ? { ...movieItem(x.m), plot: x.m.plot, year: x.m.year?.slice(0, 4), genre: x.m.genre || x.m.category }
-      : { ...seriesItem(x.s!), plot: x.s!.plot, year: x.s!.year, genre: x.s!.genre || x.s!.category },
+      ? { ...movieItem(x.m, groupOn, x.at), plot: x.m.plot, year: x.m.year?.slice(0, 4), genre: x.m.genre || x.m.category }
+      : { ...seriesItem(x.s!, groupOn, x.at), plot: x.s!.plot, year: x.s!.year, genre: x.s!.genre || x.s!.category },
   );
 
   const top = [...counts.entries()]
@@ -125,11 +132,18 @@ export function computeCatalogRows(
   const genreRows: HubRow[] = [];
   for (const [k, e] of top) {
     const items: RailItem[] = [];
-    for (let i = 0; i < movies.length; i++) if (movieGenre[i] === k) pushTop(items, movieItem(movies[i]), 10);
-    for (let i = 0; i < series.length; i++) if (seriesGenre[i] === k) pushTop(items, seriesItem(series[i]), 10);
+    for (let i = 0; i < ms.items.length; i++) if (movieGenre[i] === k) pushTop(items, movieItem(ms.items[i], groupOn, ms.at[i]), 10);
+    for (let i = 0; i < ss.items.length; i++) if (seriesGenre[i] === k) pushTop(items, seriesItem(ss.items[i], groupOn, ss.at[i]), 10);
     if (items.length >= 4) genreRows.push({ title: e.label, items });
   }
   return { newest, bill, genreRows };
+}
+
+function allowedWithAt<T extends { addedAt?: number }>(list: T[], allow: Allow<T>): { items: T[]; at: number[] } {
+  const items: T[] = [];
+  const at: number[] = [];
+  for (const x of list) if (allow(x)) { items.push(x); at.push(x.addedAt ?? 0); }
+  return { items, at };
 }
 
 /**
@@ -143,6 +157,8 @@ export function computeBecauseRow(
   allowMovie: Allow<Movie>,
   allowSeries: Allow<SeriesInfo>,
   seenIds: Set<string>,
+  groupOn = false,
+  preferLang = "",
 ): (HubRow & { genre: string }) | null {
   if (!seed) return null;
   const sid = seed.id.replace(/^series:/, "");
@@ -159,16 +175,38 @@ export function computeBecauseRow(
   const match = (it: { genre?: string; category?: string }) =>
     g ? (it.genre ?? "").toLowerCase().includes(g) : it.category === cat;
 
+  // Con versiones agrupadas: ni otras versiones del título visto, ni dos
+  // versiones de un mismo título en la fila (se queda la del idioma preferido).
+  const prefer = preferLang.toLowerCase().slice(0, 2);
   const items: RailItem[] = [];
+  const langs: (string | undefined)[] = [];
+  const slotOf = new Map<string, number>();
+  const add = (x: Movie | SeriesInfo, kind: "movie" | "series") => {
+    const item = kind === "movie" ? movieItem(x as Movie, groupOn) : seriesItem(x as SeriesInfo, groupOn);
+    if (groupOn && x.vg !== undefined) {
+      const key = `${kind}:${x.vg}`;
+      const at = slotOf.get(key);
+      if (at !== undefined) {
+        if (prefer && x.vLang === prefer && langs[at] !== prefer) { items[at] = item; langs[at] = x.vLang; }
+        return;
+      }
+      slotOf.set(key, items.length);
+    }
+    items.push(item);
+    langs.push(x.vLang);
+  };
+  const sameTitle = (x: Movie | SeriesInfo) => groupOn && src.vg !== undefined && x.vg === src.vg;
+  const srcKind = seed.kind === "movie" ? "movie" : "series";
   for (const m of movies) {
     if (items.length >= 10) break;
-    if (m.id !== seed.id && !seenIds.has(m.id) && allowMovie(m) && match(m)) items.push(movieItem(m));
+    if (m.id !== seed.id && !(srcKind === "movie" && sameTitle(m)) && !seenIds.has(m.id) && allowMovie(m) && match(m)) add(m, "movie");
   }
   for (const s of series) {
     if (items.length >= 10) break;
-    if (s.id !== sid && !seenIds.has(s.id) && allowSeries(s) && match(s)) items.push(seriesItem(s));
+    if (s.id !== sid && !(srcKind === "series" && sameTitle(s)) && !seenIds.has(s.id) && allowSeries(s) && match(s)) add(s, "series");
   }
-  return items.length >= 4 ? { title: `Porque viste ${src.name}`, items, genre: g } : null;
+  const srcName = groupOn ? src.vTitle ?? src.name : src.name;
+  return items.length >= 4 ? { title: `Porque viste ${srcName}`, items, genre: g } : null;
 }
 
 /**

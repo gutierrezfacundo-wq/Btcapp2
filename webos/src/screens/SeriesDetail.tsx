@@ -14,6 +14,9 @@ import { encodeB64Url } from "../data/b64url";
 import { useBack } from "../navigation/backStack";
 import { focusWhenReady } from "../navigation/focusMemory";
 import { FocusZone } from "../components/FocusZone";
+import { VariantPicker } from "../components/VariantPicker";
+import { useVodAllowed } from "../hooks/useVodAllowed";
+import { variantInfo, variantsOf } from "../data/variants";
 
 function initials(s: string) {
   return s.split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
@@ -30,6 +33,22 @@ export function SeriesDetail() {
   const series = useAppStore((s) => s.catalog.series);
   const progress = useAppStore((s) => s.progress);
   const info = useMemo(() => series.find((s) => s.id === id), [series, id]);
+  // Otras versiones de la serie (idioma/calidad), sin las de categorías
+  // ocultas ni las no aptas en modo Felix.
+  const groupOn = useAppStore((s) => s.groupVariants);
+  const allowed = useVodAllowed();
+  const variants = useMemo(
+    () => (groupOn && info ? variantsOf(series, info).filter((v) => v.id === id || allowed.series(v)) : []),
+    [groupOn, info, series, id, allowed],
+  );
+  const pickVariant = (vid: string) => {
+    const v = series.find((x) => x.id === vid);
+    // Reemplaza la ficha (Volver no pasa por cada versión probada) y deja el
+    // foco en el chip elegido.
+    navigate(`/series/${vid}?name=${encodeURIComponent(v?.name ?? title)}&ver=1${fromSearch ? "&from=search" : ""}`, { replace: true });
+  };
+  const shownTitle = groupOn ? info?.vTitle ?? variantInfo(title).title : title;
+  const cameFromPicker = params.get("ver") === "1";
 
   const [episodes, setEpisodes] = useState<Episode[] | null>(null);
   const [meta, setMeta] = useState<SeriesMeta | null>(null);
@@ -69,7 +88,7 @@ export function SeriesDetail() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source, id]);
 
-  useEffect(() => { if (episodes) focusWhenReady("SER_PLAY"); }, [episodes]);
+  useEffect(() => { if (episodes) focusWhenReady(cameFromPicker ? `SER_VER_${id}` : "SER_PLAY"); }, [episodes]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Abierta desde el buscador: Volver regresa a los resultados de búsqueda.
   const goBack = () => {
@@ -165,13 +184,14 @@ export function SeriesDetail() {
                     {info?.posterUrl || meta?.posterUrl ? <img src={info?.posterUrl || meta?.posterUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 18 }} /> : initials(title)}
                   </div>
                   <div className="det-info">
-                    <div className="det-title">{title}</div>
+                    <div className="det-title">{shownTitle}</div>
                     <div className="det-meta">
                       {meta?.rating ? <span className="det-mchip rate"><Icon name="star" /> {meta.rating}</span> : null}
                       {meta?.year ? <span className="det-mchip">{meta.year}</span> : null}
                       {meta?.genre ? <span className="det-mchip">{meta.genre}</span> : info?.category ? <span className="det-mchip">{info.category}</span> : null}
                       {seasons.length ? <span className="det-mchip">{seasons.length} temporada{seasons.length > 1 ? "s" : ""}</span> : null}
                     </div>
+                    <VariantPicker variants={variants} currentId={id} focusPrefix="SER_VER" onPick={pickVariant} />
                     {info?.plot || meta?.plot ? <div className="det-syn">{info?.plot || meta?.plot}</div> : null}
                     <div style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
                       {continueEp ? (

@@ -1,6 +1,7 @@
 import type { Catalog, Category, Movie, SeriesInfo, SourceConfig } from "./types";
 import { parseM3u } from "./m3u";
 import { fetchText } from "./http";
+import { addVariantFields, assignVariantGroups } from "./variants";
 
 export async function loadM3uCatalog(
   source: Extract<SourceConfig, { kind: "m3u" }>,
@@ -14,7 +15,7 @@ export async function loadM3uCatalog(
   const live = all.filter((c) => c.kind === "live");
   const movies: Movie[] = all
     .filter((c) => c.kind === "movie")
-    .map((c) => ({
+    .map((c) => addVariantFields<Movie>({
       id: c.id,
       name: c.name,
       streamUrl: c.streamUrl,
@@ -23,12 +24,15 @@ export async function loadM3uCatalog(
     }));
   const series: SeriesInfo[] = all
     .filter((c) => c.kind === "series-episode")
-    .map((c) => ({
+    .map((c) => addVariantFields<SeriesInfo>({
       id: c.id,
       name: c.name,
       posterUrl: c.logoUrl,
       category: c.groupTitle,
     }));
+
+  assignVariantGroups(movies);
+  assignVariantGroups(series);
 
   function categoriesFrom(values: Array<string | undefined>): Category[] {
     const seen = new Set<string>();

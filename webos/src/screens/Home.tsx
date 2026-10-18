@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { FocusContext, useFocusable } from "@noriginmedia/norigin-spatial-navigation";
 import type Hls from "hls.js";
 import { useAppStore, applyCatPrefs } from "../store/useAppStore";
+import { collapseVariants, type Collapsed } from "../data/variants";
 import { findNextProgram, findNowPlaying } from "../data/xmltv";
 import { loadShortEpg, type ShortEpgProgram } from "../data/xtream";
 import { FocusableButton } from "../components/FocusableButton";
@@ -297,18 +298,30 @@ export function Home() {
   const catItems = useMemo(() => [{ id: "__all__", name: "Todas" }, ...categories], [categories]);
   const selCatIdx = category === null ? 0 : catItems.findIndex((c) => c.name === category);
 
+  // Versiones del mismo título ("EN - …", "ES - …", "4K - …"): una tarjeta
+  // por título, con la del idioma preferido al frente. Ver data/variants.
+  const groupOn = useAppStore((s) => s.groupVariants);
+  const prefAudioLang = useAppStore((s) => s.prefAudioLang);
+  const preferLang = kidsMode ? "es" : prefAudioLang;
+  const moviesShown = useMemo((): Collapsed<(typeof moviesFiltered)[number]> =>
+    groupOn ? collapseVariants(moviesFiltered, preferLang) : { items: moviesFiltered, counts: [] },
+  [groupOn, moviesFiltered, preferLang]);
+  const seriesShown = useMemo((): Collapsed<(typeof seriesFiltered)[number]> =>
+    groupOn ? collapseVariants(seriesFiltered, preferLang) : { items: seriesFiltered, counts: [] },
+  [groupOn, seriesFiltered, preferLang]);
+
   // Datos livianos para la grilla virtualizada (sin closures por item).
   const gridItems = useMemo(() => {
-    if (tab === "movies") return moviesFiltered.map((m) => ({ id: m.id, name: m.name, posterUrl: m.posterUrl, year: m.year, rating: m.rating, genre: m.category }));
-    if (tab === "series") return seriesFiltered.map((s) => ({ id: s.id, name: s.name, posterUrl: s.posterUrl, year: s.year, rating: undefined as string | undefined, genre: s.category }));
+    if (tab === "movies") return moviesShown.items.map((m, i) => toGridData(m, m.rating, groupOn, moviesShown.counts[i]));
+    if (tab === "series") return seriesShown.items.map((s, i) => toGridData(s, undefined, groupOn, seriesShown.counts[i]));
     return [];
-  }, [tab, moviesFiltered, seriesFiltered]);
+  }, [tab, moviesShown, seriesShown, groupOn]);
   const onPickGrid = (index: number) => {
     if (tab === "movies") {
-      const m = moviesFiltered[index];
+      const m = moviesShown.items[index];
       if (m) navigate(`/movie/${m.id}`);
     } else {
-      const s = seriesFiltered[index];
+      const s = seriesShown.items[index];
       if (s) openSeries(s.id, s.name);
     }
   };
@@ -329,12 +342,17 @@ export function Home() {
   const vodRails = useMemo((): { title: string; items: GridData[] }[] | null => {
     if (tab !== "movies" && tab !== "series") return null;
     if (category !== null || q !== "" || genre !== null || sortMode !== "default") return null;
-    const list = tab === "movies" ? moviesFiltered : seriesFiltered; // ya viene sin ocultas y filtrado por Felix
+    // Ya vienen sin ocultas y filtradas por Felix. `list`: una por título
+    // (Novedades, "Porque viste"); `all`: todas las versiones (filas por
+    // categoría, así cada categoría muestra la versión que tiene).
+    const shown = tab === "movies" ? moviesShown : seriesShown;
+    const list = shown.items;
+    const all = tab === "movies" ? moviesFiltered : seriesFiltered;
     if (!list.length) return null;
-    const toGrid = (x: typeof list[number]): GridData => ({
-      id: x.id, name: x.name, posterUrl: x.posterUrl, year: x.year,
-      rating: (x as { rating?: string }).rating, genre: x.category,
-    });
+    const versions = new Map<string, number>();
+    shown.counts.forEach((n, i) => { if (n > 1) versions.set(list[i].id, n); });
+    const toGrid = (x: typeof list[number]): GridData =>
+      toGridData(x, (x as { rating?: string }).rating, groupOn, versions.get(x.id));
     const rails: { title: string; items: GridData[] }[] = [];
     // Novedades de la sección: top 20 por fecha de alta, sin ordenar toda la lista.
     const newest: typeof list = [];
@@ -356,26 +374,35 @@ export function Home() {
       const g = (src?.genre ?? "").split(/[,/|]/)[0].trim().toLowerCase();
       if (src && (g || src.category)) {
         const seen = new Set(history.map((h) => h.id.replace(/^series:/, "")));
+        // Ni el título visto ni otras versiones de él.
         const match = list.filter((x) =>
-          x.id !== src.id && !seen.has(x.id) &&
+          x.id !== src.id && (src.vg === undefined || x.vg !== src.vg) && !seen.has(x.id) &&
           (g ? (x.genre ?? "").toLowerCase().includes(g) : x.category === src.category));
-        if (match.length >= 4) rails.push({ title: `Porque viste ${src.name}`, items: match.slice(0, 20).map(toGrid) });
+        if (match.length >= 4) rails.push({ title: `Porque viste ${groupOn ? src.vTitle ?? src.name : src.name}`, items: match.slice(0, 20).map(toGrid) });
       }
     }
     // Una fila por categoría, en el orden del usuario (ocultas ya excluidas).
     // Una sola pasada repartiendo en baldes, en vez de recorrer la lista
     // entera una vez por categoría.
     const buckets = new Map<string, typeof list>();
-    for (const c of categories.slice(0, 20)) if (!buckets.has(c.name)) buckets.set(c.name, []);
-    for (const x of list) {
+    const bucketGroups = new Map<string, Set<number>>();
+    for (const c of categories.slice(0, 20)) if (!buckets.has(c.name)) { buckets.set(c.name, []); bucketGroups.set(c.name, new Set()); }
+    for (const x of all) {
       const b = x.category !== undefined ? buckets.get(x.category) : undefined;
-      if (b && b.length < 20) b.push(x);
+      if (!b || b.length >= 20) continue;
+      // Sin repetir el mismo título dentro de una fila.
+      if (groupOn && x.vg !== undefined) {
+        const seenG = bucketGroups.get(x.category!)!;
+        if (seenG.has(x.vg)) continue;
+        seenG.add(x.vg);
+      }
+      b.push(x);
     }
     for (const [name, items] of buckets) {
       if (items.length >= 3) rails.push({ title: name, items: items.map(toGrid) });
     }
     return rails.length ? rails : null;
-  }, [tab, category, q, genre, sortMode, moviesFiltered, seriesFiltered, categories, history]);
+  }, [tab, category, q, genre, sortMode, moviesFiltered, seriesFiltered, moviesShown, seriesShown, groupOn, categories, history]);
   const onRowEnter = useCallback((id: string) => {
     if (selRef.current === id) setFullscreen(true);
     else setSelectedChannelId(id);
@@ -545,7 +572,7 @@ export function Home() {
             ) : (
               <GridScreen
                 title={title}
-                count={tab === "movies" ? moviesFiltered.length : seriesFiltered.length}
+                count={tab === "movies" ? moviesShown.items.length : seriesShown.items.length}
                 categories={categories}
                 category={category}
                 onCategory={setCategory}
@@ -814,7 +841,39 @@ function PreviewPanel({
 
 
 // ===================== GRID (películas / series) =====================
-interface GridData { id: string; name: string; posterUrl?: string; year?: string; rating?: string; genre?: string }
+interface GridData {
+  id: string;
+  name: string;
+  posterUrl?: string;
+  year?: string;
+  rating?: string;
+  genre?: string;
+  /** Marca de la tarjeta: "3 versiones" o lo que distingue a esta ("Inglés"). */
+  badge?: string;
+}
+
+/**
+ * Tarjeta de película/serie. Con las versiones agrupadas se muestra el título
+ * limpio ("Spider-Man: Brand New Day" y no "4K-TOP - Spider-Man…") y una marca
+ * con cuántas versiones hay o, si es una sola, qué la distingue.
+ */
+function toGridData(
+  x: { id: string; name: string; posterUrl?: string; year?: string; category?: string; vTitle?: string; vLabel?: string },
+  rating: string | undefined,
+  groupOn: boolean,
+  versions: number | undefined,
+): GridData {
+  const many = groupOn && (versions ?? 1) > 1;
+  return {
+    id: x.id,
+    name: groupOn ? x.vTitle ?? x.name : x.name,
+    posterUrl: x.posterUrl,
+    year: x.year,
+    rating,
+    genre: many ? undefined : x.category,
+    badge: !groupOn ? undefined : many ? `${versions} versiones` : x.vLabel,
+  };
+}
 
 const SORT_OPTIONS = [
   { id: "default", label: "Por defecto" },
@@ -942,6 +1001,7 @@ function GridScreen({
                     <div className="vr-poster">
                       {it.posterUrl ? <PosterImg src={it.posterUrl} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} /> : <div className="poster-ph">{initials(it.name)}</div>}
                       {it.rating ? <div className="poster-rate"><Icon name="star" size={15} /> {it.rating}</div> : null}
+                      {it.badge ? <div className="poster-ver">{it.badge}</div> : null}
                     </div>
                     <div className="vr-name">{it.name}</div>
                   </FocusableButton>
@@ -966,6 +1026,7 @@ function GridScreen({
                   <div className="poster-img">
                     {it.posterUrl ? <PosterImg src={it.posterUrl} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} /> : <div className="poster-ph">{initials(it.name)}</div>}
                     {it.rating ? <div className="poster-rate"><Icon name="star" size={15} /> {it.rating}</div> : null}
+                    {it.badge ? <div className="poster-ver">{it.badge}</div> : null}
                     <div className="poster-meta">
                       <div className="poster-name">{it.name}</div>
                       {it.year || it.genre ? <div className="poster-year">{[it.year, it.genre].filter(Boolean).join(" · ")}</div> : null}

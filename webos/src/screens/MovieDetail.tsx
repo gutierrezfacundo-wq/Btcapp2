@@ -13,6 +13,9 @@ import { useRailNav } from "../hooks/useRailNav";
 import { encodeB64Url } from "../data/b64url";
 import { useBack } from "../navigation/backStack";
 import { focusWhenReady } from "../navigation/focusMemory";
+import { VariantPicker } from "../components/VariantPicker";
+import { useVodAllowed } from "../hooks/useVodAllowed";
+import { variantsOf } from "../data/variants";
 
 function initials(s: string) {
   return s.split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
@@ -48,6 +51,19 @@ export function MovieDetail() {
   const isKidsOk = kidsItemIds.includes(id);
 
   const catMovie = useMemo(() => movies.find((m) => m.id === id), [movies, id]);
+  // Otras versiones del mismo título (idioma/calidad), sin las de categorías
+  // ocultas ni las no aptas en modo Felix.
+  const groupOn = useAppStore((s) => s.groupVariants);
+  const allowed = useVodAllowed();
+  const variants = useMemo(
+    () => (groupOn && catMovie ? variantsOf(movies, catMovie).filter((v) => v.id === id || allowed.movie(v)) : []),
+    [groupOn, catMovie, movies, id, allowed],
+  );
+  const pickVariant = (vid: string) => {
+    // Reemplaza la ficha (Volver no pasa por cada versión probada) y deja el
+    // foco en el chip elegido.
+    navigate(`/movie/${vid}?ver=1${fromSearch ? "&from=search" : ""}`, { replace: true });
+  };
   const [details, setDetails] = useState<MovieDetails | null>(detailsCache.get(id) ?? null);
   const [detailsDone, setDetailsDone] = useState(detailsCache.has(id));
 
@@ -81,7 +97,8 @@ export function MovieDetail() {
   }, [catMovie, details, id]);
 
   const { ref, focusKey } = useFocusable({ trackChildren: true, focusKey: "MOVIE" });
-  useEffect(() => { focusWhenReady("MOV_PLAY"); }, [movie?.id]);
+  const cameFromPicker = params.get("ver") === "1";
+  useEffect(() => { focusWhenReady(cameFromPicker ? `MOV_VER_${id}` : "MOV_PLAY"); }, [movie?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Abierta desde el buscador: Volver regresa a los resultados de búsqueda.
   const goBack = () => {
@@ -157,13 +174,14 @@ export function MovieDetail() {
                     {poster ? <img src={poster} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 18 }} /> : initials(movie.name)}
                   </div>
                   <div className="det-info">
-                    <div className="det-title">{movie.name}</div>
+                    <div className="det-title">{groupOn ? movie.vTitle ?? movie.name : movie.name}</div>
                     <div className="det-meta">
                       {rating ? <span className="det-mchip rate"><Icon name="star" /> {rating}</span> : null}
                       {year ? <span className="det-mchip">{year}</span> : null}
                       {genre ? <span className="det-mchip">{genre}</span> : null}
                       {details?.duration ? <span className="det-mchip">{details.duration}</span> : null}
                     </div>
+                    <VariantPicker variants={variants} currentId={id} focusPrefix="MOV_VER" onPick={pickVariant} />
                     {plot ? <div className="det-syn">{plot}</div> : null}
                     {details?.director || details?.cast ? (
                       <div className="det-credits">
