@@ -80,6 +80,8 @@ const ChannelRow = memo(function ChannelRow({
   );
 });
 
+const NO_VOD: ReadonlyArray<{ genre?: string }> = [];
+
 export function Home() {
   const navigate = useNavigate();
   const [search] = useSearchParams();
@@ -207,9 +209,13 @@ export function Home() {
   const [sortMode, setSortMode] = useState<SortMode>("default");
   // Filtro por género de metadata (Comedia, Familia…), si el proveedor lo manda.
   const [genre, setGenre] = useState<string | null>(null);
+  // Lista de la pestaña actual: los géneros no se recalculan en Películas
+  // cuando llegan las series (ni al revés).
+  const vodSource: ReadonlyArray<{ genre?: string }> =
+    tab === "movies" ? catalog.movies : tab === "series" ? catalog.series : NO_VOD;
   const genres = useMemo(() => {
-    if (tab !== "movies" && tab !== "series") return [];
-    const src = tab === "movies" ? catalog.movies : catalog.series;
+    const src = vodSource;
+    if (!src.length) return [];
     const count = new Map<string, { label: string; n: number }>();
     for (const it of src) {
       for (const raw of (it.genre ?? "").split(/[,/|]/)) {
@@ -225,7 +231,7 @@ export function Home() {
       .sort((a, b) => b.n - a.n)
       .slice(0, 24)
       .map((e) => e.label);
-  }, [tab, catalog.movies, catalog.series]);
+  }, [vodSource]);
   const collator = useMemo(() => new Intl.Collator("es", { sensitivity: "base" }), []);
   const applySort = useCallback(<T extends { name: string; year?: string; addedAt?: number }>(list: T[]): T[] => {
     if (sortMode === "default") return list;
@@ -330,8 +336,16 @@ export function Home() {
       rating: (x as { rating?: string }).rating, genre: x.category,
     });
     const rails: { title: string; items: GridData[] }[] = [];
-    // Novedades de la sección
-    const newest = list.filter((x) => (x.addedAt ?? 0) > 0).sort((a, b) => (b.addedAt ?? 0) - (a.addedAt ?? 0)).slice(0, 20);
+    // Novedades de la sección: top 20 por fecha de alta, sin ordenar toda la lista.
+    const newest: typeof list = [];
+    for (const x of list) {
+      const at = x.addedAt ?? 0;
+      if (at <= 0 || (newest.length === 20 && at <= (newest[19].addedAt ?? 0))) continue;
+      let i = newest.length;
+      while (i > 0 && (newest[i - 1].addedAt ?? 0) < at) i--;
+      newest.splice(i, 0, x);
+      if (newest.length > 20) newest.pop();
+    }
     if (newest.length >= 4) rails.push({ title: "Novedades", items: newest.map(toGrid) });
     // Porque viste X (último del historial de este tipo)
     const wantKind = tab === "movies" ? "movie" : "series-episode";
@@ -348,10 +362,17 @@ export function Home() {
         if (match.length >= 4) rails.push({ title: `Porque viste ${src.name}`, items: match.slice(0, 20).map(toGrid) });
       }
     }
-    // Una fila por categoría, en el orden del usuario (ocultas ya excluidas)
-    for (const c of categories.slice(0, 20)) {
-      const items = list.filter((x) => x.category === c.name).slice(0, 20);
-      if (items.length >= 3) rails.push({ title: c.name, items: items.map(toGrid) });
+    // Una fila por categoría, en el orden del usuario (ocultas ya excluidas).
+    // Una sola pasada repartiendo en baldes, en vez de recorrer la lista
+    // entera una vez por categoría.
+    const buckets = new Map<string, typeof list>();
+    for (const c of categories.slice(0, 20)) if (!buckets.has(c.name)) buckets.set(c.name, []);
+    for (const x of list) {
+      const b = x.category !== undefined ? buckets.get(x.category) : undefined;
+      if (b && b.length < 20) b.push(x);
+    }
+    for (const [name, items] of buckets) {
+      if (items.length >= 3) rails.push({ title: name, items: items.map(toGrid) });
     }
     return rails.length ? rails : null;
   }, [tab, category, q, genre, sortMode, moviesFiltered, seriesFiltered, categories, history]);

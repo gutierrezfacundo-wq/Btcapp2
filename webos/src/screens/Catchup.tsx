@@ -97,7 +97,7 @@ export function Catchup() {
     const sub = `${dayLabel(p.startTs)} · ${hm(p.startTs)}–${hm(p.stopTs)}`;
     const st = encodeB64Url({ from: `/catchup/${id}`, cid: `ct-${streamId}-${p.startTs}` });
     const route = `/player?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}&meta=${encodeURIComponent(sub)}&st=${st}`;
-    pushHistory({ id: `ct:${id}`, name: title, route, posterUrl: channel.logoUrl, sub, kind: "live" });
+    pushHistory({ id: `ct:${id}`, name: title, route, posterUrl: channel.logoUrl, sub, kind: "live", category: channel.groupTitle });
     navigate(route);
   };
 

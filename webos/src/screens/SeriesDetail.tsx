@@ -135,7 +135,7 @@ export function SeriesDetail() {
   const play = (ep: Episode) => {
     const route = routeFor(ep);
     const epMeta = `T${ep.seasonNumber} · E${ep.episodeNumber}${ep.duration ? ` · ${ep.duration}` : ""}`;
-    pushHistory({ id: `series:${id}`, name: title, route, posterUrl: info?.posterUrl, sub: epMeta, kind: "series-episode", cid: ep.id });
+    pushHistory({ id: `series:${id}`, name: title, route, posterUrl: info?.posterUrl, sub: epMeta, kind: "series-episode", cid: ep.id, category: info?.category });
     // Cola de la temporada: habilita "Siguiente episodio" al terminar cada uno.
     setPlayQueue(seasonEpisodes.map((e) => ({ route: routeFor(e), label: `T${e.seasonNumber} · E${e.episodeNumber}`, url: e.streamUrl })));
     navigate(route);

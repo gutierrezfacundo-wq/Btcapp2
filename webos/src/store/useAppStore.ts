@@ -3,8 +3,7 @@ import type { Catalog, EpgProgram, MediaKind, SavedSource, SourceConfig } from "
 import { xtreamXmltvUrl } from "../data/types";
 import { loadM3uCatalog } from "../data/m3uCatalog";
 import { loadAccountInfo, loadXtreamLive, loadXtreamMovies, loadXtreamSeries } from "../data/xtream";
-import { groupByChannel, parseXmltv } from "../data/xmltv";
-import { fetchText } from "../data/http";
+import { loadXmltvStream, warmUpParser } from "../data/parseClient";
 
 const SOURCE_KEY = "iptv.source.v1";          // legacy (fuente unica) — se migra
 const SOURCES_KEY = "iptv.sources.v1";        // nuevo: array de listas guardadas
@@ -92,6 +91,64 @@ function sourceKeyOf(s: SourceConfig): string {
   return s.kind === "m3u" ? `m3u:${s.playlistUrl}` : `xt:${s.server}:${s.username}`;
 }
 
+/** Corre `fn` cuando el navegador está libre (o a lo sumo en `timeout` ms). */
+function runWhenIdle(fn: () => void, timeout = 2000) {
+  const ric = (window as unknown as {
+    requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+  }).requestIdleCallback;
+  if (ric) ric(fn, { timeout });
+  else setTimeout(fn, 200);
+}
+
+/** Espera a que el navegador esté libre: para arrancar trabajo de fondo. */
+function idle(minDelayMs: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(() => runWhenIdle(resolve), minDelayMs));
+}
+
+type Section = "movies" | "series";
+
+/** `background`: precarga silenciosa (no muestra progreso ni re-renderiza
+ *  pantallas). `force`: volver a bajarla aunque ya esté cargada (al recargar
+ *  la lista), mostrando lo anterior mientras tanto. */
+export interface EnsureOpts {
+  background?: boolean;
+  force?: boolean;
+}
+
+interface SectionJob {
+  /** Lista a la que pertenece: una descarga de otra lista no se reutiliza. */
+  source: SourceConfig;
+  /** ¿Alguien está mirando esta carga? Si no, no se publica el progreso:
+   *  cada set() de progreso re-renderiza el Hub y Home sin que nadie lo vea. */
+  visible: boolean;
+  p: Promise<void>;
+}
+
+/** Descargas de películas/series en curso: entrar a la sección mientras la
+ *  precarga baja no tiene que disparar una segunda descarga idéntica (doble
+ *  parseo y una conexión más al proveedor). */
+const inflight: Partial<Record<Section, SectionJob>> = {};
+
+/** Sube con cada reload(): el trabajo de fondo de una carga anterior (otra
+ *  lista) no pisa el catálogo de la actual. */
+let loadGeneration = 0;
+
+function sameChannels(a: Catalog["liveChannels"], b: Catalog["liveChannels"]): boolean {
+  if (a.length !== b.length || a.length === 0) return false;
+  for (let i = 0; i < a.length; i++) {
+    const x = a[i], y = b[i];
+    if (x.id !== y.id || x.name !== y.name || x.streamUrl !== y.streamUrl || x.logoUrl !== y.logoUrl
+      || x.groupTitle !== y.groupTitle || x.tvgId !== y.tvgId || x.archiveDays !== y.archiveDays) return false;
+  }
+  return true;
+}
+
+function sameCategories(a: Catalog["liveCategories"], b: Catalog["liveCategories"]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i].id !== b[i].id || a[i].name !== b[i].name) return false;
+  return true;
+}
+
 function loadCatalogCache(s: SourceConfig): Catalog | null {
   try {
     const raw = localStorage.getItem(CATALOG_CACHE_KEY);
@@ -103,7 +160,20 @@ function loadCatalogCache(s: SourceConfig): Catalog | null {
   }
 }
 
+/**
+ * Guarda en caché SOLO el vivo (canales + categorías), que es lo que se
+ * muestra al instante al arrancar. Antes se guardaba el catálogo entero: con
+ * las películas el JSON pesaba decenas de MB, armarlo trababa la TV más de un
+ * segundo, no entraba en el almacenamiento, fallaba y se borraba la caché —
+ * así que encima cada arranque terminaba siendo en frío.
+ */
 function saveCatalogCache(s: SourceConfig, catalog: Catalog) {
+  const live: Catalog = { ...emptyCatalog, liveChannels: catalog.liveChannels, liveCategories: catalog.liveCategories };
+  // Fuera del camino de la interacción: JSON.stringify + localStorage son sincrónicos.
+  runWhenIdle(() => writeCatalogCache(s, live));
+}
+
+function writeCatalogCache(s: SourceConfig, catalog: Catalog) {
   try {
     const entry: CatalogCacheEntry = {
       sourceKey: sourceKeyOf(s),
@@ -220,6 +290,9 @@ export interface HistoryItem {
   kind: MediaKind;
   /** Id del contenido cuyo progreso se guarda (ej. episodio de la serie). */
   cid?: string;
+  /** Categoría del proveedor: el Inicio oculta lo de categorías ocultas sin
+   *  esperar a que cargue esa sección del catálogo. */
+  category?: string;
   at: number;
 }
 
@@ -303,8 +376,10 @@ interface AppState {
 
   clearSource: () => void;
   reload: () => Promise<void>;
-  ensureMovies: () => Promise<void>;
-  ensureSeries: () => Promise<void>;
+  /** `background`: precarga silenciosa (no muestra progreso ni re-renderiza
+   *  pantallas); si después alguien la pide de verdad, el progreso aparece. */
+  ensureMovies: (opts?: EnsureOpts) => Promise<void>;
+  ensureSeries: (opts?: EnsureOpts) => Promise<void>;
   toggleFavorite: (item: FavoriteItem) => void;
   isFavorite: (id: string) => boolean;
   pushHistory: (item: Omit<HistoryItem, "at">) => void;
@@ -409,6 +484,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({
       sources,
       ...(isActive ? { source: sources.find((s) => s.id === id)?.config ?? null } : {}),
+      // Cambiaron servidor o credenciales de la lista activa: lo cargado
+      // (con las URLs viejas) se descarta y se vuelve a bajar.
+      ...(isActive && patch.config
+        ? { catalog: emptyCatalog, epgByChannel: new Map(), loadedSections: { movies: false, series: false } }
+        : {}),
     });
   },
 
@@ -418,12 +498,17 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (activeId === id) activeId = remaining[0]?.id ?? null;
     persistSources(remaining, activeId);
     const nextConfig = remaining.find((s) => s.id === activeId)?.config ?? null;
+    const activeChanged = activeId !== get().activeSourceId;
     set({
       sources: remaining,
       activeSourceId: activeId,
       source: nextConfig,
       catPrefs: loadCatPrefs(nextConfig),
       kidsPrefs: loadKidsPrefs(nextConfig),
+      // Cambió la lista activa: nada de la anterior queda a la vista.
+      ...(activeChanged
+        ? { catalog: emptyCatalog, epgByChannel: new Map(), loadedSections: { movies: false, series: false } }
+        : {}),
     });
     if (activeId) void get().reload();
     else set({ catalog: emptyCatalog, epgByChannel: new Map() });
@@ -437,6 +522,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       activeSourceId: id,
       source: src.config,
       catalog: emptyCatalog,
+      epgByChannel: new Map(),
       loadedSections: { movies: false, series: false },
       ui: { tab: "live", category: null, selectedChannelId: null },
       catPrefs: loadCatPrefs(src.config),
@@ -454,80 +540,45 @@ export const useAppStore = create<AppState>((set, get) => ({
     });
   },
 
-  ensureMovies: async () => {
-    const s = get();
-    if (s.loadedSections.movies || !s.source || s.source.kind !== "xtream") return;
-    set({ loadingStep: "Películas", loadingProgress: { current: 0, total: 2 } });
-    try {
-      const onProgress = (step: string, current: number, total: number) => {
-        set({ loadingStep: step, loadingProgress: { current, total } });
-      };
-      const mv = await loadXtreamMovies(s.source, onProgress);
-      const merged: Catalog = { ...get().catalog, ...mv };
-      set({
-        catalog: merged,
-        loadingStep: null,
-        loadingProgress: null,
-        loadedSections: { ...get().loadedSections, movies: true },
-      });
-      saveCatalogCache(s.source, merged);
-    } catch (e) {
-      set({
-        loadingStep: null,
-        loadingProgress: null,
-        error: e instanceof Error ? e.message : "Error cargando películas",
-      });
-    }
-  },
-
-  ensureSeries: async () => {
-    const s = get();
-    if (s.loadedSections.series || !s.source || s.source.kind !== "xtream") return;
-    set({ loadingStep: "Series", loadingProgress: { current: 0, total: 2 } });
-    try {
-      const onProgress = (step: string, current: number, total: number) => {
-        set({ loadingStep: step, loadingProgress: { current, total } });
-      };
-      const sr = await loadXtreamSeries(s.source, onProgress);
-      const merged: Catalog = { ...get().catalog, ...sr };
-      set({
-        catalog: merged,
-        loadingStep: null,
-        loadingProgress: null,
-        loadedSections: { ...get().loadedSections, series: true },
-      });
-      saveCatalogCache(s.source, merged);
-    } catch (e) {
-      set({
-        loadingStep: null,
-        loadingProgress: null,
-        error: e instanceof Error ? e.message : "Error cargando series",
-      });
-    }
-  },
+  ensureMovies: (opts) => ensureSection("movies", opts),
+  ensureSeries: (opts) => ensureSection("series", opts),
 
   reload: async () => {
     const source = get().source;
     if (!source) return;
+    const gen = ++loadGeneration;
+    // Si mientras esperamos la red cambian de lista (o vuelven a recargar),
+    // lo que llegue de esta carga ya no se aplica.
+    const stale = () => gen !== loadGeneration || get().source !== source;
+    // Lo que ya había de esta misma lista (películas/series) se conserva
+    // mientras se refresca: setActiveSource/removeSource lo vacían al cambiar
+    // de lista, así que acá solo puede ser de la actual.
+    const prev = get().catalog;
+    const keepVod = {
+      movies: prev.movies, movieCategories: prev.movieCategories,
+      series: prev.series, seriesCategories: prev.seriesCategories,
+    };
+    const vodWasLoaded = { ...get().loadedSections };
 
     // 1) Mostrar cache al instante si existe
     const cached = loadCatalogCache(source);
     if (cached && cached.liveChannels.length > 0) {
-      set({ catalog: cached, loading: false, error: null });
+      set({ catalog: { ...cached, ...keepVod }, loading: false, error: null });
     } else {
       set({ loading: true, error: null });
     }
 
     // 2) Refrescar de red.
-    // En Xtream cargamos SOLO en-vivo al inicio (rapido, bajo consumo). Peliculas
-    // y series se cargan a demanda al entrar a esas secciones.
+    // En Xtream se carga primero solo el vivo (rápido); películas, series y la
+    // guía van después, en segundo plano (loadInBackground).
     try {
       const onProgress = (step: string, current: number, total: number) => {
-        set({ loadingStep: step, loadingProgress: { current, total } });
+        if (!stale()) set({ loadingStep: step, loadingProgress: { current, total } });
       };
       set({ loadingStep: "Conectando…", loadingProgress: { current: 0, total: 2 } });
       if (source.kind === "m3u") {
         const catalog = await loadM3uCatalog(source);
+        if (stale()) return;
         set({
           catalog,
           loading: false,
@@ -539,34 +590,33 @@ export const useAppStore = create<AppState>((set, get) => ({
         saveCatalogCache(source, catalog);
       } else {
         const live = await loadXtreamLive(source, onProgress);
-        const partial: Catalog = { ...emptyCatalog, ...live };
+        if (stale()) return;
+        // Si el vivo que llegó es igual al de la caché (lo normal de un día
+        // para otro), se conservan los mismos arrays: así las pantallas que ya
+        // lo muestran no se re-dibujan enteras mientras el usuario navega.
+        const cur = get().catalog;
+        const sameLive = sameChannels(cur.liveChannels, live.liveChannels)
+          && sameCategories(cur.liveCategories, live.liveCategories);
+        const next: Catalog = sameLive ? cur : { ...cur, ...live };
         set({
-          catalog: partial,
+          catalog: next,
           loading: false,
           loadingStep: null,
           loadingProgress: null,
           error: null,
-          loadedSections: { movies: false, series: false },
         });
-        saveCatalogCache(source, partial);
-        // Precargar Películas y Series en segundo plano (secuencial, para no
-        // castigar al proveedor): entrar a esas secciones queda instantáneo.
-        void get().ensureMovies().then(() => get().ensureSeries());
-        // Capacidades del proveedor: desfasaje horario de la guía y formatos.
+        if (!sameLive) saveCatalogCache(source, next);
+        // Capacidades del proveedor (chico y lo usa la vista previa del vivo
+        // para elegir m3u8 o ts): ya mismo.
         void loadAccountInfo(source)
-          .then((a) => set({ epgAutoMs: a.epgAutoOffsetMs ?? 0, allowedFormats: a.allowedFormats ?? null }))
+          .then((a) => {
+            if (!stale()) set({ epgAutoMs: a.epgAutoOffsetMs ?? 0, allowedFormats: a.allowedFormats ?? null });
+          })
           .catch(() => undefined);
       }
-      const catalogForEpg = get().catalog;
-      void catalogForEpg;
-
-      const epgUrl = source.kind === "m3u" ? source.epgUrl : xtreamXmltvUrl(source);
-      if (epgUrl) {
-        loadEpg(epgUrl)
-          .then((map) => set({ epgByChannel: map }))
-          .catch(() => set({ epgByChannel: new Map() }));
-      }
+      void loadInBackground(gen, source, vodWasLoaded);
     } catch (e) {
+      if (stale()) return;
       const msg = e instanceof Error ? e.message : "Error desconocido";
       // Si hay cache visible, no pisamos la lista con el error.
       if (!cached || cached.liveChannels.length === 0) {
@@ -711,7 +761,142 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 }));
 
-async function loadEpg(url: string) {
-  const xml = await fetchText(url, 60000);
-  return groupByChannel(parseXmltv(xml));
+/** Carga (una sola vez por lista) las películas o las series de Xtream. */
+function ensureSection(section: Section, opts?: EnsureOpts): Promise<void> {
+  const { getState: get, setState: set } = useAppStore;
+  const s = get();
+  const source = s.source;
+  if (!source || source.kind !== "xtream") return Promise.resolve();
+  const loaded = s.loadedSections[section];
+  if (loaded && !opts?.force) return Promise.resolve();
+  const label = section === "movies" ? "Películas" : "Series";
+  // Lo pidió alguien que está mirando y todavía no hay nada que mostrar.
+  const showNow = !opts?.background && !loaded;
+
+  const running = inflight[section];
+  if (running && running.source === source) {
+    if (showNow && !running.visible) {
+      running.visible = true;
+      set({ loadingStep: label, loadingProgress: { current: 0, total: 2 }, error: null });
+    }
+    return running.p;
+  }
+  // (Si había una descarga de otra lista, se la ignora: su resultado se
+  // descarta al llegar porque la lista ya no es la misma.)
+
+  const job: SectionJob = { source, visible: showNow, p: Promise.resolve() };
+  if (showNow) set({ loadingStep: label, loadingProgress: { current: 0, total: 2 }, error: null });
+  job.p = (async () => {
+    try {
+      const onProgress = (step: string, current: number, total: number) => {
+        if (job.visible && get().source === source) set({ loadingStep: step, loadingProgress: { current, total } });
+      };
+      const part = section === "movies"
+        ? await loadXtreamMovies(source, onProgress)
+        : await loadXtreamSeries(source, onProgress);
+      if (get().source !== source) return; // cambiaron de lista mientras bajaba
+      set({
+        catalog: { ...get().catalog, ...part },
+        loadedSections: { ...get().loadedSections, [section]: true },
+        ...(job.visible ? { loadingStep: null, loadingProgress: null } : {}),
+      });
+      fillHistoryCategories(section, "movies" in part ? part.movies : part.series);
+    } catch (e) {
+      // Si falló la precarga silenciosa no se avisa: al entrar a la sección
+      // se reintenta y ahí sí se muestra el error.
+      if (get().source !== source || !job.visible) return;
+      set({
+        loadingStep: null,
+        loadingProgress: null,
+        error: e instanceof Error ? e.message : `Error cargando ${label.toLowerCase()}`,
+      });
+    } finally {
+      if (inflight[section] === job) inflight[section] = undefined;
+    }
+  })();
+  inflight[section] = job;
+  return job.p;
+}
+
+/**
+ * El historial guardado antes de que se registrara la categoría no la tiene:
+ * apenas carga la sección se completa (una sola vez), así el Inicio puede
+ * ocultar lo de categorías ocultas desde el primer momento en los próximos
+ * arranques, sin esperar a que bajen las películas.
+ */
+function fillHistoryCategories(section: Section, list: Array<{ id: string; category?: string }>) {
+  const { getState: get, setState: set } = useAppStore;
+  const hist = get().history;
+  const kind = section === "movies" ? "movie" : "series-episode";
+  const want = new Map<string, number>(); // id del catálogo → posición en el historial
+  hist.forEach((h, i) => {
+    if (h.kind === kind && h.category === undefined) want.set(h.id.replace(/^series:/, ""), i);
+  });
+  if (!want.size) return;
+  let next: HistoryItem[] | null = null;
+  for (const it of list) {
+    const i = want.get(it.id);
+    if (i === undefined || it.category === undefined) continue;
+    next = next ?? [...hist];
+    next[i] = { ...next[i], category: it.category };
+  }
+  if (!next) return;
+  try { localStorage.setItem(HISTORY_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+  set({ history: next });
+}
+
+/**
+ * Lo pesado, en segundo plano y de a una cosa por vez, recién cuando la app ya
+ * responde. Antes películas, series y la guía completa arrancaban todas juntas
+ * apenas aparecía el vivo, y el D-pad quedaba muerto varios segundos.
+ * Orden: películas → series → guía (lo que el usuario abre primero, primero).
+ */
+async function loadInBackground(
+  gen: number,
+  source: SourceConfig,
+  /** Secciones que ya estaban cargadas antes de esta recarga: se refrescan. */
+  refresh: { movies: boolean; series: boolean },
+) {
+  const { getState: get, setState: set } = useAppStore;
+  const stillCurrent = () => gen === loadGeneration && get().source === source;
+  if (source.kind === "xtream") warmUpParser(); // el ping del worker corre mientras esperamos
+  await idle(1500);
+  if (!stillCurrent()) return;
+  if (source.kind === "xtream") {
+    await get().ensureMovies({ background: true, force: refresh.movies });
+    if (!stillCurrent()) return;
+    await idle(300);
+    await get().ensureSeries({ background: true, force: refresh.series });
+    if (!stillCurrent()) return;
+  }
+  const epgUrl = source.kind === "m3u" ? source.epgUrl : xtreamXmltvUrl(source);
+  if (!epgUrl) {
+    set({ epgByChannel: new Map() }); // que no quede la guía de otra lista
+    return;
+  }
+  await idle(300);
+  try {
+    const keep = new Set<string>();
+    for (const c of get().catalog.liveChannels) if (c.tvgId) keep.add(c.tvgId);
+    const map = await loadEpg(epgUrl, keep);
+    if (stillCurrent()) set({ epgByChannel: map });
+  } catch {
+    if (stillCurrent()) set({ epgByChannel: new Map() });
+  }
+}
+
+/**
+ * La guía solo se usa para el "ahora / después" de cada canal: alcanza con los
+ * canales de la lista y una ventana alrededor de ahora. Los horarios se
+ * guardan tal como vienen y la corrección (automática hasta ±14 h + manual
+ * hasta ±12 h) se aplica al mostrarlos, así que la ventana cubre ±28 h, más
+ * margen adelante para que la app pueda quedar abierta horas.
+ */
+async function loadEpg(url: string, keepChannels: Set<string>) {
+  const now = Date.now();
+  return loadXmltvStream(url, 120000, {
+    keepChannels: keepChannels.size > 0 ? keepChannels : undefined,
+    fromMs: now - 28 * 3600_000,
+    toMs: now + 40 * 3600_000,
+  });
 }

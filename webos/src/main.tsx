@@ -37,7 +37,10 @@ fitStage();
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <HashRouter>
+    {/* Navegación con transiciones: si el código de la pantalla nueva todavía
+        no cargó, la anterior sigue a la vista (y es la única que responde)
+        hasta que la nueva está lista, en vez de quedar oculta pero activa. */}
+    <HashRouter future={{ v7_startTransition: true }}>
       <App />
     </HashRouter>
   </React.StrictMode>,

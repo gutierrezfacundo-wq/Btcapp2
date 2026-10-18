@@ -9,6 +9,8 @@ import type {
   SourceConfig,
 } from "./types";
 import { fetchJson } from "./http";
+import { loadCatalogStream } from "./parseClient";
+import { categoryIndex } from "./xtreamMap";
 import {
   xtreamPlayerApi,
   xtreamStreamLive,
@@ -29,30 +31,6 @@ interface XtLiveDto {
   category_id?: string;
   tv_archive?: number | string;
   tv_archive_duration?: number | string;
-}
-
-interface XtMovieDto {
-  stream_id: number;
-  name: string;
-  stream_icon?: string;
-  container_extension?: string;
-  category_id?: string;
-  rating?: string;
-  plot?: string;
-  releaseDate?: string;
-  added?: string;
-  genre?: string;
-}
-
-interface XtSeriesDto {
-  series_id: number;
-  name: string;
-  cover?: string;
-  category_id?: string;
-  plot?: string;
-  releaseDate?: string;
-  last_modified?: string;
-  genre?: string;
 }
 
 interface XtSeriesInfoDto {
@@ -91,10 +69,6 @@ function toCategories(dtos: XtCategoryDto[]): Category[] {
   return dtos.map((c) => ({ id: c.category_id, name: c.category_name }));
 }
 
-function categoryName(list: Category[], id: string | undefined): string | undefined {
-  if (!id) return undefined;
-  return list.find((c) => c.id === id)?.name;
-}
 
 /** Estado de la cuenta Xtream (player_api user_info + server_info). */
 export interface AccountInfo {
@@ -209,12 +183,13 @@ export async function loadXtreamLive(
     LONG_TIMEOUT,
   );
   const liveCats = toCategories(liveCatsDto);
+  const liveCatsName = categoryIndex(liveCats);
   const liveChannels: Channel[] = liveDto.map((d) => ({
     id: `xt-live-${d.stream_id}`,
     name: d.name,
     streamUrl: xtreamStreamLive(source, d.stream_id),
     logoUrl: d.stream_icon || undefined,
-    groupTitle: categoryName(liveCats, d.category_id),
+    groupTitle: liveCatsName(d.category_id),
     tvgId: d.epg_channel_id || undefined,
     kind: "live",
     archiveDays: Number(d.tv_archive) ? Number(d.tv_archive_duration) || 1 : undefined,
@@ -233,23 +208,10 @@ export async function loadXtreamMovies(
     `${base}&action=get_vod_categories`,
   );
   onProgress?.("Películas", 2, 2);
-  const movieDto = await fetchJson<XtMovieDto[]>(
-    `${base}&action=get_vod_streams`,
-    LONG_TIMEOUT,
-  );
+  // La respuesta puede pesar decenas de MB: se baja acá y se parsea en un
+  // worker para no trabar el control remoto (ver parseClient).
   const vodCats = toCategories(vodCatsDto);
-  const movies: Movie[] = movieDto.map((d) => ({
-    id: `xt-vod-${d.stream_id}`,
-    name: d.name,
-    streamUrl: xtreamStreamMovie(source, d.stream_id, d.container_extension || "mp4"),
-    posterUrl: d.stream_icon || undefined,
-    category: categoryName(vodCats, d.category_id),
-    plot: d.plot,
-    rating: d.rating,
-    year: d.releaseDate,
-    addedAt: d.added ? Number(d.added) || undefined : undefined,
-    genre: d.genre || undefined,
-  }));
+  const movies = await loadCatalogStream<Movie>(`${base}&action=get_vod_streams`, LONG_TIMEOUT, { kind: "movies", cats: vodCats, source });
   return { movies, movieCategories: vodCats };
 }
 
@@ -264,21 +226,8 @@ export async function loadXtreamSeries(
     `${base}&action=get_series_categories`,
   );
   onProgress?.("Series", 2, 2);
-  const seriesDto = await fetchJson<XtSeriesDto[]>(
-    `${base}&action=get_series`,
-    LONG_TIMEOUT,
-  );
   const seriesCats = toCategories(seriesCatsDto);
-  const series: SeriesInfo[] = seriesDto.map((d) => ({
-    id: String(d.series_id),
-    name: d.name,
-    posterUrl: d.cover || undefined,
-    category: categoryName(seriesCats, d.category_id),
-    plot: d.plot,
-    year: d.releaseDate ? d.releaseDate.slice(0, 4) : undefined,
-    addedAt: d.last_modified ? Number(d.last_modified) || undefined : undefined,
-    genre: d.genre || undefined,
-  }));
+  const series = await loadCatalogStream<SeriesInfo>(`${base}&action=get_series`, LONG_TIMEOUT, { kind: "series", cats: seriesCats });
   return { series, seriesCategories: seriesCats };
 }
 

@@ -110,7 +110,9 @@ export function MovieDetail() {
     const fav = { id: movie.id, name: movie.name, streamUrl: movie.streamUrl, logoUrl: poster, kind: "movie" as const, meta: sub };
     const st = encodeB64Url({ from: `/movie/${movie.id}${fromSearch ? "?from=search" : ""}`, cid: movie.id, fav });
     const route = `/player?url=${encodeURIComponent(movie.streamUrl)}&title=${encodeURIComponent(movie.name)}${sub ? `&meta=${encodeURIComponent(sub)}` : ""}&st=${st}`;
-    pushHistory({ id: movie.id, name: movie.name, route, posterUrl: poster, sub, kind: "movie" });
+    // Solo la categoría real del catálogo: si la ficha se armó con get_vod_info,
+    // movie.category es en realidad el género y el filtro de ocultas fallaría.
+    pushHistory({ id: movie.id, name: movie.name, route, posterUrl: poster, sub, kind: "movie", category: catMovie?.category });
     navigate(route);
   };
 

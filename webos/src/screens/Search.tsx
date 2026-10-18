@@ -33,6 +33,16 @@ function initials(s: string) {
 }
 
 /** Búsqueda global: canales + películas + series en una sola pantalla. */
+/** Los primeros `cap` que contienen `q` y pasan `ok`: corta apenas los junta,
+ *  en vez de filtrar las decenas de miles de títulos en cada tecla. */
+function takeMatching<T>(list: T[], lower: string[], q: string, cap: number, ok: (item: T) => boolean): T[] {
+  const out: T[] = [];
+  for (let i = 0; i < list.length && out.length < cap; i++) {
+    if (lower[i].includes(q) && ok(list[i])) out.push(list[i]);
+  }
+  return out;
+}
+
 export function Search() {
   const navigate = useNavigate();
   const railNav = useRailNav();
@@ -72,10 +82,28 @@ export function Search() {
   const kMov = useMemo(() => new Set(kidsMode ? kidsPrefs.movies : []), [kidsMode, kidsPrefs]);
   const kSer = useMemo(() => new Set(kidsMode ? kidsPrefs.series : []), [kidsMode, kidsPrefs]);
 
+  // Categorías ocultas por el usuario (Gestionar categorías): tampoco aparecen
+  // en la búsqueda.
+  const catPrefs = useAppStore((s) => s.catPrefs);
+  const hLive = useMemo(() => new Set(catPrefs.live.hidden), [catPrefs]);
+  const hMov = useMemo(() => new Set(catPrefs.movies.hidden), [catPrefs]);
+  const hSer = useMemo(() => new Set(catPrefs.series.hidden), [catPrefs]);
+
+  // Nombres en minúsculas, calculados una vez por catálogo y no en cada tecla.
+  const liveLc = useMemo(() => catalog.liveChannels.map((c) => c.name.toLowerCase()), [catalog.liveChannels]);
+  const moviesLc = useMemo(() => catalog.movies.map((m) => m.name.toLowerCase()), [catalog.movies]);
+  const seriesLc = useMemo(() => catalog.series.map((x) => x.name.toLowerCase()), [catalog.series]);
+
   const cap = kind === "all" ? MAX_PER_GROUP : MAX_FILTERED;
-  const channels = useMemo(() => (q.length < 2 || (kind !== "all" && kind !== "live") ? [] : catalog.liveChannels.filter((c) => (!kidsMode || kLive.has(c.groupTitle ?? "") || kItems.has(c.id)) && c.name.toLowerCase().includes(q)).slice(0, cap)), [catalog.liveChannels, q, kind, cap, kidsMode, kLive, kItems]);
-  const movies = useMemo(() => (q.length < 2 || (kind !== "all" && kind !== "movie") ? [] : catalog.movies.filter((m) => (!kidsMode || kMov.has(m.category ?? "") || kItems.has(m.id)) && m.name.toLowerCase().includes(q)).slice(0, cap)), [catalog.movies, q, kind, cap, kidsMode, kMov, kItems]);
-  const series = useMemo(() => (q.length < 2 || (kind !== "all" && kind !== "series") ? [] : catalog.series.filter((s) => (!kidsMode || kSer.has(s.category ?? "") || kItems.has(s.id)) && s.name.toLowerCase().includes(q)).slice(0, cap)), [catalog.series, q, kind, cap, kidsMode, kSer, kItems]);
+  const channels = useMemo(() => (q.length < 2 || (kind !== "all" && kind !== "live") ? [] : takeMatching(catalog.liveChannels, liveLc, q, cap,
+    (c) => !hLive.has(c.groupTitle ?? "") && (!kidsMode || kLive.has(c.groupTitle ?? "") || kItems.has(c.id)))),
+  [catalog.liveChannels, liveLc, q, kind, cap, kidsMode, kLive, kItems, hLive]);
+  const movies = useMemo(() => (q.length < 2 || (kind !== "all" && kind !== "movie") ? [] : takeMatching(catalog.movies, moviesLc, q, cap,
+    (m) => !hMov.has(m.category ?? "") && (!kidsMode || kMov.has(m.category ?? "") || kItems.has(m.id)))),
+  [catalog.movies, moviesLc, q, kind, cap, kidsMode, kMov, kItems, hMov]);
+  const series = useMemo(() => (q.length < 2 || (kind !== "all" && kind !== "series") ? [] : takeMatching(catalog.series, seriesLc, q, cap,
+    (x) => !hSer.has(x.category ?? "") && (!kidsMode || kSer.has(x.category ?? "") || kItems.has(x.id)))),
+  [catalog.series, seriesLc, q, kind, cap, kidsMode, kSer, kItems, hSer]);
   const empty = q.length >= 2 && !channels.length && !movies.length && !series.length;
 
   const openChannel = (id: string) => {
