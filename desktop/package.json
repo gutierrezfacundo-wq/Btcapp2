@@ -1,0 +1,50 @@
+{
+  "name": "potri-desktop",
+  "productName": "POTRI",
+  "version": "0.2.0",
+  "description": "POTRI para PC: la app de la TV en una ventana de escritorio",
+  "private": true,
+  "main": "main.cjs",
+  "author": "POTRI",
+  "scripts": {
+    "copy-app": "node -e \"const fs=require('fs');fs.rmSync('app',{recursive:true,force:true});fs.cpSync('../webos/dist','app',{recursive:true})\"",
+    "start": "electron .",
+    "dist:win": "electron-builder --win --publish never"
+  },
+  "devDependencies": {
+    "electron": "44.4.5",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "com.iptv.player.desktop",
+    "productName": "POTRI",
+    "directories": {
+      "buildResources": "resources",
+      "output": "dist"
+    },
+    "files": [
+      "main.cjs",
+      "preload.cjs",
+      "resources/icon.png",
+      "app/**/*"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "resources/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "POTRI",
+      "artifactName": "POTRI-${version}-instalador.${ext}"
+    },
+    "portable": {
+      "artifactName": "POTRI-${version}-portable.${ext}"
+    },
+    "publish": null
+  }
+}
