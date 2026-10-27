@@ -112,7 +112,7 @@ export function Home() {
   const setCategory = (c: string | null) => { setCategoryState(c); setUi({ category: c }); };
   const setSelectedChannelId = (id: string | null) => { setSelectedChannelIdState(id); setUi({ selectedChannelId: id }); };
 
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(() => gridMemory[(search.get("tab") as Tab) ?? ui.tab ?? "live"]?.query ?? "");
   const [searchOpen, setSearchOpen] = useState(search.get("search") === "1");
   const [fullscreen, setFullscreen] = useState(false);
 
@@ -206,10 +206,13 @@ export function Home() {
   const q = deferredQuery.trim().toLowerCase();
 
   // Orden de la grilla VOD: por defecto (proveedor) / recientes / año / A-Z.
-  type SortMode = "default" | "recent" | "year" | "az";
-  const [sortMode, setSortMode] = useState<SortMode>("default");
+  const [sortMode, setSortMode] = useState<SortMode>(() => gridMemory[tab]?.sortMode ?? "default");
   // Filtro por género de metadata (Comedia, Familia…), si el proveedor lo manda.
-  const [genre, setGenre] = useState<string | null>(null);
+  const [genre, setGenre] = useState<string | null>(() => gridMemory[tab]?.genre ?? null);
+  useEffect(() => {
+    gridMemory[tab] = { ...gridMemory[tab], query, sortMode, genre };
+  }, [tab, query, sortMode, genre]);
+  const remember = (id: string) => { gridMemory[tab] = { ...gridMemory[tab], query, sortMode, genre, pickedId: id }; };
   // Lista de la pestaña actual: los géneros no se recalculan en Películas
   // cuando llegan las series (ni al revés).
   const vodSource: ReadonlyArray<{ genre?: string }> =
@@ -319,27 +322,29 @@ export function Home() {
   const onPickGrid = (index: number) => {
     if (tab === "movies") {
       const m = moviesShown.items[index];
-      if (m) navigate(`/movie/${m.id}`);
+      if (m) { remember(m.id); navigate(`/movie/${m.id}`); }
     } else {
       const s = seriesShown.items[index];
-      if (s) openSeries(s.id, s.name);
+      if (s) { remember(s.id); openSeries(s.id, s.name); }
     }
   };
   // Abrir por id (las filas estilo Netflix no comparten índice con la grilla).
   const onPickId = useCallback((id: string) => {
+    remember(id);
     if (tab === "movies") navigate(`/movie/${id}`);
     else {
       const s = catalog.series.find((x) => x.id === id);
       if (s) openSeries(s.id, s.name);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, catalog.series]);
+  }, [tab, catalog.series, query, sortMode, genre]);
+  const pickedId = gridMemory[tab]?.pickedId;
 
   // ===== Vista por filas (estilo Netflix) para Películas/Series =====
   // Solo cuando no hay filtros activos: con categoría, búsqueda, género u
   // orden elegidos se muestra la grilla clásica.
   const history = useAppStore((s) => s.history);
-  const vodRails = useMemo((): { title: string; items: GridData[] }[] | null => {
+  const vodRails = useMemo((): Rail[] | null => {
     if (tab !== "movies" && tab !== "series") return null;
     if (category !== null || q !== "" || genre !== null || sortMode !== "default") return null;
     // Ya vienen sin ocultas y filtradas por Felix. `list`: una por título
@@ -353,7 +358,7 @@ export function Home() {
     shown.counts.forEach((n, i) => { if (n > 1) versions.set(list[i].id, n); });
     const toGrid = (x: typeof list[number]): GridData =>
       toGridData(x, (x as { rating?: string }).rating, groupOn, versions.get(x.id));
-    const rails: { title: string; items: GridData[] }[] = [];
+    const rails: Rail[] = [];
     // Novedades de la sección: top 20 por fecha de alta, sin ordenar toda la lista.
     const newest: typeof list = [];
     for (const x of list) {
@@ -364,7 +369,7 @@ export function Home() {
       newest.splice(i, 0, x);
       if (newest.length > 20) newest.pop();
     }
-    if (newest.length >= 4) rails.push({ title: "Novedades", items: newest.map(toGrid) });
+    if (newest.length >= 4) rails.push({ title: "Novedades", items: newest.map(toGrid), more: { kind: "recent" } });
     // Porque viste X (último del historial de este tipo)
     const wantKind = tab === "movies" ? "movie" : "series-episode";
     const seed = history.find((h) => h.kind === wantKind);
@@ -387,9 +392,11 @@ export function Home() {
     const buckets = new Map<string, typeof list>();
     const bucketGroups = new Map<string, Set<number>>();
     for (const c of categories.slice(0, 20)) if (!buckets.has(c.name)) { buckets.set(c.name, []); bucketGroups.set(c.name, new Set()); }
+    const overflow = new Set<string>();
     for (const x of all) {
       const b = x.category !== undefined ? buckets.get(x.category) : undefined;
-      if (!b || b.length >= 20) continue;
+      if (!b) continue;
+      if (b.length >= 20) { overflow.add(x.category!); continue; }
       // Sin repetir el mismo título dentro de una fila.
       if (groupOn && x.vg !== undefined) {
         const seenG = bucketGroups.get(x.category!)!;
@@ -399,7 +406,8 @@ export function Home() {
       b.push(x);
     }
     for (const [name, items] of buckets) {
-      if (items.length >= 3) rails.push({ title: name, items: items.map(toGrid) });
+      // "Ver más" cuando la categoría tiene más de lo que entra en la fila.
+      if (items.length >= 3) rails.push({ title: name, items: items.map(toGrid), more: overflow.has(name) ? { kind: "cat", cat: name } : undefined });
     }
     return rails.length ? rails : null;
   }, [tab, category, q, genre, sortMode, moviesFiltered, seriesFiltered, moviesShown, seriesShown, groupOn, categories, history]);
@@ -587,6 +595,8 @@ export function Home() {
                 onGenre={setGenre}
                 rails={vodRails}
                 onPickId={onPickId}
+                onMore={(m) => { if (m.kind === "cat") setCategory(m.cat); else setSortMode("recent"); }}
+                pickedId={pickedId}
               />
             )}
           </FocusZone>
@@ -841,6 +851,18 @@ function PreviewPanel({
 
 
 // ===================== GRID (películas / series) =====================
+
+type SortMode = "default" | "recent" | "year" | "az";
+/** "Ver más" al final de una fila: abrir la categoría, o todo por recientes. */
+type RailMore = { kind: "cat"; cat: string } | { kind: "recent" };
+interface Rail { title: string; items: GridData[]; more?: RailMore }
+
+/**
+ * Lo que el usuario tenía en cada pestaña (búsqueda, orden, género y la
+ * última tarjeta que abrió). Home se desmonta al entrar a una ficha: sin
+ * esto, al volver se perdía la búsqueda y aparecía la lista entera.
+ */
+const gridMemory: Partial<Record<string, { query: string; sortMode: SortMode; genre: string | null; pickedId?: string }>> = {};
 interface GridData {
   id: string;
   name: string;
@@ -884,7 +906,7 @@ const SORT_OPTIONS = [
 const SORT_LABEL: Record<string, string> = { default: "Por defecto", recent: "Recientes", year: "Año", az: "A-Z" };
 
 function GridScreen({
-  title, count, categories, category, onCategory, query, onQuery, items, onPick, sortMode, onSortChange, genres, genre, onGenre, rails, onPickId,
+  title, count, categories, category, onCategory, query, onQuery, items, onPick, sortMode, onSortChange, genres, genre, onGenre, rails, onPickId, onMore, pickedId,
 }: {
   title: string;
   count: number;
@@ -901,9 +923,28 @@ function GridScreen({
   genre: string | null;
   onGenre: (g: string | null) => void;
   /** Vista por filas estilo Netflix (null = grilla clásica). */
-  rails: { title: string; items: GridData[] }[] | null;
+  rails: Rail[] | null;
   onPickId: (id: string) => void;
+  onMore: (m: RailMore) => void;
+  /** Última tarjeta abierta: al volver de la ficha se la deja a la vista. */
+  pickedId?: string;
 }) {
+  // "Ver más": al cambiar a la grilla, el foco va a su primera tarjeta.
+  const focusFirst = useRef(false);
+  useEffect(() => {
+    if (!focusFirst.current || !items.length) return;
+    focusFirst.current = false;
+    focusWhenReady(`GRD_${items[0].id}`, 40);
+  }, [items]);
+  const more = (m: RailMore) => { focusFirst.current = true; onMore(m); };
+  // Volver de una ficha: fila de la tarjeta abierta, para que se monte y
+  // reciba el foco (la grilla y las filas están virtualizadas).
+  const pickedRow = useMemo(() => {
+    if (!pickedId) return undefined;
+    if (rails) { const r = rails.findIndex((x) => x.items.some((it) => it.id === pickedId)); return r >= 0 ? r : undefined; }
+    const i = items.findIndex((it) => it.id === pickedId);
+    return i >= 0 ? Math.floor(i / 6) : undefined;
+  }, [pickedId, rails, items]);
   // Menú de orden: lista desplegable (OK abre, ↑↓ elige, OK aplica, Back cierra).
   const [sortOpen, setSortOpen] = useState(false);
   useBack(() => { setSortOpen(false); focusWhenReady("GRD_SORT"); }, sortOpen);
@@ -999,13 +1040,14 @@ function GridScreen({
           items={rails}
           estRowHeight={332}
           overscan={2}
+          scrollToIndex={pickedRow}
           getKey={(r) => r.title}
           renderRow={(r, ri) => (
             <div className="vr-row">
               <div className="vr-h">{r.title}</div>
               <FocusZone zone={`vr:${ri}`} className="vr-scroll scroll">
                 {r.items.map((it) => (
-                  <FocusableButton key={it.id} className="vr-card" onEnterPress={() => onPickId(it.id)}>
+                  <FocusableButton key={it.id} focusKey={`VR_${ri}_${it.id}`} className="vr-card" onEnterPress={() => onPickId(it.id)}>
                     <div className="vr-poster">
                       {it.posterUrl ? <PosterImg src={it.posterUrl} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} /> : <div className="poster-ph">{initials(it.name)}</div>}
                       {it.rating ? <div className="poster-rate"><Icon name="star" size={15} /> {it.rating}</div> : null}
@@ -1014,6 +1056,13 @@ function GridScreen({
                     <div className="vr-name">{it.name}</div>
                   </FocusableButton>
                 ))}
+                {r.more ? (
+                  <FocusableButton key="__more" focusKey={`VR_${ri}_more`} className="vr-card vr-more" onEnterPress={() => more(r.more!)}
+                    onArrowPress={(d) => d !== "right"}>
+                    <div className="vr-poster vr-more-box"><Icon name="arrow_forward" size={44} /><span>Ver más</span></div>
+                    <div className="vr-name">{r.more.kind === "cat" ? "Toda la categoría" : "Todo por recientes"}</div>
+                  </FocusableButton>
+                ) : null}
               </FocusZone>
             </div>
           )}
@@ -1026,11 +1075,12 @@ function GridScreen({
           items={rows}
           estRowHeight={470}
           overscan={3}
+          scrollToIndex={pickedRow}
           getKey={(_r, i) => `row-${i}`}
           renderRow={(row, i) => (
             <div className="grd-row">
               {row.map((it, j) => (
-                <FocusableButton key={it.id} className="poster" onEnterPress={() => onPick(i * 6 + j)}>
+                <FocusableButton key={it.id} focusKey={`GRD_${it.id}`} className="poster" onEnterPress={() => onPick(i * 6 + j)}>
                   <div className="poster-img">
                     {it.posterUrl ? <PosterImg src={it.posterUrl} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} /> : <div className="poster-ph">{initials(it.name)}</div>}
                     {it.rating ? <div className="poster-rate"><Icon name="star" size={15} /> {it.rating}</div> : null}
