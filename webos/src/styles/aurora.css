@@ -396,6 +396,9 @@
 .bare.focused{box-shadow:0 0 0 3px var(--ring)}
 
 .grd-chips{flex-wrap:nowrap;overflow:hidden}
+.grd-chips.scroll{overflow-x:auto;overflow-y:hidden !important;scrollbar-width:none}
+.grd-chips.scroll::-webkit-scrollbar{display:none}
+.sort-item.sort-note{white-space:normal;max-width:360px;font-size:17px;line-height:1.35;opacity:.85}
 .grd-chips .chip{flex-shrink:0}
 
 /* Scroll con rueda del Magic Remote: los contenedores .scroll deben poder

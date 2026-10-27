@@ -940,25 +940,31 @@ function GridScreen({
     <div className="grd">
       <div className="grd-h">
         <div className="grd-htitle"><span className="grd-title">{title}</span><span className="grd-count">{count.toLocaleString()} títulos</span></div>
-        {genres.length ? (
-          <div className="grd-sortwrap">
-            <FocusableButton focusKey="GRD_GENRE" className={`grd-sort ${genre ? "onfilter" : ""}`} onEnterPress={openGenre}>
-              <Icon name="theater_comedy" /> {genre ?? "Género"}
-            </FocusableButton>
-            {genreOpen ? (
-              <FocusZone zone="grd:genre" className="sort-pop genres scroll">
+        {/* Siempre visible: si el proveedor no manda géneros en la lista
+            (muchos no lo hacen para películas), el menú lo explica. */}
+        <div className="grd-sortwrap">
+          <FocusableButton focusKey="GRD_GENRE" className={`grd-sort ${genre ? "onfilter" : ""}`} onEnterPress={openGenre}>
+            <Icon name="theater_comedy" /> {genre ?? "Género"}
+          </FocusableButton>
+          {genreOpen ? (
+            <FocusZone zone="grd:genre" className="sort-pop genres scroll">
+              {genres.length ? (
                 <FocusableButton focusKey="GEN__all" className={`sort-item ${genre === null ? "on" : ""}`} onEnterPress={() => pickGenre(null)}>
                   <span className="sort-check"><Icon name="check" /></span> Todos
                 </FocusableButton>
-                {genres.map((g) => (
-                  <FocusableButton key={g} focusKey={`GEN_${g}`} className={`sort-item ${genre === g ? "on" : ""}`} onEnterPress={() => pickGenre(g)}>
-                    <span className="sort-check"><Icon name="check" /></span> {g}
-                  </FocusableButton>
-                ))}
-              </FocusZone>
-            ) : null}
-          </div>
-        ) : null}
+              ) : (
+                <FocusableButton focusKey="GEN__all" className="sort-item sort-note" onEnterPress={() => pickGenre(null)}>
+                  Tu proveedor no manda el género de {title.toLowerCase()} en la lista, así que no se puede filtrar por género.
+                </FocusableButton>
+              )}
+              {genres.map((g) => (
+                <FocusableButton key={g} focusKey={`GEN_${g}`} className={`sort-item ${genre === g ? "on" : ""}`} onEnterPress={() => pickGenre(g)}>
+                  <span className="sort-check"><Icon name="check" /></span> {g}
+                </FocusableButton>
+              ))}
+            </FocusZone>
+          ) : null}
+        </div>
         <div className="grd-sortwrap">
           <FocusableButton focusKey="GRD_SORT" className="grd-sort" onEnterPress={openSort}>
             <Icon name="swap_vert" /> {SORT_LABEL[sortMode]}
@@ -978,9 +984,11 @@ function GridScreen({
           <FocusableInput focusKey="SEARCH_IN" value={query} onChange={onQuery} placeholder={`Buscar ${title.toLowerCase()}…`} />
         </div>
       </div>
-      <div className="grd-chips">
+      {/* "scroll": la fila se desliza con el foco (sin eso el foco avanzaba
+          por categorías que quedaban fuera de la pantalla, invisibles). */}
+      <div className="grd-chips scroll">
         <FocusableButton focusKey="CAT_0" className={`chip ${category === null ? "on" : ""}`} onEnterPress={() => onCategory(null)}>Todas</FocusableButton>
-        {categories.slice(0, 30).map((c) => (
+        {categories.map((c) => (
           <FocusableButton key={c.id} className={`chip ${category === c.name ? "on" : ""}`} onEnterPress={() => onCategory(c.name)}>{c.name}</FocusableButton>
         ))}
       </div>
