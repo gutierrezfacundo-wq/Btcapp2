@@ -39,9 +39,17 @@ def _get_int(key: str, default: int = 0) -> int:
         return default
 
 
-# --- Telegram ---
-TELEGRAM_BOT_TOKEN = _get_env('TELEGRAM_BOT_TOKEN', required=True)
-TELEGRAM_CHAT_ID = _get_env('TELEGRAM_CHAT_ID', required=True)
+# --- Notificaciones: 'telegram' o 'consola' ---
+NOTIFICACIONES = _get_env('NOTIFICACIONES', 'telegram').strip().lower()
+if NOTIFICACIONES not in ('telegram', 'consola'):
+    raise EnvironmentError(
+        f"NOTIFICACIONES debe ser 'telegram' o 'consola' (valor actual: {NOTIFICACIONES})"
+    )
+
+# --- Telegram (solo obligatorio si NOTIFICACIONES=telegram) ---
+_usa_telegram = NOTIFICACIONES == 'telegram'
+TELEGRAM_BOT_TOKEN = _get_env('TELEGRAM_BOT_TOKEN', '', required=_usa_telegram)
+TELEGRAM_CHAT_ID = _get_env('TELEGRAM_CHAT_ID', '', required=_usa_telegram)
 
 # --- Binance ---
 BINANCE_API_KEY = _get_env('BINANCE_API_KEY', '')

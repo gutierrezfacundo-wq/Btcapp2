@@ -49,6 +49,21 @@ nano .env
 
 > El bot solo envía alertas mientras la PC está prendida. Desactivá la suspensión automática si lo querés 24/7.
 
+## Modo consola (sin Telegram)
+
+Si preferís ver todo en la ventana de la consola en lugar de Telegram, poné en `.env`:
+
+```
+NOTIFICACIONES=consola
+```
+
+Con esto no hace falta configurar `TELEGRAM_BOT_TOKEN` ni `TELEGRAM_CHAT_ID`.
+
+- Los resúmenes, alertas y análisis se muestran en la consola
+- Los comandos (`/precio`, `/status`, `/help`, etc.) se escriben en la misma ventana y se confirman con Enter
+- Los botones de compra (Fase 4) aparecen como opciones numeradas: escribí `1` o `2` y apretá Enter
+- En la consola solo se ven advertencias y errores del log; el log completo queda en `btc_bot.log`
+
 ## Configuración mínima (.env)
 
 Para las fases 1-2 solo necesitás:

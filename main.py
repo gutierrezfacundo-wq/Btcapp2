@@ -13,7 +13,6 @@ import config
 from database import Database
 from binance_client import BinanceClient
 from gemini_client import GeminiClient
-from telegram_client import TelegramClient
 from analyzer import Analyzer
 
 # La consola de Windows usa cp1252 por defecto y falla con caracteres Unicode
@@ -21,15 +20,30 @@ if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 
 # --- Configurar logging ---
+_handler_consola = logging.StreamHandler(sys.stdout)
+# En modo consola solo se muestran advertencias y errores, para que los
+# mensajes del bot se lean bien. El log completo queda en btc_bot.log.
+if config.NOTIFICACIONES == 'consola':
+    _handler_consola.setLevel(logging.WARNING)
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
     handlers=[
-        logging.StreamHandler(sys.stdout),
+        _handler_consola,
         logging.FileHandler('btc_bot.log', encoding='utf-8'),
     ]
 )
 logger = logging.getLogger(__name__)
+
+
+def _crear_notificador():
+    """Devuelve el canal de notificaciones configurado en .env."""
+    if config.NOTIFICACIONES == 'consola':
+        from consola_client import ConsolaClient
+        return ConsolaClient()
+    from telegram_client import TelegramClient
+    return TelegramClient()
 
 
 class BTCBot:
@@ -42,7 +56,7 @@ class BTCBot:
         self.db = Database(config.DB_PATH)
         self.binance = BinanceClient()
         self.gemini = GeminiClient()
-        self.telegram = TelegramClient()
+        self.notificador = _crear_notificador()
         self.analyzer = Analyzer(self.db)
 
         # Estado
@@ -56,20 +70,20 @@ class BTCBot:
 
     def _registrar_comandos(self):
         """Registra los comandos disponibles en Telegram."""
-        self.telegram.registrar_comando('status', self._cmd_status)
-        self.telegram.registrar_comando('precio', self._cmd_precio)
-        self.telegram.registrar_comando('resumen', self._cmd_resumen)
-        self.telegram.registrar_comando('help', self._cmd_help)
-        self.telegram.registrar_comando('ayuda', self._cmd_help)
+        self.notificador.registrar_comando('status', self._cmd_status)
+        self.notificador.registrar_comando('precio', self._cmd_precio)
+        self.notificador.registrar_comando('resumen', self._cmd_resumen)
+        self.notificador.registrar_comando('help', self._cmd_help)
+        self.notificador.registrar_comando('ayuda', self._cmd_help)
 
         if config.FASE_5_AUTO:
-            self.telegram.registrar_comando('auto', self._cmd_auto)
-            self.telegram.registrar_comando('reporte', self._cmd_reporte)
+            self.notificador.registrar_comando('auto', self._cmd_auto)
+            self.notificador.registrar_comando('reporte', self._cmd_reporte)
 
         # Callbacks de botones inline (Fase 4)
         if config.FASE_4_MANUAL:
-            self.telegram.registrar_callback('comprar_', self._callback_comprar)
-            self.telegram.registrar_callback('ignorar_', self._callback_ignorar)
+            self.notificador.registrar_callback('comprar_', self._callback_comprar)
+            self.notificador.registrar_callback('ignorar_', self._callback_ignorar)
 
     # --- Comandos de Telegram ---
 
@@ -92,18 +106,18 @@ class BTCBot:
             f"⏱ Intervalo: `{config.MONITOR_INTERVAL}s`\n\n"
             f"*Fases activas:*\n" + "\n".join(f"  {f}" for f in fases)
         )
-        self.telegram.enviar_mensaje(texto)
+        self.notificador.enviar_mensaje(texto)
 
     def _cmd_precio(self, args: list):
         """Comando /precio — Precio actual con variaciones."""
         precio = self.binance.obtener_precio()
         if not precio:
-            self.telegram.enviar_mensaje("❌ No se pudo obtener el precio actual")
+            self.notificador.enviar_mensaje("❌ No se pudo obtener el precio actual")
             return
 
         variaciones = self.analyzer.obtener_variaciones(precio)
         resumen = self.analyzer.formatear_resumen(variaciones)
-        self.telegram.enviar_mensaje(resumen)
+        self.notificador.enviar_mensaje(resumen)
 
     def _cmd_resumen(self, args: list):
         """Comando /resumen — Resumen completo bajo demanda."""
@@ -126,29 +140,29 @@ class BTCBot:
             ])
 
         texto = "📖 *Comandos disponibles:*\n\n" + "\n".join(comandos)
-        self.telegram.enviar_mensaje(texto)
+        self.notificador.enviar_mensaje(texto)
 
     def _cmd_auto(self, args: list):
         """Comando /auto on|off — Activar/desactivar modo automático."""
         if not config.FASE_5_AUTO:
-            self.telegram.enviar_mensaje("❌ Fase 5 (auto-trading) no está habilitada")
+            self.notificador.enviar_mensaje("❌ Fase 5 (auto-trading) no está habilitada")
             return
 
         if not args:
             estado = "activado" if self.db.es_modo_auto() else "desactivado"
-            self.telegram.enviar_mensaje(f"🤖 Modo automático: *{estado}*")
+            self.notificador.enviar_mensaje(f"🤖 Modo automático: *{estado}*")
             return
 
         if args[0].lower() == 'on':
             self.db.set_modo_auto(True)
-            self.telegram.enviar_mensaje("✅ Modo automático *ACTIVADO*")
+            self.notificador.enviar_mensaje("✅ Modo automático *ACTIVADO*")
             logger.info("Modo automático activado por comando Telegram")
         elif args[0].lower() == 'off':
             self.db.set_modo_auto(False)
-            self.telegram.enviar_mensaje("⏸ Modo automático *DESACTIVADO*")
+            self.notificador.enviar_mensaje("⏸ Modo automático *DESACTIVADO*")
             logger.info("Modo automático desactivado por comando Telegram")
         else:
-            self.telegram.enviar_mensaje("Uso: /auto on | /auto off")
+            self.notificador.enviar_mensaje("Uso: /auto on | /auto off")
 
     def _cmd_reporte(self, args: list):
         """Comando /reporte — Reporte semanal de operaciones."""
@@ -166,13 +180,13 @@ class BTCBot:
             partes = callback_data.split('_')
             monto_usdt = float(partes[1])
         except (IndexError, ValueError):
-            self.telegram.enviar_mensaje("❌ Error al procesar la orden")
+            self.notificador.enviar_mensaje("❌ Error al procesar la orden")
             return
 
         # Validar límite semanal
         gastado_semana = self.db.monto_operado_semana()
         if gastado_semana + monto_usdt > config.TRADE_MAX_POR_SEMANA:
-            self.telegram.editar_mensaje(
+            self.notificador.editar_mensaje(
                 message_id,
                 f"❌ Orden cancelada: excede límite semanal "
                 f"(${gastado_semana:.2f} + ${monto_usdt:.2f} > "
@@ -181,7 +195,7 @@ class BTCBot:
             return
 
         # Ejecutar compra
-        self.telegram.editar_mensaje(message_id, "⏳ Ejecutando orden de compra...")
+        self.notificador.editar_mensaje(message_id, "⏳ Ejecutando orden de compra...")
         resultado = self.binance.ejecutar_compra_mercado(monto_usdt)
 
         if resultado:
@@ -201,13 +215,13 @@ class BTCBot:
                 f"💸 Gastado: `${resultado['monto_usdt']:.2f} USDT`\n"
                 f"🔖 Orden ID: `{resultado['orden_id']}`"
             )
-            self.telegram.editar_mensaje(message_id, texto)
+            self.notificador.editar_mensaje(message_id, texto)
         else:
-            self.telegram.editar_mensaje(message_id, "❌ Error ejecutando la orden")
+            self.notificador.editar_mensaje(message_id, "❌ Error ejecutando la orden")
 
     def _callback_ignorar(self, callback_data: str, message_id: int):
         """Callback del botón ❌ Ignorar."""
-        self.telegram.editar_mensaje(
+        self.notificador.editar_mensaje(
             message_id,
             "⏭ Oportunidad ignorada. Se registró la decisión."
         )
@@ -224,7 +238,7 @@ class BTCBot:
 
         variaciones = self.analyzer.obtener_variaciones(precio)
         resumen = self.analyzer.formatear_resumen(variaciones)
-        self.telegram.enviar_mensaje(resumen)
+        self.notificador.enviar_mensaje(resumen)
 
     def _enviar_reporte_semanal(self):
         """Genera y envía reporte semanal."""
@@ -235,7 +249,7 @@ class BTCBot:
         reporte = self.analyzer.formatear_reporte_semanal(
             operaciones, balance_actual, balance_inicial
         )
-        self.telegram.enviar_mensaje(reporte)
+        self.notificador.enviar_mensaje(reporte)
 
     def _procesar_alerta_gemini(self, variaciones: dict):
         """
@@ -294,7 +308,7 @@ class BTCBot:
             # Verificar stop-loss
             if self.analyzer.verificar_stop_loss(balance_usdt):
                 self.db.set_modo_auto(False)
-                self.telegram.enviar_mensaje(
+                self.notificador.enviar_mensaje(
                     "🛑 *STOP-LOSS ACTIVADO*\n\n"
                     "El balance cayó demasiado. Modo automático desactivado."
                 )
@@ -303,14 +317,14 @@ class BTCBot:
             # Verificar límite semanal
             gastado_semana = self.db.monto_operado_semana()
             if gastado_semana + monto_compra > config.TRADE_MAX_POR_SEMANA:
-                self.telegram.enviar_mensaje(
+                self.notificador.enviar_mensaje(
                     f"⚠️ Compra automática cancelada: excede límite semanal\n"
                     f"Gastado: ${gastado_semana:.2f} / ${config.TRADE_MAX_POR_SEMANA:.2f}"
                 )
                 return
 
             # Ejecutar compra automática
-            self.telegram.enviar_mensaje(
+            self.notificador.enviar_mensaje(
                 f"{analisis['texto']}\n\n"
                 f"🤖 *Ejecutando compra automática por ${monto_compra:.2f} USDT...*"
             )
@@ -326,14 +340,14 @@ class BTCBot:
                     orden_id=str(resultado['orden_id']),
                     notas=f"Auto-trade (confianza: {analisis['confianza']})",
                 )
-                self.telegram.enviar_mensaje(
+                self.notificador.enviar_mensaje(
                     f"✅ *Compra automática ejecutada*\n\n"
                     f"₿ Cantidad: `{resultado['cantidad_btc']:.8f} BTC`\n"
                     f"💰 Precio: `${resultado['precio_promedio']:,.2f}`\n"
                     f"💸 Gastado: `${resultado['monto_usdt']:.2f} USDT`"
                 )
             else:
-                self.telegram.enviar_mensaje("❌ Error en compra automática")
+                self.notificador.enviar_mensaje("❌ Error en compra automática")
             return
 
         # Fase 4: Botones manuales
@@ -347,14 +361,14 @@ class BTCBot:
                 {'texto': '❌ Ignorar',
                  'callback_data': f'ignorar_{uid}'},
             ]
-            self.telegram.enviar_mensaje_con_botones(
+            self.notificador.enviar_mensaje_con_botones(
                 f"{analisis['texto']}\n\n"
                 f"💵 Monto sugerido: `${monto_compra:.2f} USDT`",
                 botones,
             )
         else:
             # Solo enviar análisis sin botones
-            self.telegram.enviar_mensaje(analisis['texto'])
+            self.notificador.enviar_mensaje(analisis['texto'])
 
     def ciclo(self):
         """Ejecuta un ciclo completo de monitoreo."""
@@ -376,13 +390,13 @@ class BTCBot:
             if self._resumen_enviado_key != clave_resumen:
                 self._resumen_enviado_key = clave_resumen
                 resumen = self.analyzer.formatear_resumen(variaciones)
-                self.telegram.enviar_mensaje(resumen)
+                self.notificador.enviar_mensaje(resumen)
                 logger.info("Resumen periódico enviado")
 
         # 5. Verificar alerta de variación
         if self.analyzer.debe_alertar_variacion(variaciones):
             alerta = self.analyzer.formatear_alerta(variaciones)
-            self.telegram.enviar_mensaje(alerta)
+            self.notificador.enviar_mensaje(alerta)
 
             # Fase 3+: Análisis con Gemini
             self._procesar_alerta_gemini(variaciones)
@@ -392,7 +406,7 @@ class BTCBot:
             balance = self.binance.obtener_balance_usdt()
             if balance is not None and self.analyzer.verificar_stop_loss(balance):
                 self.db.set_modo_auto(False)
-                self.telegram.enviar_mensaje(
+                self.notificador.enviar_mensaje(
                     "🛑 *STOP-LOSS ACTIVADO*\n\n"
                     "El portfolio cayó más del "
                     f"{config.STOP_LOSS_PORCENTAJE}% desde el inicio.\n"
@@ -400,7 +414,7 @@ class BTCBot:
                 )
 
         # 7. Procesar comandos/callbacks de Telegram
-        self.telegram.procesar_updates()
+        self.notificador.procesar_updates()
 
     def _guardar_balance_inicial_si_necesario(self):
         """Guarda el balance inicial si aún no se registró (para stop-loss)."""
@@ -409,6 +423,17 @@ class BTCBot:
             if balance is not None:
                 self.db.guardar_balance_inicial(balance)
                 logger.info(f"Balance inicial registrado: ${balance:.2f}")
+
+    def _esperar_proximo_ciclo(self):
+        """Espera MONITOR_INTERVAL segundos. En modo consola atiende comandos mientras tanto."""
+        if not getattr(self.notificador, 'polling_rapido', False):
+            time.sleep(config.MONITOR_INTERVAL)
+            return
+
+        fin = time.monotonic() + config.MONITOR_INTERVAL
+        while time.monotonic() < fin:
+            self.notificador.procesar_updates()
+            time.sleep(1)
 
     def iniciar(self):
         """Inicia el loop principal del bot."""
@@ -420,11 +445,11 @@ class BTCBot:
         logger.info(f"Fase 5 (Auto): {'ON' if config.FASE_5_AUTO else 'OFF'}")
         logger.info("=" * 50)
 
-        # Enviar mensaje de inicio por Telegram
-        self.telegram.enviar_mensaje(
+        accion_help = "Escribí" if config.NOTIFICACIONES == 'consola' else "Enviá"
+        self.notificador.enviar_mensaje(
             "🟢 *BTC Bot iniciado*\n\n"
             f"⏱ Intervalo: `{config.MONITOR_INTERVAL}s`\n"
-            "Enviá /help para ver los comandos disponibles."
+            f"{accion_help} /help para ver los comandos disponibles."
         )
 
         # Guardar balance inicial si aplica
@@ -447,21 +472,21 @@ class BTCBot:
 
             except KeyboardInterrupt:
                 logger.info("Bot detenido por el usuario")
-                self.telegram.enviar_mensaje("🔴 *Bot detenido manualmente*")
+                self.notificador.enviar_mensaje("🔴 *Bot detenido manualmente*")
                 break
             except Exception as e:
                 logger.error(f"Error en ciclo principal: {e}", exc_info=True)
                 try:
-                    self.telegram.enviar_alerta_error(str(e))
+                    self.notificador.enviar_alerta_error(str(e))
                 except Exception:
-                    logger.error("No se pudo enviar alerta de error por Telegram")
+                    logger.error("No se pudo enviar la alerta de error")
 
             # Esperar hasta el próximo ciclo
             try:
-                time.sleep(config.MONITOR_INTERVAL)
+                self._esperar_proximo_ciclo()
             except KeyboardInterrupt:
                 logger.info("Bot detenido por el usuario durante espera")
-                self.telegram.enviar_mensaje("🔴 *Bot detenido manualmente*")
+                self.notificador.enviar_mensaje("🔴 *Bot detenido manualmente*")
                 break
 
 
