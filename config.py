@@ -63,6 +63,17 @@ COMISION_PORCENTAJE = _get_float('COMISION_PORCENTAJE', 0.1)
 GEMINI_API_KEY = _get_env('GEMINI_API_KEY', '')
 GEMINI_MODEL = _get_env('GEMINI_MODEL', 'gemini-2.5-flash')
 
+# --- OpenAI (alternativa a Gemini) ---
+OPENAI_API_KEY = _get_env('OPENAI_API_KEY', '')
+OPENAI_MODEL = _get_env('OPENAI_MODEL', 'gpt-5-mini')
+
+# --- Proveedor de IA: 'gemini' u 'openai' ---
+IA_PROVEEDOR = _get_env('IA_PROVEEDOR', 'gemini').strip().lower()
+if IA_PROVEEDOR not in ('gemini', 'openai'):
+    raise EnvironmentError(
+        f"IA_PROVEEDOR debe ser 'gemini' u 'openai' (valor actual: {IA_PROVEEDOR})"
+    )
+
 # --- Base de datos ---
 DB_PATH = _get_env('DB_PATH', 'btc_bot.db')
 
@@ -96,6 +107,14 @@ AUTONOMO_TAKE_PROFIT_MAX = _get_float('AUTONOMO_TAKE_PROFIT_MAX', 5.0)  # %
 AUTONOMO_STOP_LOSS = _get_float('AUTONOMO_STOP_LOSS', 3.0)  # %
 # Cada cuántos minutos se consulta a la IA cuando no hay posición abierta
 AUTONOMO_INTERVALO_ANALISIS = _get_int('AUTONOMO_INTERVALO_ANALISIS', 60)
+# Quién decide la compra: 'ia' (Gemini/OpenAI) o 'reglas' (tendencia + RSI, sin IA)
+AUTONOMO_ENTRADA = _get_env('AUTONOMO_ENTRADA', 'ia').strip().lower()
+if AUTONOMO_ENTRADA not in ('ia', 'reglas'):
+    raise EnvironmentError(
+        f"AUTONOMO_ENTRADA debe ser 'ia' o 'reglas' (valor actual: {AUTONOMO_ENTRADA})"
+    )
+# Modo reglas: compra si el RSI de 15 min baja de este valor (sobreventa)
+AUTONOMO_RSI_COMPRA = _get_float('AUTONOMO_RSI_COMPRA', 30.0)
 
 # --- Símbolo de trading ---
 TRADING_PAIR = _get_env('TRADING_PAIR', 'BTCUSDT')

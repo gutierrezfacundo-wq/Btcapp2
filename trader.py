@@ -5,6 +5,8 @@ Cómo decide:
   - ENTRADA (IA): cada AUTONOMO_INTERVALO_ANALISIS minutos, si no hay posición abierta,
     Gemini evalúa si hay un margen que valga la pena. Solo se compra si la suba esperada
     cubre las comisiones + AUTONOMO_MARGEN_MINIMO y la confianza no es baja.
+    Con AUTONOMO_ENTRADA=reglas no se usa IA: compra si el RSI de 15 min está en
+    sobreventa y la tendencia de 7 días es alcista, con objetivo = comisiones + margen mínimo.
   - SALIDA (reglas fijas): se vende al llegar al objetivo propuesto por la IA
     (con tope AUTONOMO_TAKE_PROFIT_MAX) o si la pérdida llega a AUTONOMO_STOP_LOSS.
     La salida nunca depende de la IA, así siempre se puede cortar una pérdida.
@@ -154,17 +156,20 @@ class TraderAutonomo:
             logger.warning("Sin velas para evaluar entrada, se reintenta en el próximo análisis")
             return
 
-        evaluacion = self.gemini.evaluar_margen(
-            precio_actual=precio,
-            velas_4h=velas_4h,
-            velas_15m=velas_15m,
-            comision_ida_vuelta=self._comision_ida_vuelta(),
-            margen_minimo=config.AUTONOMO_MARGEN_MINIMO,
-            stop_loss=config.AUTONOMO_STOP_LOSS,
-            take_profit_max=config.AUTONOMO_TAKE_PROFIT_MAX,
-        )
+        if config.AUTONOMO_ENTRADA == 'reglas':
+            evaluacion = self._evaluar_por_reglas(precio, velas_4h, velas_15m)
+        else:
+            evaluacion = self.gemini.evaluar_margen(
+                precio_actual=precio,
+                velas_4h=velas_4h,
+                velas_15m=velas_15m,
+                comision_ida_vuelta=self._comision_ida_vuelta(),
+                margen_minimo=config.AUTONOMO_MARGEN_MINIMO,
+                stop_loss=config.AUTONOMO_STOP_LOSS,
+                take_profit_max=config.AUTONOMO_TAKE_PROFIT_MAX,
+            )
         if not evaluacion:
-            logger.error("No se pudo obtener la evaluación de margen de Gemini")
+            logger.error("No se pudo obtener la evaluación de margen de la IA")
             return
 
         self.db.guardar_analisis(
@@ -190,6 +195,54 @@ class TraderAutonomo:
             return
 
         self._comprar(monto, precio, evaluacion)
+
+    @staticmethod
+    def _rsi(cierres: list, periodos: int = 14) -> Optional[float]:
+        """RSI de Wilder sobre una lista de precios de cierre."""
+        if len(cierres) <= periodos:
+            return None
+        cambios = [b - a for a, b in zip(cierres, cierres[1:])]
+        suba = sum(max(c, 0) for c in cambios[:periodos]) / periodos
+        baja = sum(max(-c, 0) for c in cambios[:periodos]) / periodos
+        for c in cambios[periodos:]:
+            suba = (suba * (periodos - 1) + max(c, 0)) / periodos
+            baja = (baja * (periodos - 1) + max(-c, 0)) / periodos
+        if baja == 0:
+            return 100.0
+        return 100 - 100 / (1 + suba / baja)
+
+    def _evaluar_por_reglas(self, precio: float, velas_4h: list, velas_15m: list) -> Optional[dict]:
+        """
+        Entrada sin IA: compra en una caída de corto plazo (RSI 15m en sobreventa)
+        solo si la tendencia de 7 días es alcista (precio sobre el promedio de las velas de 4h).
+        Devuelve el mismo formato que evaluar_margen de la IA.
+        """
+        rsi = self._rsi([v['cierre'] for v in velas_15m])
+        if rsi is None:
+            return None
+        promedio_7d = sum(v['cierre'] for v in velas_4h) / len(velas_4h)
+        tendencia_alcista = precio > promedio_7d
+        sobreventa = rsi < config.AUTONOMO_RSI_COMPRA
+
+        umbral = self._comision_ida_vuelta() + config.AUTONOMO_MARGEN_MINIMO
+        decision = 'comprar' if tendencia_alcista and sobreventa else 'esperar'
+        analisis = (
+            f"RSI 15m: {rsi:.1f} (compra bajo {config.AUTONOMO_RSI_COMPRA:.0f}). "
+            f"Precio {'sobre' if tendencia_alcista else 'bajo'} el promedio de 7 días "
+            f"(${promedio_7d:,.0f})."
+        )
+        logger.info(f"Reglas: {analisis} → {decision}")
+        return {
+            'analisis': analisis,
+            'decision': decision,
+            'ganancia_esperada_pct': umbral if decision == 'comprar' else 0.0,
+            'horizonte_horas': 0.0,
+            'confianza': 'media',
+            'texto': (
+                f"📐 *Entrada por reglas*\n\n{analisis}\n\n"
+                f"📊 *Decisión:* {decision.upper()}"
+            ),
+        }
 
     def _comprar(self, monto: float, precio: float, evaluacion: dict):
         """Ejecuta la compra y registra la posición."""

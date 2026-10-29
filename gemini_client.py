@@ -18,53 +18,85 @@ GEMINI_URL = (
     "https://generativelanguage.googleapis.com/v1beta/models/"
     f"{config.GEMINI_MODEL}:generateContent"
 )
+OPENAI_URL = "https://api.openai.com/v1/chat/completions"
 TIMEOUT = 60  # segundos
 
 
 class GeminiClient:
+    """Cliente de IA. Usa Gemini u OpenAI según IA_PROVEEDOR en .env."""
+
     def __init__(self):
-        self.api_key = config.GEMINI_API_KEY
+        self.usa_openai = config.IA_PROVEEDOR == 'openai'
+        if self.usa_openai:
+            self.api_key = config.OPENAI_API_KEY
+            self.nombre = 'OpenAI'
+        else:
+            self.api_key = config.GEMINI_API_KEY
+            self.nombre = 'Gemini'
 
     def _disponible(self) -> bool:
-        """Verifica si Gemini está configurado."""
+        """Verifica si el proveedor de IA está configurado."""
         if not self.api_key:
-            logger.warning("GEMINI_API_KEY no configurada")
+            logger.warning(f"{'OPENAI' if self.usa_openai else 'GEMINI'}_API_KEY no configurada")
             return False
         return True
 
+    def _pedir_texto_gemini(self, prompt: str) -> str:
+        response = requests.post(
+            f"{GEMINI_URL}?key={self.api_key}",
+            json={
+                "contents": [{"parts": [{"text": prompt}]}],
+                "generationConfig": {
+                    "temperature": 0.3,
+                    # Margen amplio: los modelos 2.5 gastan tokens "pensando"
+                    "maxOutputTokens": 4096,
+                    "responseMimeType": "application/json",
+                }
+            },
+            timeout=TIMEOUT,
+        )
+        response.raise_for_status()
+        data = response.json()
+        return (
+            data.get('candidates', [{}])[0]
+            .get('content', {})
+            .get('parts', [{}])[0]
+            .get('text', '')
+        )
+
+    def _pedir_texto_openai(self, prompt: str) -> str:
+        response = requests.post(
+            OPENAI_URL,
+            headers={"Authorization": f"Bearer {self.api_key}"},
+            json={
+                "model": config.OPENAI_MODEL,
+                "messages": [{"role": "user", "content": prompt}],
+                "response_format": {"type": "json_object"},
+            },
+            timeout=TIMEOUT,
+        )
+        response.raise_for_status()
+        data = response.json()
+        return (
+            data.get('choices', [{}])[0]
+            .get('message', {})
+            .get('content') or ''
+        )
+
     def _consultar(self, prompt: str) -> Optional[dict]:
         """
-        Envía un prompt a Gemini pidiendo respuesta en JSON y la devuelve como dict.
+        Envía un prompt a la IA pidiendo respuesta en JSON y la devuelve como dict.
         Retorna None si hay error de conexión o la respuesta no es JSON válido.
         """
         texto_respuesta = ''
         try:
-            response = requests.post(
-                f"{GEMINI_URL}?key={self.api_key}",
-                json={
-                    "contents": [{"parts": [{"text": prompt}]}],
-                    "generationConfig": {
-                        "temperature": 0.3,
-                        # Margen amplio: los modelos 2.5 gastan tokens "pensando"
-                        "maxOutputTokens": 4096,
-                        "responseMimeType": "application/json",
-                    }
-                },
-                timeout=TIMEOUT,
-            )
-            response.raise_for_status()
-            data = response.json()
-
-            # Extraer texto de la respuesta
-            texto_respuesta = (
-                data.get('candidates', [{}])[0]
-                .get('content', {})
-                .get('parts', [{}])[0]
-                .get('text', '')
-            )
+            if self.usa_openai:
+                texto_respuesta = self._pedir_texto_openai(prompt)
+            else:
+                texto_respuesta = self._pedir_texto_gemini(prompt)
 
             if not texto_respuesta:
-                logger.error("Respuesta vacía de Gemini")
+                logger.error(f"Respuesta vacía de {self.nombre}")
                 return None
 
             # Limpiar posibles backticks markdown
@@ -76,12 +108,12 @@ class GeminiClient:
 
             resultado = json.loads(texto_limpio.strip())
             if not isinstance(resultado, dict):
-                logger.error("Gemini no devolvió un objeto JSON")
+                logger.error(f"{self.nombre} no devolvió un objeto JSON")
                 return None
             return resultado
 
         except json.JSONDecodeError as e:
-            logger.error(f"Error parseando respuesta JSON de Gemini: {e}")
+            logger.error(f"Error parseando respuesta JSON de {self.nombre}: {e}")
             logger.debug(f"Respuesta raw: {texto_respuesta[:500]}")
             return None
         except requests.exceptions.RequestException as e:
@@ -89,10 +121,10 @@ class GeminiClient:
             detalle = type(e).__name__
             if e.response is not None:
                 detalle = f"HTTP {e.response.status_code}: {e.response.text[:300]}"
-            logger.error(f"Error de conexión con Gemini: {detalle}")
+            logger.error(f"Error de conexión con {self.nombre}: {detalle}")
             return None
         except (KeyError, IndexError, AttributeError) as e:
-            logger.error(f"Error procesando respuesta de Gemini: {e}")
+            logger.error(f"Error procesando respuesta de {self.nombre}: {e}")
             return None
 
     def analizar_mercado(self, precio_actual: float, variacion_1h: float,
