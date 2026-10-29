@@ -25,6 +25,30 @@ bash setup.sh
 nano .env
 ```
 
+## Instalación en PC
+
+### Windows
+
+1. Instalá Python 3.10+ desde https://www.python.org/downloads/ (tildá **"Add python.exe to PATH"**)
+2. Descargá el repo (botón *Code → Download ZIP* en GitHub, o `git clone`)
+3. Doble clic en `setup_windows.bat`
+4. Abrí `.env` con el Bloc de notas y completá tus keys
+5. Doble clic en `iniciar_bot.bat`
+
+Para que arranque solo al prender la PC: `Win + R` → `shell:startup` → pegá ahí un acceso directo a `iniciar_bot.bat`.
+
+### Linux / macOS
+
+```bash
+git clone https://github.com/gutierrezfacundo-wq/Btcapp2.git
+cd Btcapp2
+bash setup_pc.sh
+nano .env
+.venv/bin/python main.py
+```
+
+> El bot solo envía alertas mientras la PC está prendida. Desactivá la suspensión automática si lo querés 24/7.
+
 ## Configuración mínima (.env)
 
 Para las fases 1-2 solo necesitás:
