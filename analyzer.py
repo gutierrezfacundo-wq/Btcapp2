@@ -167,9 +167,12 @@ class Analyzer:
                                    balance_actual: float,
                                    balance_inicial: float) -> str:
         """Formatea el reporte semanal de operaciones para Telegram."""
+        compras = [op for op in operaciones if op['tipo'] == 'compra']
+        ventas = [op for op in operaciones if op['tipo'] == 'venta']
         total_operaciones = len(operaciones)
-        total_gastado = sum(op['monto_usdt'] for op in operaciones)
-        total_btc = sum(op['cantidad_btc'] for op in operaciones)
+        total_gastado = sum(op['monto_usdt'] for op in compras)
+        total_vendido = sum(op['monto_usdt'] for op in ventas)
+        total_btc = sum(op['cantidad_btc'] for op in compras)
 
         if balance_inicial and balance_inicial > 0:
             rendimiento = ((balance_actual - balance_inicial) / balance_inicial) * 100
@@ -181,8 +184,9 @@ class Analyzer:
             "📋 *Reporte Semanal*\n",
             f"📊 Operaciones: `{total_operaciones}`",
             f"💸 Total invertido: `${total_gastado:,.2f} USDT`",
+            f"💵 Total vendido: `${total_vendido:,.2f} USDT`",
             f"₿ BTC comprado: `{total_btc:.8f}`",
-            f"💰 Balance actual: `${balance_actual:,.2f} USDT`",
+            f"💰 Valor de la cuenta (USDT + BTC): `${balance_actual:,.2f}`",
             f"📈 Rendimiento: {rendimiento_texto}",
         ]
 
@@ -190,7 +194,7 @@ class Analyzer:
             lineas.append("\n*Últimas operaciones:*")
             for op in operaciones[:5]:  # Mostrar últimas 5
                 lineas.append(
-                    f"  • {op['timestamp'][:10]}: "
+                    f"  • {op['timestamp'][:10]} {op['tipo']}: "
                     f"{op['cantidad_btc']:.6f} BTC "
                     f"(${op['monto_usdt']:.2f}) "
                     f"[{op['modo']}]"
@@ -200,8 +204,8 @@ class Analyzer:
 
     def verificar_stop_loss(self, balance_actual: float) -> bool:
         """
-        Verifica si el balance cayó más del porcentaje de stop-loss
-        respecto al balance inicial. Retorna True si se debe pausar.
+        Verifica si el valor de la cuenta (USDT + BTC) cayó más del porcentaje
+        de stop-loss respecto al valor inicial. Retorna True si se debe pausar.
         """
         balance_inicial = self.db.obtener_balance_inicial()
         if not balance_inicial or balance_inicial <= 0:

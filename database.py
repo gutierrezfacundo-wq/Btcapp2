@@ -228,14 +228,18 @@ class Database:
             conn.close()
 
     def monto_operado_semana(self) -> float:
-        """Calcula el monto total operado en los últimos 7 días."""
+        """
+        Calcula el monto comprado en los últimos 7 días (límite semanal de Fase 4-5).
+        No incluye el modo autónomo, que tiene su propio presupuesto.
+        """
         conn = self._conectar()
         try:
             desde = (datetime.utcnow() - timedelta(days=7)).isoformat()
             row = conn.execute(
                 """SELECT COALESCE(SUM(monto_usdt), 0) as total
                    FROM operaciones
-                   WHERE timestamp >= ? AND estado = 'completada'""",
+                   WHERE timestamp >= ? AND estado = 'completada'
+                     AND tipo = 'compra' AND modo != 'autonomo'""",
                 (desde,)
             ).fetchone()
             return row['total']

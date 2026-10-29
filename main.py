@@ -14,6 +14,7 @@ from database import Database
 from binance_client import BinanceClient
 from gemini_client import GeminiClient
 from analyzer import Analyzer
+from trader import TraderAutonomo
 
 # La consola de Windows usa cp1252 por defecto y falla con caracteres Unicode
 if hasattr(sys.stdout, 'reconfigure'):
@@ -58,6 +59,9 @@ class BTCBot:
         self.gemini = GeminiClient()
         self.notificador = _crear_notificador()
         self.analyzer = Analyzer(self.db)
+        self.trader = None
+        if config.AUTONOMO:
+            self.trader = TraderAutonomo(self.db, self.binance, self.gemini, self.notificador)
 
         # Estado
         self._resumen_enviado_key = None  # Para evitar enviar resumen duplicado
@@ -80,6 +84,10 @@ class BTCBot:
             self.notificador.registrar_comando('auto', self._cmd_auto)
             self.notificador.registrar_comando('reporte', self._cmd_reporte)
 
+        if config.AUTONOMO:
+            self.notificador.registrar_comando('autonomo', self._cmd_autonomo)
+            self.notificador.registrar_comando('vender', self._cmd_vender)
+
         # Callbacks de botones inline (Fase 4)
         if config.FASE_4_MANUAL:
             self.notificador.registrar_callback('comprar_', self._callback_comprar)
@@ -95,6 +103,9 @@ class BTCBot:
         fases.append(f"3: Gemini {'✅' if config.FASE_3_GEMINI else '❌'}")
         fases.append(f"4: Trading manual {'✅' if config.FASE_4_MANUAL else '❌'}")
         fases.append(f"5: Auto-trading {'✅' if config.FASE_5_AUTO else '❌'}")
+        if config.AUTONOMO:
+            estado = "✅" if self.trader.activo() else "⏸ pausado"
+            fases.append(f"Autónomo (${config.AUTONOMO_PRESUPUESTO_USDT:.2f}): {estado}")
 
         ultimo_precio = self.db.obtener_ultimo_precio()
         precio_texto = f"${ultimo_precio:,.2f}" if ultimo_precio else "Sin datos"
@@ -139,6 +150,13 @@ class BTCBot:
                 "/reporte — Reporte semanal de operaciones",
             ])
 
+        if config.AUTONOMO:
+            comandos.extend([
+                "/autonomo — Estado del trading autónomo",
+                "/autonomo on|off — Reanudar o pausar el trading autónomo",
+                "/vender — Cerrar ya la posición autónoma abierta",
+            ])
+
         texto = "📖 *Comandos disponibles:*\n\n" + "\n".join(comandos)
         self.notificador.enviar_mensaje(texto)
 
@@ -167,6 +185,33 @@ class BTCBot:
     def _cmd_reporte(self, args: list):
         """Comando /reporte — Reporte semanal de operaciones."""
         self._enviar_reporte_semanal()
+
+    def _cmd_autonomo(self, args: list):
+        """Comando /autonomo [on|off] — Estado, reanudar o pausar el trading autónomo."""
+        if args and args[0].lower() == 'on':
+            self.trader.set_activo(True)
+            self.notificador.enviar_mensaje(
+                "✅ Trading autónomo *ACTIVADO*. Si hay una posición abierta, se sigue vigilando."
+            )
+            logger.info("Trading autónomo activado por comando")
+        elif args and args[0].lower() == 'off':
+            self.trader.set_activo(False)
+            self.notificador.enviar_mensaje(
+                "⏸ Trading autónomo *PAUSADO*. No compra ni vende.\n"
+                "Si hay una posición abierta, podés cerrarla con /vender."
+            )
+            logger.info("Trading autónomo pausado por comando")
+        else:
+            self.notificador.enviar_mensaje(
+                self.trader.estado_texto(self.binance.obtener_precio())
+            )
+
+    def _cmd_vender(self, args: list):
+        """Comando /vender — Cierra la posición autónoma a precio de mercado."""
+        if not self.trader.posicion():
+            self.notificador.enviar_mensaje("No hay posición autónoma abierta.")
+            return
+        self.trader.vender('✋ Venta manual')
 
     # --- Callbacks de botones inline ---
 
@@ -243,7 +288,8 @@ class BTCBot:
     def _enviar_reporte_semanal(self):
         """Genera y envía reporte semanal."""
         operaciones = self.db.obtener_operaciones_semana()
-        balance_actual = self.binance.obtener_balance_usdt() or 0
+        precio = self.binance.obtener_precio()
+        balance_actual = (self.binance.obtener_valor_total(precio) if precio else None) or 0
         balance_inicial = self.db.obtener_balance_inicial() or 0
 
         reporte = self.analyzer.formatear_reporte_semanal(
@@ -305,8 +351,9 @@ class BTCBot:
                 and analisis['confianza'] == 'alta'
                 and monto_compra > 0):
 
-            # Verificar stop-loss
-            if self.analyzer.verificar_stop_loss(balance_usdt):
+            # Verificar stop-loss sobre el valor total (USDT + BTC)
+            valor_total = self.binance.obtener_valor_total(variaciones['precio_actual'])
+            if valor_total is not None and self.analyzer.verificar_stop_loss(valor_total):
                 self.db.set_modo_auto(False)
                 self.notificador.enviar_mensaje(
                     "🛑 *STOP-LOSS ACTIVADO*\n\n"
@@ -401,10 +448,14 @@ class BTCBot:
             # Fase 3+: Análisis con Gemini
             self._procesar_alerta_gemini(variaciones)
 
-        # 6. Verificar stop-loss (Fase 5)
+        # 6. Trading autónomo: vigila la posición o busca una entrada
+        if self.trader:
+            self.trader.ciclo(precio)
+
+        # 7. Verificar stop-loss (Fase 5) sobre el valor total (USDT + BTC)
         if config.FASE_5_AUTO and self.db.es_modo_auto():
-            balance = self.binance.obtener_balance_usdt()
-            if balance is not None and self.analyzer.verificar_stop_loss(balance):
+            valor_total = self.binance.obtener_valor_total(precio)
+            if valor_total is not None and self.analyzer.verificar_stop_loss(valor_total):
                 self.db.set_modo_auto(False)
                 self.notificador.enviar_mensaje(
                     "🛑 *STOP-LOSS ACTIVADO*\n\n"
@@ -413,13 +464,14 @@ class BTCBot:
                     "Modo automático *DESACTIVADO*."
                 )
 
-        # 7. Procesar comandos/callbacks de Telegram
+        # 8. Procesar comandos/callbacks de Telegram
         self.notificador.procesar_updates()
 
     def _guardar_balance_inicial_si_necesario(self):
-        """Guarda el balance inicial si aún no se registró (para stop-loss)."""
+        """Guarda el valor inicial de la cuenta (USDT + BTC) si aún no se registró."""
         if config.FASE_5_AUTO and not self.db.obtener_balance_inicial():
-            balance = self.binance.obtener_balance_usdt()
+            precio = self.binance.obtener_precio()
+            balance = self.binance.obtener_valor_total(precio) if precio else None
             if balance is not None:
                 self.db.guardar_balance_inicial(balance)
                 logger.info(f"Balance inicial registrado: ${balance:.2f}")
@@ -443,14 +495,23 @@ class BTCBot:
         logger.info(f"Fase 3 (Gemini): {'ON' if config.FASE_3_GEMINI else 'OFF'}")
         logger.info(f"Fase 4 (Manual): {'ON' if config.FASE_4_MANUAL else 'OFF'}")
         logger.info(f"Fase 5 (Auto): {'ON' if config.FASE_5_AUTO else 'OFF'}")
+        logger.info(f"Autónomo: {'ON' if config.AUTONOMO else 'OFF'}"
+                    f"{' (TESTNET)' if config.BINANCE_TESTNET else ''}")
         logger.info("=" * 50)
 
         accion_help = "Escribí" if config.NOTIFICACIONES == 'consola' else "Enviá"
-        self.notificador.enviar_mensaje(
+        texto_inicio = (
             "🟢 *BTC Bot iniciado*\n\n"
             f"⏱ Intervalo: `{config.MONITOR_INTERVAL}s`\n"
-            f"{accion_help} /help para ver los comandos disponibles."
         )
+        if self.trader:
+            texto_inicio += (
+                f"🤖 Trading autónomo con `${config.AUTONOMO_PRESUPUESTO_USDT:.2f} USDT`: "
+                f"*{'ACTIVO' if self.trader.activo() else 'PAUSADO'}*"
+                f"{' (TESTNET)' if config.BINANCE_TESTNET else ''}\n"
+            )
+        texto_inicio += f"{accion_help} /help para ver los comandos disponibles."
+        self.notificador.enviar_mensaje(texto_inicio)
 
         # Guardar balance inicial si aplica
         self._guardar_balance_inicial_si_necesario()

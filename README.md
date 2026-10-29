@@ -10,6 +10,7 @@ Bot de monitoreo y trading de BTC que corre en Termux (Android). Consulta precio
 | 3 | Análisis con Gemini AI en alertas | `FASE_3_GEMINI=true` |
 | 4 | Compra manual con botones en Telegram | `FASE_4_MANUAL=true` |
 | 5 | Auto-trading con límites de seguridad | `FASE_5_AUTO=true` |
+| Autónomo | Compra y vende solo con un presupuesto fijo | `AUTONOMO=true` |
 
 ## Instalación en Termux
 
@@ -74,6 +75,46 @@ Con esto no hace falta configurar `TELEGRAM_BOT_TOKEN` ni `TELEGRAM_CHAT_ID`.
 - Los botones de compra (Fase 4) aparecen como opciones numeradas: escribí `1` o `2` y apretá Enter
 - En la consola solo se ven advertencias y errores del log; el log completo queda en `btc_bot.log`
 
+## Trading autónomo
+
+El bot compra y vende BTC solo, usando únicamente el presupuesto que le asignes (por defecto 20 USDT).
+
+**Cómo decide:**
+
+1. **Compra (decide la IA):** cada hora (`AUTONOMO_INTERVALO_ANALISIS`), si no tiene BTC comprado, le pasa a Gemini las velas reales de Binance (7 días + últimas 12 horas) y le pregunta si hay un margen que valga la pena. Solo compra si la suba esperada cubre las comisiones (0,2% ida y vuelta) más `AUTONOMO_MARGEN_MINIMO`, y si la confianza no es baja. El bot vuelve a verificar esos números: no confía ciegamente en la IA.
+2. **Venta (reglas fijas):** vende cuando llega al objetivo que propuso la IA (con tope `AUTONOMO_TAKE_PROFIT_MAX`) o cuando pierde `AUTONOMO_STOP_LOSS`. La venta no depende de la IA, así una pérdida siempre se corta.
+3. **Protección global:** si el presupuesto cae `STOP_LOSS_PORCENTAJE` (20% por defecto), se pausa solo y te avisa.
+
+Las esperas no se notifican (para no llenar el chat): quedan en `btc_bot.log`. Las compras y ventas sí.
+
+**Configuración:**
+
+```
+AUTONOMO=true
+AUTONOMO_PRESUPUESTO_USDT=20
+BINANCE_API_KEY=...        # con permiso de Spot Trading, SIN permiso de retiro
+BINANCE_API_SECRET=...
+GEMINI_API_KEY=...
+```
+
+**Probalo primero con dinero ficticio:** creá keys en https://testnet.binance.vision (te loguea con GitHub), ponelas en `.env` y agregá `BINANCE_TESTNET=true`. Cuando estés conforme, cambiá a tus keys reales y `BINANCE_TESTNET=false`. Si pasás de testnet a real, borrá `btc_bot.db` para que el bot no arrastre el estado de la testnet.
+
+**Comandos:**
+
+| Comando | Descripción |
+|---------|-------------|
+| `/autonomo` | Capital, posición abierta y rendimiento |
+| `/autonomo off` | Pausa (no compra ni vende) |
+| `/autonomo on` | Reanuda |
+| `/vender` | Cierra ya la posición abierta |
+
+**A tener en cuenta:**
+
+- El bot revisa el precio cada `MONITOR_INTERVAL` (5 min). Si el precio se mueve muy rápido, la venta puede ejecutarse un poco más allá del stop-loss.
+- Binance solo deja vender en múltiplos de 0.00001 BTC (~1 USD). El resto ("polvo") queda en la cuenta y se vende junto con la próxima operación; cuenta en el valor total del bot.
+- El bot tiene que estar corriendo para vigilar la posición. Si se apaga con BTC comprado, al volver a arrancar retoma la posición donde la dejó.
+- Ninguna IA predice el precio con certeza: usá solo plata que puedas perder.
+
 ## Configuración mínima (.env)
 
 Para las fases 1-2 solo necesitás:
@@ -115,6 +156,8 @@ pkill -f 'python main.py'
 | `/auto on` | Activar modo automático (Fase 5) |
 | `/auto off` | Desactivar modo automático (Fase 5) |
 | `/reporte` | Reporte semanal de operaciones (Fase 5) |
+| `/autonomo [on\|off]` | Estado / reanudar / pausar el trading autónomo |
+| `/vender` | Cerrar la posición autónoma abierta |
 
 ## Estructura del proyecto
 
@@ -126,6 +169,8 @@ binance_client.py    — Consultas y trading en Binance
 gemini_client.py     — Análisis con Gemini AI
 telegram_client.py   — Bot de Telegram
 analyzer.py          — Cálculo de variaciones y alertas
+trader.py            — Trading autónomo (entrada por IA, salida por reglas)
+consola_client.py    — Mensajes por consola en lugar de Telegram
 requirements.txt     — Dependencias Python
 .env.example         — Template de configuración
 setup.sh             — Script de instalación para Termux
@@ -151,6 +196,8 @@ FASE_5_AUTO=true
 - Todas las API keys están en `.env` (nunca en el código)
 - `.env` está en `.gitignore` (nunca se sube al repo)
 - Límites configurables por operación y por semana
-- Stop-loss global que pausa el bot automáticamente
+- Stop-loss global que pausa el bot automáticamente (calculado sobre USDT + BTC)
+- El modo autónomo solo usa el presupuesto asignado y las órdenes nunca se reintentan solas (para no duplicarlas)
+- Creá la API key de Binance **sin permiso de retiro**
 - Nunca ejecuta órdenes sin confirmación (Fase 4) o sin modo auto activo (Fase 5)
 - Cualquier error crítico envía alerta por Telegram
