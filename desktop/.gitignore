@@ -1,0 +1,4 @@
+node_modules/
+# Copia del build de la app de la TV (lo arma el CI / npm run prepare-app)
+app/
+dist/

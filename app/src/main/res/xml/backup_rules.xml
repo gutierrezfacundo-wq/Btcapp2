@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 11 y anteriores (backup en la nube y adb backup): lo mismo que
+     data_extraction_rules.xml. -->
+<full-backup-content>
+    <exclude domain="database" path="iptv.db" />
+    <exclude domain="database" path="iptv.db-wal" />
+    <exclude domain="database" path="iptv.db-shm" />
+    <exclude domain="database" path="iptv.db-journal" />
+    <exclude domain="file" path="datastore/iptv_prefs.preferences_pb" />
+</full-backup-content>
