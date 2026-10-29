@@ -16,6 +16,10 @@ from gemini_client import GeminiClient
 from telegram_client import TelegramClient
 from analyzer import Analyzer
 
+# La consola de Windows usa cp1252 por defecto y falla con caracteres Unicode
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+
 # --- Configurar logging ---
 logging.basicConfig(
     level=logging.INFO,
