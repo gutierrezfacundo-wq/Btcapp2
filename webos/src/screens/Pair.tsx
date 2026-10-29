@@ -9,12 +9,10 @@ import { encodeB64Url } from "../data/b64url";
 import { useBack } from "../navigation/backStack";
 import { FocusableButton } from "../components/FocusableButton";
 import { Icon } from "../components/Icon";
+import { randomCode } from "../data/randomCode";
 
 function genCode(): string {
-  const abc = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // sin O/0/I/1 para que sea legible
-  let s = "";
-  for (let i = 0; i < 6; i++) s += abc[Math.floor(Math.random() * abc.length)];
-  return s;
+  return randomCode(8);
 }
 
 interface CompanionPayload {

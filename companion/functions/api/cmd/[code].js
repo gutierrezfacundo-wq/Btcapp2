@@ -2,6 +2,10 @@
 // El celular hace POST con un comando; la TV hace GET con ?since=<seq> y
 // ejecuta el comando si es más nuevo. Un solo slot (gana el último), TTL 60s.
 // Usa el mismo namespace KV "PAIR" que el emparejamiento.
+//
+// Con ?hb=1&host=<servidor> la TV además avisa que está prendida (cada ~5 min):
+// queda "live:<código>" con el servidor Xtream activo, y el proxy solo atiende
+// al celular mientras ese aviso esté vigente y para ese servidor.
 
 const CORS = {
   "content-type": "application/json",
@@ -36,7 +40,12 @@ export async function onRequestGet(context) {
   const { params, request, env } = context;
   const key = cmdKey(params.code);
   if (!env.PAIR) return new Response(JSON.stringify({ error: "KV no configurado" }), { status: 500, headers: CORS });
-  const since = Number(new URL(request.url).searchParams.get("since")) || 0;
+  const qs = new URL(request.url).searchParams;
+  const since = Number(qs.get("since")) || 0;
+  if (qs.get("hb") === "1" && key.length >= 4 + 6) {
+    const host = String(qs.get("host") || "").toLowerCase().slice(0, 255);
+    await env.PAIR.put("live:" + key.slice(4), JSON.stringify({ host }), { expirationTtl: 900 });
+  }
   const val = await env.PAIR.get(key);
   if (!val) return new Response(JSON.stringify({ pending: true }), { headers: CORS });
   try {

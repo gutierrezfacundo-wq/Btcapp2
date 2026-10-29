@@ -128,7 +128,9 @@
 
   function api(action, extra){
     var base = cfg.server.replace(/\/+$/,"") + "/player_api.php?username=" + encodeURIComponent(cfg.username) + "&password=" + encodeURIComponent(cfg.password) + "&action=" + action + (extra||"");
-    return fetch("/api/proxy?u=" + encodeURIComponent(base)).then(function(r){ return r.json(); });
+    return fetch("/api/proxy?c=" + code + "&u=" + encodeURIComponent(base)).then(function(r){
+      return r.json().then(function(j){ if (!r.ok) { var err = new Error((j && j.error) || ""); err.relay = true; throw err; } return j; });
+    });
   }
   function streamUrl(kindK, id, ext){
     var b = cfg.server.replace(/\/+$/,"");
@@ -192,7 +194,7 @@
               epMode = { name: it.name, episodes: eps };
               document.getElementById("epback").style.display = "block";
               render();
-            }).catch(function(){ stat.textContent = "No se pudieron cargar los episodios."; });
+            }).catch(function(e){ stat.textContent = (e && e.relay && e.message) || "No se pudieron cargar los episodios."; });
           }));
         } else if (kind === "vod"){
           res.appendChild(row(it.stream_icon, it.name, function(){
@@ -204,7 +206,7 @@
           }));
         }
       });
-    }).catch(function(){ stat.textContent = "No se pudo cargar el catálogo."; });
+    }).catch(function(e){ stat.textContent = (e && e.relay && e.message) || "No se pudo cargar el catálogo."; });
   }
 </script>
 </body>

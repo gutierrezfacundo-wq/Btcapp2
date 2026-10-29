@@ -19,6 +19,12 @@ companion/
 
 No pasa ninguna credencial por servidores de terceros: el relay es **tuyo**.
 
+**Seguridad del control remoto:** el catálogo del celular pasa por `/api/proxy`, que
+solo atiende si la TV está prendida con POTRI abierto (la TV avisa cada ~5 min) y
+solo hacia el servidor Xtream que la TV tiene activo; así nadie más puede usar tu
+relay como proxy. Si alguien vio el código del control remoto, cambialo en la TV
+(**Control remoto → Cambiar código**) y volvé a escanear el QR.
+
 ## Deploy en Cloudflare Pages (gratis, ~5 min, una sola vez)
 
 1. Entrá a https://dash.cloudflare.com → **Workers & Pages → Create → Pages → Connect to Git**.

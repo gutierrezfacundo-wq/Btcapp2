@@ -18,6 +18,9 @@ export function RemotePair() {
   const navigate = useNavigate();
   const companionUrl = useAppStore((s) => s.companionUrl);
   const remoteCode = useAppStore((s) => s.remoteCode);
+  const regenerateRemoteCode = useAppStore((s) => s.regenerateRemoteCode);
+  // Cambiar el código desvincula el celular: se pide confirmar con un segundo OK.
+  const [confirmNew, setConfirmNew] = useState(false);
   const source = useAppStore((s) => s.source);
   const kidsMode = useAppStore((s) => s.kidsMode);
   const [qr, setQr] = useState<string | null>(null);
@@ -64,7 +67,20 @@ export function RemotePair() {
                 <div className="pair-step"><span className="pair-num">3</span> Buscá contenido y tocá ▶ para verlo en la TV</div>
                 <div className="pair-desc" style={{ marginTop: 8 }}>También tenés pausa, volver y cambio de canal. El vínculo queda guardado en el celular.</div>
                 <div className="pair-code">Código: <b>{remoteCode}</b></div>
-                <FocusableButton focusKey="RP_BACK" className="btn" onEnterPress={() => navigate("/setup")}>Listo</FocusableButton>
+                <div className="pair-desc">
+                  {confirmNew
+                    ? "El celular vinculado (y cualquiera que haya visto este código) va a dejar de controlar la TV. Apretá OK otra vez para confirmar."
+                    : "Si alguien más vio el código o el QR, cambialo: el anterior deja de funcionar."}
+                </div>
+                <div className="pair-btns">
+                  <FocusableButton focusKey="RP_BACK" className="btn" onEnterPress={() => navigate("/setup")}
+                    onFocus={() => setConfirmNew(false)}>Listo</FocusableButton>
+                  <FocusableButton focusKey="RP_NEW" className={confirmNew ? "btn primary" : "btn"}
+                    onEnterPress={() => { if (confirmNew) { regenerateRemoteCode(); setConfirmNew(false); } else setConfirmNew(true); }}
+>
+                    {confirmNew ? "Sí, cambiar código" : "Cambiar código"}
+                  </FocusableButton>
+                </div>
               </div>
             </div>
           )}

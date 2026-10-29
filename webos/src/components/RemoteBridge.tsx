@@ -12,6 +12,16 @@ interface RemoteCmd {
   num?: number;
 }
 
+const HEARTBEAT_MS = 5 * 60_000;
+
+function hostOf(server: string): string {
+  try {
+    return new URL(/^https?:\/\//i.test(server) ? server : `http://${server}`).host.toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
 /**
  * Control remoto por celular: la TV pollea el relay (/api/cmd/<código>) y
  * ejecuta el comando más nuevo. play → reproductor; pause → video visible;
@@ -20,6 +30,8 @@ interface RemoteCmd {
 export function RemoteBridge() {
   const companionUrl = useAppStore((s) => s.companionUrl);
   const remoteCode = useAppStore((s) => s.remoteCode);
+  // Servidor Xtream activo: el relay solo deja que el celular consulte ese.
+  const xtreamHost = useAppStore((s) => (s.source?.kind === "xtream" ? hostOf(s.source.server) : ""));
   // Solo comandos posteriores al arranque de la app.
   const lastSeq = useRef(Date.now());
 
@@ -40,7 +52,7 @@ export function RemoteBridge() {
         window.dispatchEvent(new CustomEvent("potri-remote", { detail: cmd }));
         return;
       }
-      if (cmd.action === "play" && typeof cmd.url === "string" && cmd.url) {
+      if (cmd.action === "play" && typeof cmd.url === "string" && /^https?:\/\//i.test(cmd.url)) {
         const st = encodeB64Url({ from: "/hub" });
         const title = encodeURIComponent(cmd.title || "Desde el celular");
         const meta = cmd.meta ? `&meta=${encodeURIComponent(cmd.meta)}` : "";
@@ -48,9 +60,16 @@ export function RemoteBridge() {
       }
     };
 
+    // Cada tanto le avisamos al relay que la TV está prendida (y con qué
+    // servidor): sin ese aviso el proxy del companion no atiende al celular.
+    let lastBeat = 0;
     const poll = async () => {
       try {
-        const r = await fetch(`${companionUrl}/api/cmd/${remoteCode}?since=${lastSeq.current}`, { cache: "no-store" });
+        const now = Date.now();
+        const beat = now - lastBeat > HEARTBEAT_MS;
+        const hb = beat ? `&hb=1&host=${encodeURIComponent(xtreamHost)}` : "";
+        const r = await fetch(`${companionUrl}/api/cmd/${remoteCode}?since=${lastSeq.current}${hb}`, { cache: "no-store" });
+        if (beat && r.ok) lastBeat = now;
         const d = (await r.json()) as { pending?: boolean; seq?: number; cmd?: RemoteCmd };
         if (alive && d && !d.pending && typeof d.seq === "number" && d.seq > lastSeq.current) {
           lastSeq.current = d.seq;
@@ -63,7 +82,7 @@ export function RemoteBridge() {
     };
     timer = window.setTimeout(poll, 3000);
     return () => { alive = false; if (timer) window.clearTimeout(timer); };
-  }, [companionUrl, remoteCode]);
+  }, [companionUrl, remoteCode, xtreamHost]);
 
   return null;
 }

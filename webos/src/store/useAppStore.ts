@@ -4,6 +4,7 @@ import { xtreamXmltvUrl } from "../data/types";
 import { loadM3uCatalog } from "../data/m3uCatalog";
 import { loadAccountInfo, loadXtreamLive, loadXtreamMovies, loadXtreamSeries } from "../data/xtream";
 import { loadXmltvStream, warmUpParser } from "../data/parseClient";
+import { randomCode } from "../data/randomCode";
 
 const SOURCE_KEY = "iptv.source.v1";          // legacy (fuente unica) — se migra
 const SOURCES_KEY = "iptv.sources.v1";        // nuevo: array de listas guardadas
@@ -32,12 +33,9 @@ function genId(): string {
   return `src-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`;
 }
 
-/** Código corto legible (sin O/0/I/1) para vincular el control remoto. */
+/** Código del control remoto: 8 símbolos al azar (unas 10^12 combinaciones). */
 function genRemoteCode(): string {
-  const abc = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  let s = "";
-  for (let i = 0; i < 6; i++) s += abc[Math.floor(Math.random() * abc.length)];
-  return s;
+  return randomCode(8);
 }
 
 /** Carga las listas guardadas, migrando la fuente unica vieja si hace falta. */
@@ -389,6 +387,8 @@ interface AppState {
   saveProgress: (id: string, pos: number, dur: number) => void;
   clearProgress: (id: string) => void;
   setCompanionUrl: (url: string) => void;
+  /** Código nuevo para el control remoto: el celular que tenía el viejo deja de funcionar. */
+  regenerateRemoteCode: () => void;
   setNativeSubs: (on: boolean) => void;
   setSubtitleScale: (s: "s" | "m" | "l") => void;
   setEpgOffsetH: (h: number) => void;
@@ -666,6 +666,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     delete next[id];
     try { localStorage.setItem(PROGRESS_KEY, JSON.stringify(next)); } catch { /* ignore */ }
     set({ progress: next });
+  },
+
+  regenerateRemoteCode: () => {
+    const c = genRemoteCode();
+    try { localStorage.setItem(REMOTECODE_KEY, c); } catch { /* ignore */ }
+    set({ remoteCode: c });
   },
 
   setCompanionUrl: (url) => {
