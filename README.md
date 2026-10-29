@@ -47,6 +47,16 @@ nano .env
 .venv/bin/python main.py
 ```
 
+### Problemas comunes en Windows
+
+**`ModuleNotFoundError: No module named 'dotenv'`**: las dependencias no se instalaron. Abrí una consola en la carpeta del bot (escribí `cmd` en la barra de direcciones del Explorador) y ejecutá:
+
+```
+.venv\Scripts\python.exe -m pip install -r requirements.txt
+```
+
+Si no existe la carpeta `.venv`, volvé a ejecutar `setup_windows.bat`.
+
 > El bot solo envía alertas mientras la PC está prendida. Desactivá la suspensión automática si lo querés 24/7.
 
 ## Modo consola (sin Telegram)
